@@ -151,16 +151,17 @@ export default function PriceChart({
                             x={currentTimestamp}
                             stroke="#3b82f6"
                             strokeDasharray="3 3"
-                            label={{ position: 'top', value: 'Now', fill: '#3b82f6', fontSize: 12 }}
+                            strokeOpacity={0.5}
+                            label={{ position: 'insideTop', value: 'Now', fill: '#3b82f6', fontSize: 12 }}
                         />
                     )}
 
                     {/* Statistical Reference Lines */}
-                    {stats && showMean && <ReferenceLine y={stats.mean} stroke="#fcd34d" strokeDasharray="4 4" label={{ position: 'insideTopLeft', value: `Mean ${stats.mean.toFixed(2)} ¢/kWh`, fill: '#fcd34d', fontSize: 10 }} />}
-                    {stats && showMedian && <ReferenceLine y={stats.median} stroke="#f87171" strokeDasharray="4 4" label={{ position: 'insideTopLeft', value: `Median ${stats.median.toFixed(2)} ¢/kWh`, fill: '#f87171', fontSize: 10 }} />}
-                    {stats && showP75 && <ReferenceLine y={stats.p75} stroke="#c084fc" strokeDasharray="4 4" label={{ position: 'insideTopLeft', value: `75th Pctl ${stats.p75.toFixed(2)} ¢/kWh`, fill: '#c084fc', fontSize: 10 }} />}
-                    {stats && showP90 && <ReferenceLine y={stats.p90} stroke="#f472b6" strokeDasharray="4 4" label={{ position: 'insideTopLeft', value: `90th Pctl ${stats.p90.toFixed(2)} ¢/kWh`, fill: '#f472b6', fontSize: 10 }} />}
-                    {stats && showP95 && <ReferenceLine y={stats.p95} stroke="#fb923c" strokeDasharray="4 4" label={{ position: 'insideTopLeft', value: `95th Pctl ${stats.p95.toFixed(2)} ¢/kWh`, fill: '#fb923c', fontSize: 10 }} />}
+                    {stats && showMean && <ReferenceLine y={stats.mean} stroke="#fcd34d" strokeDasharray="4 4" strokeOpacity={0.5} label={{ position: 'insideTopLeft', value: `Mean ${stats.mean.toFixed(2)} ¢/kWh`, fill: '#fcd34d', fontSize: 10 }} />}
+                    {stats && showMedian && <ReferenceLine y={stats.median} stroke="#f87171" strokeDasharray="4 4" strokeOpacity={0.5} label={{ position: 'insideTopLeft', value: `Median ${stats.median.toFixed(2)} ¢/kWh`, fill: '#f87171', fontSize: 10 }} />}
+                    {stats && showP75 && <ReferenceLine y={stats.p75} stroke="#c084fc" strokeDasharray="4 4" strokeOpacity={0.5} label={{ position: 'insideTopLeft', value: `75th Pctl ${stats.p75.toFixed(2)} ¢/kWh`, fill: '#c084fc', fontSize: 10 }} />}
+                    {stats && showP90 && <ReferenceLine y={stats.p90} stroke="#f472b6" strokeDasharray="4 4" strokeOpacity={0.5} label={{ position: 'insideTopLeft', value: `90th Pctl ${stats.p90.toFixed(2)} ¢/kWh`, fill: '#f472b6', fontSize: 10 }} />}
+                    {stats && showP95 && <ReferenceLine y={stats.p95} stroke="#fb923c" strokeDasharray="4 4" strokeOpacity={0.5} label={{ position: 'insideTopLeft', value: `95th Pctl ${stats.p95.toFixed(2)} ¢/kWh`, fill: '#fb923c', fontSize: 10 }} />}
 
                     <Area
                         type="monotone"
