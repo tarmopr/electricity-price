@@ -32,8 +32,9 @@ export default function Dashboard() {
     const [error, setError] = useState<string | null>(null);
 
     // User Settings
-    const [includeVat, setIncludeVat] = useState(true);
-    const [showMean, setShowMean] = useState(false);
+    const [includeVat, setIncludeVat] = useState<boolean>(true);
+    const [showNow, setShowNow] = useState<boolean>(true);
+    const [showMean, setShowMean] = useState<boolean>(false);
     const [showMedian, setShowMedian] = useState(false);
     const [showP75, setShowP75] = useState(false);
     const [showP90, setShowP90] = useState(false);
@@ -175,6 +176,8 @@ export default function Dashboard() {
                     <Controls
                         includeVat={includeVat}
                         setIncludeVat={setIncludeVat}
+                        showNow={showNow}
+                        setShowNow={setShowNow}
                         showMean={showMean}
                         setShowMean={setShowMean}
                         showMedian={showMedian}
@@ -200,6 +203,7 @@ export default function Dashboard() {
                 <PriceChart
                     data={prices}
                     includeVat={includeVat}
+                    showNow={showNow}
                     showMean={showMean}
                     showMedian={showMedian}
                     showP75={showP75}

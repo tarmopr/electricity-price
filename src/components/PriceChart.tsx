@@ -16,6 +16,7 @@ import { ElectricityPrice } from '@/lib/api';
 interface PriceChartProps {
     data: ElectricityPrice[];
     includeVat: boolean;
+    showNow: boolean;
     showMean: boolean;
     showMedian: boolean;
     showP75: boolean;
@@ -33,6 +34,7 @@ interface PriceChartProps {
 export default function PriceChart({
     data,
     includeVat,
+    showNow,
     showMean,
     showMedian,
     showP75,
@@ -146,7 +148,7 @@ export default function PriceChart({
                     <Tooltip content={<CustomTooltip />} />
 
                     {/* Current Time Line */}
-                    {currentTimestamp && (
+                    {showNow && currentTimestamp && (
                         <ReferenceLine
                             x={currentTimestamp}
                             stroke="#3b82f6"

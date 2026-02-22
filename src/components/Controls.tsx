@@ -6,6 +6,8 @@ import { ChevronDown, ChevronUp, Settings2 } from 'lucide-react';
 interface ControlsProps {
     includeVat: boolean;
     setIncludeVat: (val: boolean) => void;
+    showNow: boolean;
+    setShowNow: (val: boolean) => void;
     showMean: boolean;
     setShowMean: (val: boolean) => void;
     showMedian: boolean;
@@ -27,6 +29,8 @@ interface ControlsProps {
 export default function Controls({
     includeVat,
     setIncludeVat,
+    showNow,
+    setShowNow,
     showMean,
     setShowMean,
     showMedian,
@@ -106,7 +110,12 @@ export default function Controls({
                     <div className="flex flex-col space-y-2 w-full md:w-auto">
                         <Label className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Statistical Lines</Label>
                         <div className="flex flex-wrap gap-2">
-
+                            <button
+                                onClick={() => setShowNow(!showNow)}
+                                className={`px-3 py-1.5 rounded-lg text-sm transition-all border ${showNow ? 'bg-blue-400/20 text-blue-300 border-blue-400/50' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800'}`}
+                            >
+                                NOW
+                            </button>
                             <button
                                 onClick={() => setShowMean(!showMean)}
                                 className={`px-3 py-1.5 rounded-lg text-sm transition-all border ${showMean ? 'bg-amber-400/20 text-amber-300 border-amber-400/50' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800'}`}
