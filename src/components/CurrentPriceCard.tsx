@@ -22,7 +22,7 @@ export default function CurrentPriceCard({ currentPrice, previousPrice, nextPric
     const priceValue = includeVat ? applyVat(currentPrice.priceCentsKwh) : currentPrice.priceCentsKwh;
     const previousValue = previousPrice ? (includeVat ? applyVat(previousPrice.priceCentsKwh) : previousPrice.priceCentsKwh) : null;
     const nextValue = nextPrice ? (includeVat ? applyVat(nextPrice.priceCentsKwh) : nextPrice.priceCentsKwh) : null;
-    const medianValue = medianPrice ? (includeVat ? applyVat(medianPrice) : medianPrice) : null;
+    const medianValue = medianPrice ?? null;
 
     const isUp = previousValue ? priceValue > previousValue : false;
     const isDown = previousValue ? priceValue < previousValue : false;
