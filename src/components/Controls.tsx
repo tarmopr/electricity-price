@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Switch } from '@headlessui/react';
 import { Label } from '@/components/ui/label';
 import { Timeframe } from './Dashboard';
 import { ChevronDown, ChevronUp, Settings2 } from 'lucide-react';
@@ -100,25 +99,8 @@ export default function Controls({
                     </div>
                 </div>
 
-                {/* Bottom Row: VAT & Stats */}
+                {/* Bottom Row: Stats & VAT */}
                 <div className="flex flex-col xl:flex-row gap-6 justify-between items-start xl:items-center pt-4 border-t border-zinc-800/50">
-
-                    {/* VAT Toggle */}
-                    <div className="flex items-center space-x-3">
-                        <Switch
-                            checked={includeVat}
-                            onChange={setIncludeVat}
-                            className={`${includeVat ? 'bg-green-500' : 'bg-zinc-700'
-                                } relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-zinc-950`}
-                        >
-                            <span className="sr-only">Include VAT</span>
-                            <span
-                                className={`${includeVat ? 'translate-x-6' : 'translate-x-1'
-                                    } inline-block h-4 w-4 transform rounded-full bg-white transition-transform`}
-                            />
-                        </Switch>
-                        <Label className="text-zinc-300 font-medium">Include VAT (22%)</Label>
-                    </div>
 
                     {/* Statistical Overlays */}
                     <div className="flex flex-col space-y-2 w-full md:w-auto">
@@ -156,6 +138,19 @@ export default function Controls({
                                 95th Pctl
                             </button>
 
+                        </div>
+                    </div>
+
+                    {/* VAT Toggle */}
+                    <div className="flex flex-col space-y-2 w-full md:w-auto">
+                        <Label className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Taxes</Label>
+                        <div className="flex flex-wrap gap-2">
+                            <button
+                                onClick={() => setIncludeVat(!includeVat)}
+                                className={`px-3 py-1.5 rounded-lg text-sm transition-all border ${includeVat ? 'bg-green-400/20 text-green-300 border-green-400/50' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800'}`}
+                            >
+                                Include VAT (22%)
+                            </button>
                         </div>
                     </div>
                 </div>
