@@ -126,7 +126,7 @@ export default function PriceChart({
 
     return (
         <div className="w-full h-[400px] mt-4 relative overflow-hidden" style={{ WebkitTapHighlightColor: 'transparent' }}>
-            <ResponsiveContainer width="100%" height="100%" style={{ outline: 'none' }}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} style={{ outline: 'none' }}>
                 <AreaChart
                     data={chartData}
                     margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
