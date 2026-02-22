@@ -37,9 +37,12 @@ body {
   background: #52525b;
 }
 
-/* Remove default focus outline from Recharts SVG containers */
+/* Remove default focus outline and tap highlights from ALL Recharts SVG containers and their children */
 .recharts-wrapper,
+.recharts-wrapper *,
 .recharts-surface,
+.recharts-surface *,
 .recharts-responsive-container {
   outline: none !important;
+  -webkit-tap-highlight-color: transparent !important;
 }
