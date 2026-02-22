@@ -16,7 +16,7 @@ export default function Home() {
               <Zap className="text-zinc-950 w-6 h-6" />
             </div>
             <h1 className="text-3xl md:text-5xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-zinc-100 to-zinc-500">
-              Estonia Energy
+              Electricity Price in Estonia
             </h1>
           </div>
           <p className="text-zinc-400 mt-2 text-base md:text-lg max-w-none">

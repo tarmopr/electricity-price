@@ -5,7 +5,7 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Estonia Electricity Prices',
+  title: 'Electricity Price in Estonia',
   description: 'Live Nord Pool spot prices for electricity in Estonia',
 };
 
