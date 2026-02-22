@@ -23,10 +23,13 @@ export interface CurrentPriceResponse {
     }[];
 }
 
-// Use local proxy for client-side fetching to avoid CORS, and absolute URL for server-side
+const CORS_PROXY = 'https://corsproxy.io/?';
+const ELERING_API = 'https://dashboard.elering.ee/api/nps/price';
+
+// Use CORS proxy for client-side fetching because static export removes Next.js rewrites
 const API_BASE_URL = typeof window !== 'undefined'
-    ? '/api/elering/nps/price'
-    : 'https://dashboard.elering.ee/api/nps/price';
+    ? `${CORS_PROXY}${encodeURIComponent(ELERING_API)}`
+    : ELERING_API;
 
 
 
