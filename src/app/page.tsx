@@ -9,7 +9,7 @@ export default function Home() {
       <div className="fixed inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-900 via-zinc-950 to-zinc-950"></div>
       <div className="fixed top-0 inset-x-0 h-[500px] -z-10 bg-gradient-to-b from-green-500/5 to-transparent pointer-events-none"></div>
 
-      <div className="max-w-6xl mx-auto mb-10 mt-8 flex flex-col md:flex-row items-start md:items-end justify-between gap-4">
+      <div className="max-w-6xl mx-auto mb-6 mt-8 flex flex-col md:flex-row items-start md:items-end justify-between gap-4">
         <div className="w-full">
           <div className="flex items-center space-x-3 mb-2">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center shadow-lg shadow-green-500/20">
