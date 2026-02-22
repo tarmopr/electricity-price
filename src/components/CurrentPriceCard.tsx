@@ -43,47 +43,53 @@ export default function CurrentPriceCard({ currentPrice, previousPrice, nextPric
                 <h2 className="text-xs lg:text-sm font-medium tracking-wide uppercase">Current Price</h2>
             </div>
 
-            <div className="flex flex-col relative z-10 space-y-1">
-                <div className="flex items-baseline space-x-2 lg:space-x-3">
-                    <div className="text-4xl lg:text-5xl font-bold tracking-tighter text-white">
-                        {priceValue.toFixed(2)}
+            <div className="flex flex-row md:flex-col justify-between md:justify-start items-center md:items-start w-full relative z-10 gap-x-4">
+                {/* Main Price Area */}
+                <div className="flex flex-col space-y-1">
+                    <div className="flex items-baseline space-x-2 lg:space-x-3">
+                        <div className="text-4xl lg:text-5xl font-bold tracking-tighter text-white">
+                            {priceValue.toFixed(2)}
+                        </div>
+                        <div className="text-base lg:text-lg font-medium text-zinc-500">
+                            ¢/kWh
+                        </div>
                     </div>
-                    <div className="text-base lg:text-lg font-medium text-zinc-500">
-                        ¢/kWh
-                    </div>
+                    {medianValue !== null && (
+                        <div className="text-xs text-zinc-500 font-medium tracking-wide">
+                            Median: <span className="text-zinc-400">{medianValue.toFixed(2)} ¢</span>
+                        </div>
+                    )}
                 </div>
-                {medianValue !== null && (
-                    <div className="text-xs text-zinc-500 font-medium tracking-wide">
-                        Median: <span className="text-zinc-400">{medianValue.toFixed(2)} ¢</span>
-                    </div>
-                )}
-            </div>
 
-            <div className="flex flex-col space-y-2 mt-4 relative z-10 w-full">
-                {previousValue && (
-                    <div className="flex items-center space-x-1.5 text-xs lg:text-sm bg-zinc-900/30 rounded-lg p-2">
-                        {isUp && <ArrowUp className="w-3 h-3 lg:w-4 lg:h-4 text-red-400" />}
-                        {isDown && <ArrowDown className="w-3 h-3 lg:w-4 lg:h-4 text-green-400" />}
-                        {!isUp && !isDown && <div className="w-3 h-3 lg:w-4 lg:h-4 flex items-center justify-center text-zinc-500">-</div>}
+                {/* Comparison Area */}
+                <div className="flex flex-col space-y-2 mt-0 md:mt-4 w-auto md:w-full shrink-0">
+                    {previousValue && (
+                        <div className="flex items-center space-x-1.5 text-xs lg:text-sm bg-zinc-900/30 rounded-lg p-2">
+                            {isUp && <ArrowUp className="w-3 h-3 lg:w-4 lg:h-4 text-red-400" />}
+                            {isDown && <ArrowDown className="w-3 h-3 lg:w-4 lg:h-4 text-green-400" />}
+                            {!isUp && !isDown && <div className="w-3 h-3 lg:w-4 lg:h-4 flex items-center justify-center text-zinc-500">-</div>}
 
-                        <span className={isUp ? 'text-red-400 font-medium' : isDown ? 'text-green-400 font-medium' : 'text-zinc-500'}>
-                            {diff.toFixed(2)}¢
-                        </span>
-                        <span className="text-zinc-500">vs previous hour</span>
-                    </div>
-                )}
-                {nextValue && (
-                    <div className="flex items-center space-x-1.5 text-xs lg:text-sm bg-zinc-900/30 rounded-lg p-2">
-                        {isNextUp && <ArrowUp className="w-3 h-3 lg:w-4 lg:h-4 text-red-400" />}
-                        {isNextDown && <ArrowDown className="w-3 h-3 lg:w-4 lg:h-4 text-green-400" />}
-                        {!isNextUp && !isNextDown && <div className="w-3 h-3 lg:w-4 lg:h-4 flex items-center justify-center text-zinc-500">-</div>}
+                            <span className={isUp ? 'text-red-400 font-medium' : isDown ? 'text-green-400 font-medium' : 'text-zinc-500'}>
+                                {diff.toFixed(2)}¢
+                            </span>
+                            <span className="text-zinc-500 hidden sm:inline">vs previous hour</span>
+                            <span className="text-zinc-500 sm:hidden">prev</span>
+                        </div>
+                    )}
+                    {nextValue && (
+                        <div className="flex items-center space-x-1.5 text-xs lg:text-sm bg-zinc-900/30 rounded-lg p-2">
+                            {isNextUp && <ArrowUp className="w-3 h-3 lg:w-4 lg:h-4 text-red-400" />}
+                            {isNextDown && <ArrowDown className="w-3 h-3 lg:w-4 lg:h-4 text-green-400" />}
+                            {!isNextUp && !isNextDown && <div className="w-3 h-3 lg:w-4 lg:h-4 flex items-center justify-center text-zinc-500">-</div>}
 
-                        <span className={isNextUp ? 'text-red-400 font-medium' : isNextDown ? 'text-green-400 font-medium' : 'text-zinc-500'}>
-                            {nextDiff.toFixed(2)}¢
-                        </span>
-                        <span className="text-zinc-500">vs next hour</span>
-                    </div>
-                )}
+                            <span className={isNextUp ? 'text-red-400 font-medium' : isNextDown ? 'text-green-400 font-medium' : 'text-zinc-500'}>
+                                {nextDiff.toFixed(2)}¢
+                            </span>
+                            <span className="text-zinc-500 hidden sm:inline">vs next hour</span>
+                            <span className="text-zinc-500 sm:hidden">next</span>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );
