@@ -76,6 +76,23 @@ export default function PriceChart({
         }
     }
 
+    // Calculate gradient offsets for pastPrice based on Median
+    let medianOffset = 0.5;
+    if (chartData.length > 0 && stats) {
+        const pastPrices = chartData.map(d => d.pastPrice).filter((p): p is number => p !== null);
+        if (pastPrices.length > 0) {
+            const dataMax = Math.max(...pastPrices);
+            const dataMin = Math.min(...pastPrices);
+
+            if (dataMax > dataMin) {
+                // Median position relative to min and max. 0 is bottom (min), 1 is top (max).
+                // Gradients go top-to-bottom, so y=0 is top (max), y=1 is bottom (min).
+                medianOffset = (dataMax - stats.median) / (dataMax - dataMin);
+                medianOffset = Math.max(0, Math.min(1, medianOffset)); // Clamp
+            }
+        }
+    }
+
     const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string | number }) => {
         if (active && payload && payload.length) {
             const date = new Date(label as string | number);
@@ -100,12 +117,13 @@ export default function PriceChart({
                 >
                     <defs>
                         <linearGradient id="colorPast" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#4ade80" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#4ade80" stopOpacity={0} />
+                            <stop offset="0%" stopColor="#ef4444" stopOpacity={0.6} />
+                            <stop offset={`${medianOffset * 100}%`} stopColor="#3b82f6" stopOpacity={0.6} />
+                            <stop offset="100%" stopColor="#22c55e" stopOpacity={0.6} />
                         </linearGradient>
                         <linearGradient id="colorFuture" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#818cf8" stopOpacity={0} />
+                            <stop offset="5%" stopColor="#a855f7" stopOpacity={0.4} />
+                            <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
                         </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#3f3f46" opacity={0.4} />
@@ -134,7 +152,7 @@ export default function PriceChart({
                     <Area
                         type="monotone"
                         dataKey="pastPrice"
-                        stroke="#4ade80"
+                        stroke="url(#colorPast)"
                         strokeWidth={2}
                         fillOpacity={1}
                         fill="url(#colorPast)"
@@ -143,7 +161,7 @@ export default function PriceChart({
                     <Area
                         type="monotone"
                         dataKey="futurePrice"
-                        stroke="#818cf8"
+                        stroke="#a855f7"
                         strokeWidth={2}
                         strokeDasharray="5 5"
                         fillOpacity={1}
