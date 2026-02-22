@@ -5,10 +5,11 @@ interface CurrentPriceCardProps {
     currentPrice: ElectricityPrice | null;
     previousPrice?: ElectricityPrice | null;
     nextPrice?: ElectricityPrice | null;
+    medianPrice?: number;
     includeVat: boolean;
 }
 
-export default function CurrentPriceCard({ currentPrice, previousPrice, nextPrice, includeVat }: CurrentPriceCardProps) {
+export default function CurrentPriceCard({ currentPrice, previousPrice, nextPrice, medianPrice, includeVat }: CurrentPriceCardProps) {
     if (!currentPrice) {
         return (
             <div className="p-4 lg:p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800 animate-pulse h-full min-h-[120px] backdrop-blur-sm flex flex-col justify-center">
@@ -21,6 +22,7 @@ export default function CurrentPriceCard({ currentPrice, previousPrice, nextPric
     const priceValue = includeVat ? applyVat(currentPrice.priceCentsKwh) : currentPrice.priceCentsKwh;
     const previousValue = previousPrice ? (includeVat ? applyVat(previousPrice.priceCentsKwh) : previousPrice.priceCentsKwh) : null;
     const nextValue = nextPrice ? (includeVat ? applyVat(nextPrice.priceCentsKwh) : nextPrice.priceCentsKwh) : null;
+    const medianValue = medianPrice ? (includeVat ? applyVat(medianPrice) : medianPrice) : null;
 
     const isUp = previousValue ? priceValue > previousValue : false;
     const isDown = previousValue ? priceValue < previousValue : false;
@@ -41,13 +43,20 @@ export default function CurrentPriceCard({ currentPrice, previousPrice, nextPric
                 <h2 className="text-xs lg:text-sm font-medium tracking-wide uppercase">Current Price</h2>
             </div>
 
-            <div className="flex items-baseline space-x-2 lg:space-x-3 relative z-10">
-                <div className="text-4xl lg:text-5xl font-bold tracking-tighter text-white">
-                    {priceValue.toFixed(2)}
+            <div className="flex flex-col relative z-10 space-y-1">
+                <div className="flex items-baseline space-x-2 lg:space-x-3">
+                    <div className="text-4xl lg:text-5xl font-bold tracking-tighter text-white">
+                        {priceValue.toFixed(2)}
+                    </div>
+                    <div className="text-base lg:text-lg font-medium text-zinc-500">
+                        ¢/kWh
+                    </div>
                 </div>
-                <div className="text-base lg:text-lg font-medium text-zinc-500">
-                    ¢/kWh
-                </div>
+                {medianValue !== null && (
+                    <div className="text-xs text-zinc-500 font-medium tracking-wide">
+                        Median: <span className="text-zinc-400">{medianValue.toFixed(2)} ¢</span>
+                    </div>
+                )}
             </div>
 
             <div className="flex flex-col space-y-2 mt-4 relative z-10 w-full">

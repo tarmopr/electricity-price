@@ -167,6 +167,7 @@ export default function Dashboard() {
                         currentPrice={currentPrice}
                         previousPrice={previousPrice}
                         nextPrice={nextPrice}
+                        medianPrice={stats?.median}
                         includeVat={includeVat}
                     />
                 </div>
