@@ -202,6 +202,7 @@ export default function Dashboard() {
             <div className="bg-zinc-900/30 p-2 sm:p-6 rounded-3xl border border-zinc-800/80 shadow-2xl backdrop-blur-xl">
                 <PriceChart
                     data={prices}
+                    currentPrice={currentPrice}
                     includeVat={includeVat}
                     showNow={showNow}
                     showMean={showMean}

@@ -15,6 +15,7 @@ import { ElectricityPrice } from '@/lib/api';
 
 interface PriceChartProps {
     data: ElectricityPrice[];
+    currentPrice: ElectricityPrice | null;
     includeVat: boolean;
     showNow: boolean;
     showMean: boolean;
@@ -33,6 +34,7 @@ interface PriceChartProps {
 
 export default function PriceChart({
     data,
+    currentPrice,
     includeVat,
     showNow,
     showMean,
@@ -46,23 +48,32 @@ export default function PriceChart({
 
     const now = new Date();
 
+    // Use the explicit current price timestamp from API if available, otherwise fallback to local hour
+    const activeCurrentTimestamp = currentPrice?.timestamp || data.find(item => isSameHour(item.date, now))?.timestamp;
+
     // Process data for the chart, including color coding for past vs future
     const chartData = data.map(item => {
         const price = includeVat ? item.priceCentsKwh * 1.22 : item.priceCentsKwh;
-        const isPast = isBefore(item.date, now) && !isSameHour(item.date, now);
-        const isCurrent = isSameHour(item.date, now);
+
+        // Find if this item is the current hour
+        const isCurrent = item.timestamp === activeCurrentTimestamp;
+
+        // An item is "past" if its date is before the current active hour's date
+        // We find the current hour's date to compare correctly
+        const activeCurrentDate = data.find(d => d.timestamp === activeCurrentTimestamp)?.date;
+        const isPast = activeCurrentDate ? isBefore(item.date, activeCurrentDate) : isBefore(item.date, now);
 
         return {
             ...item,
             displayPrice: parseFloat(price.toFixed(2)),
             // For visual distinction
             pastPrice: isPast || isCurrent ? parseFloat(price.toFixed(2)) : null,
-            futurePrice: !isPast ? parseFloat(price.toFixed(2)) : null,
+            futurePrice: !isPast && !isCurrent ? parseFloat(price.toFixed(2)) : null,
         };
     });
 
-    const currentItem = chartData.find(item => isSameHour(item.date, now));
-    const currentTimestamp = currentItem?.timestamp;
+    const currentTimestamp = activeCurrentTimestamp;
+
 
     // Dynamically determine X-axis format based on the time span
     let xAxisFormat = 'HH:mm';
