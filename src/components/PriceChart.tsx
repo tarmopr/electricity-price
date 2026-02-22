@@ -59,6 +59,23 @@ export default function PriceChart({
         };
     });
 
+    // Dynamically determine X-axis format based on the time span
+    let xAxisFormat = 'HH:mm';
+    let minTickGap = 30; // default for hours
+    if (data.length > 0) {
+        const start = new Date(data[0].timestamp);
+        const end = new Date(data[data.length - 1].timestamp);
+        const diffDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+
+        if (diffDays > 180) {
+            xAxisFormat = 'MMM yyyy';
+            minTickGap = 50;
+        } else if (diffDays > 3) {
+            xAxisFormat = 'MMM d';
+            minTickGap = 40;
+        }
+    }
+
     const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string | number }) => {
         if (active && payload && payload.length) {
             const date = new Date(label as string | number);
@@ -94,11 +111,11 @@ export default function PriceChart({
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#3f3f46" opacity={0.4} />
                     <XAxis
                         dataKey="timestamp"
-                        tickFormatter={(tick) => format(new Date(tick), 'HH:mm')}
+                        tickFormatter={(tick) => format(new Date(tick), xAxisFormat)}
                         stroke="#71717a"
                         tick={{ fill: '#71717a', fontSize: 12 }}
                         tickMargin={10}
-                        minTickGap={30}
+                        minTickGap={minTickGap}
                     />
                     <YAxis
                         stroke="#71717a"
