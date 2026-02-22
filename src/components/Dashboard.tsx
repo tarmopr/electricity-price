@@ -156,14 +156,14 @@ export default function Dashboard() {
 
             {/* Top Row: Current Price & Controls */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-1 border-b border-zinc-800 pb-6 lg:border-none lg:pb-0">
+                <div className="lg:col-span-1 border-b border-zinc-800 pb-4 lg:border-none lg:pb-0 h-full">
                     <CurrentPriceCard
                         currentPrice={currentPrice}
                         previousPrice={previousPrice}
                         includeVat={includeVat}
                     />
                 </div>
-                <div className="lg:col-span-2 flex flex-col justify-end">
+                <div className="lg:col-span-2 h-full">
                     <Controls
                         includeVat={includeVat}
                         setIncludeVat={setIncludeVat}

@@ -48,7 +48,7 @@ export default function Controls({
     const [isMobileOpen, setIsMobileOpen] = useState(false);
 
     return (
-        <div className="bg-zinc-900/40 p-4 md:p-5 rounded-2xl border border-zinc-800/50 backdrop-blur-md transition-all duration-300">
+        <div className="bg-zinc-900/40 p-4 md:p-5 rounded-2xl border border-zinc-800/50 backdrop-blur-md transition-all duration-300 h-full flex flex-col justify-center">
 
             {/* Mobile Toggle Button */}
             <button
