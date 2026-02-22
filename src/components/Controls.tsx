@@ -114,7 +114,7 @@ export default function Controls({
                                 onClick={() => setShowNow(!showNow)}
                                 className={`px-3 py-1.5 rounded-lg text-sm transition-all border ${showNow ? 'bg-blue-400/20 text-blue-300 border-blue-400/50' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800'}`}
                             >
-                                NOW
+                                Now
                             </button>
                             <button
                                 onClick={() => setShowMean(!showMean)}
