@@ -59,6 +59,9 @@ export default function PriceChart({
         };
     });
 
+    const currentItem = chartData.find(item => isSameHour(item.date, now));
+    const currentTimestamp = currentItem?.timestamp;
+
     // Dynamically determine X-axis format based on the time span
     let xAxisFormat = 'HH:mm';
     let minTickGap = 30; // default for hours
@@ -141,6 +144,16 @@ export default function PriceChart({
                         tickFormatter={(val) => `${val}¢`}
                     />
                     <Tooltip content={<CustomTooltip />} />
+
+                    {/* Current Time Line */}
+                    {currentTimestamp && (
+                        <ReferenceLine
+                            x={currentTimestamp}
+                            stroke="#3b82f6"
+                            strokeDasharray="3 3"
+                            label={{ position: 'top', value: 'Now', fill: '#3b82f6', fontSize: 12 }}
+                        />
+                    )}
 
                     {/* Statistical Reference Lines */}
                     {stats && showMean && <ReferenceLine y={stats.mean} stroke="#fcd34d" strokeDasharray="4 4" label={{ position: 'insideTopLeft', value: `Mean ${stats.mean.toFixed(2)} ¢/kWh`, fill: '#fcd34d', fontSize: 10 }} />}
