@@ -2,15 +2,26 @@
 
 import { useState, useEffect } from 'react';
 import {
-    getDashboardPrices,
+    getPricesForDateRange,
     getCurrentPrice,
     calculateStatistics,
     ElectricityPrice
 } from '@/lib/api';
+import {
+    startOfYesterday, endOfYesterday,
+    startOfToday, endOfToday,
+    startOfTomorrow, endOfTomorrow,
+    startOfWeek, endOfWeek,
+    startOfMonth, endOfMonth,
+    startOfYear, endOfYear,
+    format
+} from 'date-fns';
 import PriceChart from './PriceChart';
 import CurrentPriceCard from './CurrentPriceCard';
 import Controls from './Controls';
 import { RefreshCw } from 'lucide-react';
+
+export type Timeframe = 'yesterday' | 'today' | 'tomorrow' | 'week' | 'month' | 'year' | 'custom';
 
 export default function Dashboard() {
     const [prices, setPrices] = useState<ElectricityPrice[]>([]);
@@ -27,6 +38,11 @@ export default function Dashboard() {
     const [showP90, setShowP90] = useState(false);
     const [showP95, setShowP95] = useState(false);
 
+    // Timeframe Settings
+    const [timeframe, setTimeframe] = useState<Timeframe>('today');
+    const [customStart, setCustomStart] = useState<string>(format(startOfToday(), 'yyyy-MM-dd'));
+    const [customEnd, setCustomEnd] = useState<string>(format(endOfToday(), 'yyyy-MM-dd'));
+
     useEffect(() => {
         async function fetchData() {
             try {
@@ -34,7 +50,50 @@ export default function Dashboard() {
                 setError(null);
 
                 // Fetch data array
-                const data = await getDashboardPrices();
+                let start: Date, end: Date;
+                const now = new Date();
+                switch (timeframe) {
+                    case 'yesterday':
+                        start = startOfYesterday();
+                        end = endOfYesterday();
+                        break;
+                    case 'today':
+                        start = startOfToday();
+                        end = endOfToday();
+                        break;
+                    case 'tomorrow':
+                        start = startOfTomorrow();
+                        end = endOfTomorrow();
+                        break;
+                    case 'week':
+                        start = startOfWeek(now, { weekStartsOn: 1 });
+                        end = endOfWeek(now, { weekStartsOn: 1 });
+                        break;
+                    case 'month':
+                        start = startOfMonth(now);
+                        end = endOfMonth(now);
+                        break;
+                    case 'year':
+                        start = startOfYear(now);
+                        end = endOfYear(now);
+                        break;
+                    case 'custom':
+                        start = customStart ? new Date(customStart) : startOfToday();
+                        end = customEnd ? new Date(customEnd) : endOfToday();
+                        start.setHours(0, 0, 0, 0);
+                        end.setHours(23, 59, 59, 999);
+                        if (start > end) {
+                            const temp = start;
+                            start = end;
+                            end = temp;
+                        }
+                        break;
+                    default:
+                        start = startOfToday();
+                        end = endOfToday();
+                }
+
+                const data = await getPricesForDateRange(start, end);
                 setPrices(data);
 
                 // Extract precise current price and previous
@@ -64,7 +123,7 @@ export default function Dashboard() {
         // Refresh data every 15 minutes to ensure current hour is accurate
         const interval = setInterval(fetchData, 15 * 60 * 1000);
         return () => clearInterval(interval);
-    }, []);
+    }, [timeframe, customStart, customEnd]);
 
     // Calculate statistics only once when prices or VAT settings change
     const stats = calculateStatistics(prices, includeVat);
@@ -118,6 +177,12 @@ export default function Dashboard() {
                         setShowP90={setShowP90}
                         showP95={showP95}
                         setShowP95={setShowP95}
+                        timeframe={timeframe}
+                        setTimeframe={setTimeframe}
+                        customStart={customStart}
+                        setCustomStart={setCustomStart}
+                        customEnd={customEnd}
+                        setCustomEnd={setCustomEnd}
                     />
                 </div>
             </div>

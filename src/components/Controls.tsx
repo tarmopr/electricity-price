@@ -1,5 +1,6 @@
 import { Switch } from '@headlessui/react';
 import { Label } from '@/components/ui/label';
+import { Timeframe } from './Dashboard';
 
 interface ControlsProps {
     includeVat: boolean;
@@ -14,6 +15,12 @@ interface ControlsProps {
     setShowP90: (val: boolean) => void;
     showP95: boolean;
     setShowP95: (val: boolean) => void;
+    timeframe: Timeframe;
+    setTimeframe: (val: Timeframe) => void;
+    customStart: string;
+    setCustomStart: (val: string) => void;
+    customEnd: string;
+    setCustomEnd: (val: string) => void;
 }
 
 export default function Controls({
@@ -28,11 +35,54 @@ export default function Controls({
     showP90,
     setShowP90,
     showP95,
-    setShowP95
+    setShowP95,
+    timeframe,
+    setTimeframe,
+    customStart,
+    setCustomStart,
+    customEnd,
+    setCustomEnd
 }: ControlsProps) {
     return (
-        <div className="bg-zinc-900/40 p-5 rounded-2xl border border-zinc-800/50 backdrop-blur-md">
+        <div className="bg-zinc-900/40 p-5 rounded-2xl border border-zinc-800/50 backdrop-blur-md space-y-6">
+
+            {/* Top Row: Timeframe & Dates */}
             <div className="flex flex-col md:flex-row gap-6 justify-between items-start md:items-center">
+                <div className="flex flex-col space-y-2 w-full">
+                    <Label className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Timeframe</Label>
+                    <div className="flex flex-wrap items-center gap-2">
+                        {(['yesterday', 'today', 'tomorrow', 'week', 'month', 'year', 'custom'] as Timeframe[]).map((tf) => (
+                            <button
+                                key={tf}
+                                onClick={() => setTimeframe(tf)}
+                                className={`px-3 py-1.5 rounded-lg text-sm transition-all border ${timeframe === tf ? 'bg-green-400/20 text-green-300 border-green-400/50' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800'}`}
+                            >
+                                {tf.charAt(0).toUpperCase() + tf.slice(1)}
+                            </button>
+                        ))}
+                        {timeframe === 'custom' && (
+                            <div className="flex flex-wrap items-center gap-2 ml-0 md:ml-2">
+                                <input
+                                    type="date"
+                                    value={customStart}
+                                    onChange={(e) => setCustomStart(e.target.value)}
+                                    className="bg-zinc-800/80 border border-zinc-700 text-zinc-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-green-500 placeholder-zinc-500"
+                                />
+                                <span className="text-zinc-500 text-sm font-medium">to</span>
+                                <input
+                                    type="date"
+                                    value={customEnd}
+                                    onChange={(e) => setCustomEnd(e.target.value)}
+                                    className="bg-zinc-800/80 border border-zinc-700 text-zinc-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-green-500 placeholder-zinc-500"
+                                />
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Bottom Row: VAT & Stats */}
+            <div className="flex flex-col xl:flex-row gap-6 justify-between items-start xl:items-center pt-4 border-t border-zinc-800/50">
 
                 {/* VAT Toggle */}
                 <div className="flex items-center space-x-3">

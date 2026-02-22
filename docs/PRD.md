@@ -20,6 +20,8 @@ The **Estonia Electricity Price Dashboard** is a premium, highly interactive web
 - **Responsiveness:** Auto-scaling taking full width of the container while maintaining aspect ratio.
 
 ### 3.3. Advanced Controls & Settings
+- **Timeframe Scale:** Toggles to quickly switch the displayed data timeframe between Yesterday, Today (default), Tomorrow, This Week, This Month, and This Year.
+- **Custom Date Range:** Date pickers to fetch and visualize historical or forecasted electricity prices for any custom start and end date combination.
 - **VAT Toggle:** A switch allowing users to instantly recalculate all displayed prices to either include or exclude the Estonian Value Added Tax (VAT), which is currently 22%. By default, VAT should be included.
 - **Statistical Overlays:** Toggle buttons to overlay horizontal reference lines on the main chart for the following mathematical calculations based on the currently loaded data timeframe:
   - Mean (Average)
