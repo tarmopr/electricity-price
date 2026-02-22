@@ -11,19 +11,22 @@ The **Estonia Electricity Price Dashboard** is a premium, highly interactive web
 
 ### 3.1. Current Price Widget
 - **Live Price Display:** Shows the exact electricity price for the current hour in cents/kWh.
-- **Trend Indicator:** Displays the price difference (in cents/kWh) compared to the preceding clock hour, with visual indicators (green for price drop, red for increase).
+- **Trend Indicators:** Displays the price difference (in cents/kWh) compared to both the preceding clock hour and the next clock hour, with visual indicators (green for down, red for up).
+- **Median Context:** Displays the median price for the currently selected timeframe directly beneath the current price for quick reference.
 
 ### 3.2. Interactive Price Chart
-- **Timeline Visualization:** An area chart displaying prices for the last 24 hours and up to the next 24+ forecasted hours.
-- **Visual Distinction:** Distinct color coding and styling for past/current prices (solid line/fill) versus future prices (dashed line/different fill hue).
+- **Timeline Visualization:** An area chart displaying prices for the selected date range.
+- **Visual Distinction:** Distinct color coding and styling. The past/current price area uses a dynamic 3-color gradient (Green when below median, Blue near median, Red when spiking above). The future price is styled distinctly (purple dashed line/fill).
 - **Interactivity:** Support for hover state tooltips showing exact time and price.
+- **Dynamic X-Axis:** The time axis dynamically formats based on the selected time span (e.g., `HH:mm` for daily views, `MMM d` for weekly/monthly views, `MMM yyyy` for yearly views).
 - **Responsiveness:** Auto-scaling taking full width of the container while maintaining aspect ratio.
 
 ### 3.3. Advanced Controls & Settings
-- **Timeframe Scale:** Toggles to quickly switch the displayed data timeframe between Yesterday, Today (default), Tomorrow, This Week, This Month, and This Year.
+- **Collapsible Mobile View:** On narrow screens, the controls are hidden behind a toggle button by default to maximize chart visibility.
+- **Timeframe Scale:** Toggles to quickly switch the displayed data timeframe between Yesterday, Today, Tomorrow, This Week, This Month, and This Year.
 - **Custom Date Range:** Date pickers to fetch and visualize historical or forecasted electricity prices for any custom start and end date combination.
-- **VAT Toggle:** A switch allowing users to instantly recalculate all displayed prices to either include or exclude the Estonian Value Added Tax (VAT), which is currently 22%. By default, VAT should be included.
-- **Statistical Overlays:** Toggle buttons to overlay horizontal reference lines on the main chart for the following mathematical calculations based on the currently loaded data timeframe:
+- **VAT Toggle:** A button allowing users to instantly recalculate all displayed prices to either include or exclude the Estonian Value Added Tax (VAT), which is currently 22%. By default, VAT should be included.
+- **Statistical Overlays:** Toggle buttons to overlay horizontal reference lines on the main chart for mathematical calculations. The reference lines explicitly state their calculated value (e.g., `Mean 9.19 ¢/kWh`) in the chart label:
   - Mean (Average)
   - Median (50th Percentile)
   - 75th Percentile
@@ -53,7 +56,7 @@ The **Estonia Electricity Price Dashboard** is a premium, highly interactive web
 ## 5. Non-Functional Requirements
 - **Performance:** Fast initial load utilizing Next.js Server-Side Rendering (SSR) capabilities where applicable, though most data fetching will be Client-Side due to dynamic time dependencies.
 - **Design:** The UI must be "premium" and modern, avoiding default browser aesthetics. It should utilize dark mode (`#09090b` background), smooth generic fonts (`Inter`), and sleek scrollbars.
-- **Responsiveness:** The layout must gracefully degrade from a multi-column desktop layout to a stacked, single-column layout on mobile devices.
+- **Responsiveness:** The layout must gracefully degrade from a multi-column desktop layout to a stacked, single-column layout on mobile devices. Text wrapping and header padding should dynamically adjust to prevent awkwardly broken sentences on wide screens or cramped text on mobiles.
 - **Error Handling:** Graceful error states if the Elering API is unreachable or returns malformed payloads.
 
 ## 6. Future Considerations (Out of Scope for MVP)
