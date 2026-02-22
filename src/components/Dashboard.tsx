@@ -27,6 +27,7 @@ export default function Dashboard() {
     const [prices, setPrices] = useState<ElectricityPrice[]>([]);
     const [currentPrice, setCurrentPrice] = useState<ElectricityPrice | null>(null);
     const [previousPrice, setPreviousPrice] = useState<ElectricityPrice | null>(null);
+    const [nextPrice, setNextPrice] = useState<ElectricityPrice | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -101,10 +102,15 @@ export default function Dashboard() {
                 setCurrentPrice(current);
 
                 if (current && data.length > 0) {
-                    // Find the hour just before the current one to show trend
+                    // Find the hour just before the current one to show trend, and the next hour
                     const currentIdx = data.findIndex(p => p.timestamp === current.timestamp);
                     if (currentIdx > 0) {
                         setPreviousPrice(data[currentIdx - 1]);
+                    }
+                    if (currentIdx !== -1 && currentIdx < data.length - 1) {
+                        setNextPrice(data[currentIdx + 1]);
+                    } else {
+                        setNextPrice(null);
                     }
                 }
             } catch (err: unknown) {
@@ -160,6 +166,7 @@ export default function Dashboard() {
                     <CurrentPriceCard
                         currentPrice={currentPrice}
                         previousPrice={previousPrice}
+                        nextPrice={nextPrice}
                         includeVat={includeVat}
                     />
                 </div>

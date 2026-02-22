@@ -4,10 +4,11 @@ import { ArrowDown, ArrowUp, Zap } from "lucide-react";
 interface CurrentPriceCardProps {
     currentPrice: ElectricityPrice | null;
     previousPrice?: ElectricityPrice | null;
+    nextPrice?: ElectricityPrice | null;
     includeVat: boolean;
 }
 
-export default function CurrentPriceCard({ currentPrice, previousPrice, includeVat }: CurrentPriceCardProps) {
+export default function CurrentPriceCard({ currentPrice, previousPrice, nextPrice, includeVat }: CurrentPriceCardProps) {
     if (!currentPrice) {
         return (
             <div className="p-4 lg:p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800 animate-pulse h-full min-h-[120px] backdrop-blur-sm flex flex-col justify-center">
@@ -19,10 +20,15 @@ export default function CurrentPriceCard({ currentPrice, previousPrice, includeV
 
     const priceValue = includeVat ? applyVat(currentPrice.priceCentsKwh) : currentPrice.priceCentsKwh;
     const previousValue = previousPrice ? (includeVat ? applyVat(previousPrice.priceCentsKwh) : previousPrice.priceCentsKwh) : null;
+    const nextValue = nextPrice ? (includeVat ? applyVat(nextPrice.priceCentsKwh) : nextPrice.priceCentsKwh) : null;
 
     const isUp = previousValue ? priceValue > previousValue : false;
     const isDown = previousValue ? priceValue < previousValue : false;
     const diff = previousValue ? Math.abs(priceValue - previousValue) : 0;
+
+    const isNextUp = nextValue ? nextValue > priceValue : false;
+    const isNextDown = nextValue ? nextValue < priceValue : false;
+    const nextDiff = nextValue ? Math.abs(nextValue - priceValue) : 0;
 
     return (
         <div className="p-4 lg:p-6 rounded-2xl bg-gradient-to-br from-zinc-900/80 to-zinc-950/80 border border-zinc-800/50 shadow-2xl backdrop-blur-xl relative overflow-hidden group hover:border-zinc-700/50 transition-all duration-500 h-full flex flex-col justify-center">
@@ -44,18 +50,32 @@ export default function CurrentPriceCard({ currentPrice, previousPrice, includeV
                 </div>
             </div>
 
-            {previousValue && (
-                <div className="flex items-center mt-2 lg:mt-4 space-x-1.5 text-xs lg:text-sm relative z-10">
-                    {isUp && <ArrowUp className="w-3 h-3 lg:w-4 lg:h-4 text-red-400" />}
-                    {isDown && <ArrowDown className="w-3 h-3 lg:w-4 lg:h-4 text-green-400" />}
-                    {!isUp && !isDown && <div className="w-3 h-3 lg:w-4 lg:h-4 flex items-center justify-center text-zinc-500">-</div>}
+            <div className="flex flex-col space-y-2 mt-4 relative z-10 w-full">
+                {previousValue && (
+                    <div className="flex items-center space-x-1.5 text-xs lg:text-sm bg-zinc-900/30 rounded-lg p-2">
+                        {isUp && <ArrowUp className="w-3 h-3 lg:w-4 lg:h-4 text-red-400" />}
+                        {isDown && <ArrowDown className="w-3 h-3 lg:w-4 lg:h-4 text-green-400" />}
+                        {!isUp && !isDown && <div className="w-3 h-3 lg:w-4 lg:h-4 flex items-center justify-center text-zinc-500">-</div>}
 
-                    <span className={isUp ? 'text-red-400 font-medium' : isDown ? 'text-green-400 font-medium' : 'text-zinc-500'}>
-                        {diff.toFixed(2)}¢
-                    </span>
-                    <span className="text-zinc-500">vs previous hour</span>
-                </div>
-            )}
+                        <span className={isUp ? 'text-red-400 font-medium' : isDown ? 'text-green-400 font-medium' : 'text-zinc-500'}>
+                            {diff.toFixed(2)}¢
+                        </span>
+                        <span className="text-zinc-500">vs previous hour</span>
+                    </div>
+                )}
+                {nextValue && (
+                    <div className="flex items-center space-x-1.5 text-xs lg:text-sm bg-zinc-900/30 rounded-lg p-2">
+                        {isNextUp && <ArrowUp className="w-3 h-3 lg:w-4 lg:h-4 text-red-400" />}
+                        {isNextDown && <ArrowDown className="w-3 h-3 lg:w-4 lg:h-4 text-green-400" />}
+                        {!isNextUp && !isNextDown && <div className="w-3 h-3 lg:w-4 lg:h-4 flex items-center justify-center text-zinc-500">-</div>}
+
+                        <span className={isNextUp ? 'text-red-400 font-medium' : isNextDown ? 'text-green-400 font-medium' : 'text-zinc-500'}>
+                            {nextDiff.toFixed(2)}¢
+                        </span>
+                        <span className="text-zinc-500">vs next hour</span>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }
