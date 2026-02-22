@@ -19,8 +19,8 @@ export default function Home() {
               Estonia Energy
             </h1>
           </div>
-          <p className="text-zinc-400 mt-2 text-lg max-w-xl">
-            Live Nord Pool spot market prices. Monitor current rates, analyze trends, and plan your energy consumption.
+          <p className="text-zinc-400 mt-2 text-base md:text-lg max-w-4xl">
+            Live Nord Pool spot market prices. <span className="hidden sm:inline">Monitor current rates, analyze trends, and plan your energy consumption.</span>
           </p>
         </div>
       </div>
