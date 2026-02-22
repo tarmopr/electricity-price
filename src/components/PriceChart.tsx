@@ -122,9 +122,9 @@ export default function PriceChart({
                 >
                     <defs>
                         <linearGradient id="colorPast" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#ef4444" stopOpacity={0.6} />
+                            <stop offset={`${Math.max(0, medianOffset - 0.15) * 100}%`} stopColor="#ef4444" stopOpacity={0.6} />
                             <stop offset={`${medianOffset * 100}%`} stopColor="#3b82f6" stopOpacity={0.6} />
-                            <stop offset="100%" stopColor="#22c55e" stopOpacity={0.6} />
+                            <stop offset={`${Math.min(1, medianOffset + 0.15) * 100}%`} stopColor="#22c55e" stopOpacity={0.6} />
                         </linearGradient>
                         <linearGradient id="colorFuture" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#a855f7" stopOpacity={0.4} />
