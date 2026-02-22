@@ -23,8 +23,10 @@ export interface CurrentPriceResponse {
     }[];
 }
 
-// Ensure timestamp is properly aligned
-const API_BASE_URL = 'https://dashboard.elering.ee/api/nps/price';
+// Use local proxy for client-side fetching to avoid CORS, and absolute URL for server-side
+const API_BASE_URL = typeof window !== 'undefined'
+    ? '/api/elering/nps/price'
+    : 'https://dashboard.elering.ee/api/nps/price';
 
 
 
