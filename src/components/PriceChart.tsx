@@ -125,11 +125,12 @@ export default function PriceChart({
     };
 
     return (
-        <div className="w-full h-[400px] mt-4 relative">
-            <ResponsiveContainer width="100%" height="100%">
+        <div className="w-full h-[400px] mt-4 relative overflow-hidden" style={{ WebkitTapHighlightColor: 'transparent' }}>
+            <ResponsiveContainer width="100%" height="100%" style={{ outline: 'none' }}>
                 <AreaChart
                     data={chartData}
                     margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                    style={{ outline: 'none' }}
                 >
                     <defs>
                         <linearGradient id="colorPast" x1="0" y1="0" x2="0" y2="1">
