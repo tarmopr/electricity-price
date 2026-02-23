@@ -44,6 +44,11 @@ export default function Dashboard() {
     const [customStart, setCustomStart] = useState<string>(format(startOfToday(), 'yyyy-MM-dd'));
     const [customEnd, setCustomEnd] = useState<string>(format(endOfToday(), 'yyyy-MM-dd'));
 
+    // Cheapest Period Settings
+    const [showCheapestPeriod, setShowCheapestPeriod] = useState<boolean>(false);
+    const [cheapestPeriodHours, setCheapestPeriodHours] = useState<number>(1);
+    const [cheapestPeriodUntil, setCheapestPeriodUntil] = useState<string>("22:00");
+
     useEffect(() => {
         async function fetchData() {
             try {
@@ -237,6 +242,12 @@ export default function Dashboard() {
                         setCustomStart={setCustomStart}
                         customEnd={customEnd}
                         setCustomEnd={setCustomEnd}
+                        showCheapestPeriod={showCheapestPeriod}
+                        setShowCheapestPeriod={setShowCheapestPeriod}
+                        cheapestPeriodHours={cheapestPeriodHours}
+                        setCheapestPeriodHours={setCheapestPeriodHours}
+                        cheapestPeriodUntil={cheapestPeriodUntil}
+                        setCheapestPeriodUntil={setCheapestPeriodUntil}
                     />
                 </div>
             </div>
@@ -254,6 +265,9 @@ export default function Dashboard() {
                     showP90={showP90}
                     showP95={showP95}
                     stats={stats}
+                    showCheapestPeriod={showCheapestPeriod}
+                    cheapestPeriodHours={cheapestPeriodHours}
+                    cheapestPeriodUntil={cheapestPeriodUntil}
                 />
             </div>
 

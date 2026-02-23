@@ -23,10 +23,11 @@ The **Estonia Electricity Price Dashboard** is a premium, highly interactive web
 
 ### 3.3. Advanced Controls & Settings
 - **Collapsible Mobile View:** On narrow screens, the controls are hidden behind a toggle button by default to maximize chart visibility.
-- **Timeframe Scale:** Toggles to quickly switch the displayed data timeframe between Yesterday, Today, Tomorrow, This Week, This Month, This Quarter, and This Year.
+- **Timeframe Scale:** A sleek dropdown selector to quickly switch the displayed data timeframe between Yesterday, Today, Tomorrow, This Week, This Month, This Quarter, and This Year.
+- **Discovery (Cheapest Period):** Users can toggle a highlighting feature to automatically calculate and discover the mathematically cheapest contiguous period of electricity (1 to 8 hours) within their currently selected timeframe overlaying a reference area on the chart.
 - **Custom Date Range:** Date pickers to fetch and visualize historical or forecasted electricity prices for any custom start and end date combination. Elering API constraints are bypassed by automatically chunking large requests.
 - **VAT Toggle:** A button allowing users to instantly recalculate all displayed prices to either include or exclude the Estonian Value Added Tax (VAT), which is currently 22%. By default, VAT should be included.
-- **Statistical Overlays:** Toggle buttons to overlay horizontal reference lines on the main chart for mathematical calculations. The reference lines explicitly state their calculated value (e.g., `Mean 9.19 ¢/kWh`):
+- **Advanced Chart Settings (Statistical Overlays):** Toggles to overlay horizontal reference lines on the main chart for mathematical calculations. The reference lines explicitly state their calculated value (e.g., `Mean 9.19 ¢/kWh`):
   - Mean (Average)
   - Median (50th Percentile)
   - 75th Percentile

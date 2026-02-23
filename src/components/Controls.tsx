@@ -24,6 +24,12 @@ interface ControlsProps {
     setCustomStart: (val: string) => void;
     customEnd: string;
     setCustomEnd: (val: string) => void;
+    showCheapestPeriod: boolean;
+    setShowCheapestPeriod: (val: boolean) => void;
+    cheapestPeriodHours: number;
+    setCheapestPeriodHours: (val: number) => void;
+    cheapestPeriodUntil: string;
+    setCheapestPeriodUntil: (val: string) => void;
 }
 
 export default function Controls({
@@ -46,7 +52,13 @@ export default function Controls({
     customStart,
     setCustomStart,
     customEnd,
-    setCustomEnd
+    setCustomEnd,
+    showCheapestPeriod,
+    setShowCheapestPeriod,
+    cheapestPeriodHours,
+    setCheapestPeriodHours,
+    cheapestPeriodUntil,
+    setCheapestPeriodUntil
 }: ControlsProps) {
     const [isMobileOpen, setIsMobileOpen] = useState(false);
 
@@ -66,49 +78,101 @@ export default function Controls({
             </button>
 
             {/* The Controls Content */}
-            <div className={`${isMobileOpen ? 'flex' : 'hidden'} md:flex flex-col space-y-6 mt-4 md:mt-0 pt-4 md:pt-0 border-t border-zinc-800/50 md:border-0`}>
+            <div className={`${isMobileOpen ? 'flex' : 'hidden'} md:flex flex-col space-y-4 mt-4 md:mt-0 pt-4 md:pt-0 border-t border-zinc-800/50 md:border-0`}>
 
-                {/* Top Row: Timeframe & Dates */}
-                <div className="flex flex-col md:flex-row gap-6 justify-between items-start md:items-center">
-                    <div className="flex flex-col space-y-2 w-full">
+                {/* Top Row: Timeframe & Dates & Cheapest Period */}
+                <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+
+                    {/* Timeframe Selector & Custom Dates */}
+                    <div className="flex flex-col space-y-2">
                         <Label className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Timeframe</Label>
-                        <div className="flex flex-wrap items-center gap-2">
-                            {(['yesterday', 'today', 'tomorrow', 'week', 'month', 'quarter', 'custom'] as Timeframe[]).map((tf) => (
-                                <button
-                                    key={tf}
-                                    onClick={() => setTimeframe(tf)}
-                                    className={`px-3 py-1.5 rounded-lg text-sm transition-all border ${timeframe === tf ? 'bg-green-400/20 text-green-300 border-green-400/50' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800'}`}
+                        <div className="flex flex-wrap items-center gap-3">
+                            <div className="relative">
+                                <select
+                                    value={timeframe}
+                                    onChange={(e) => setTimeframe(e.target.value as Timeframe)}
+                                    className="appearance-none bg-zinc-800/50 text-zinc-200 border border-zinc-700/80 hover:bg-zinc-800/80 focus:outline-none focus:ring-1 focus:ring-green-500/50 rounded-lg px-4 py-1.5 pr-8 text-sm font-medium transition-colors cursor-pointer"
                                 >
-                                    {tf.charAt(0).toUpperCase() + tf.slice(1)}
-                                </button>
-                            ))}
+                                    <option value="yesterday">Yesterday</option>
+                                    <option value="today">Today</option>
+                                    <option value="tomorrow">Tomorrow</option>
+                                    <option value="week">This Week</option>
+                                    <option value="month">This Month</option>
+                                    <option value="quarter">This Quarter</option>
+                                    <option value="custom">Custom Range</option>
+                                </select>
+                                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+                            </div>
+
                             {timeframe === 'custom' && (
-                                <div className="flex flex-wrap items-center gap-2 ml-0 md:ml-2">
+                                <div className="flex items-center gap-2">
                                     <input
                                         type="date"
                                         value={customStart}
                                         onChange={(e) => setCustomStart(e.target.value)}
-                                        className="bg-zinc-800/80 border border-zinc-700 text-zinc-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-green-500 placeholder-zinc-500"
+                                        className="bg-zinc-800/50 border border-zinc-700/80 text-zinc-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-green-500"
                                     />
-                                    <span className="text-zinc-500 text-sm font-medium">to</span>
+                                    <span className="text-zinc-500 text-sm">to</span>
                                     <input
                                         type="date"
                                         value={customEnd}
                                         onChange={(e) => setCustomEnd(e.target.value)}
-                                        className="bg-zinc-800/80 border border-zinc-700 text-zinc-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-green-500 placeholder-zinc-500"
+                                        className="bg-zinc-800/50 border border-zinc-700/80 text-zinc-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-green-500"
                                     />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Cheapest Period Feature */}
+                    <div className="flex flex-col space-y-2">
+                        <Label className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Discovery</Label>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <button
+                                onClick={() => setShowCheapestPeriod(!showCheapestPeriod)}
+                                className={`px-3 py-1.5 rounded-lg text-sm transition-all border ${showCheapestPeriod ? 'bg-green-400/20 text-green-300 border-green-400/50' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800'}`}
+                            >
+                                Highlight Cheapest
+                            </button>
+
+                            {showCheapestPeriod && (
+                                <div className="flex items-center gap-2">
+                                    <div className="relative">
+                                        <select
+                                            value={cheapestPeriodHours}
+                                            onChange={(e) => setCheapestPeriodHours(Number(e.target.value))}
+                                            className="appearance-none bg-zinc-800/50 text-zinc-200 border border-zinc-700/80 hover:bg-zinc-800/80 focus:outline-none focus:ring-1 focus:ring-green-500/50 rounded-lg px-3 py-1.5 pr-8 text-sm font-medium transition-colors cursor-pointer"
+                                        >
+                                            {[1, 2, 3, 4, 5, 6, 7, 8].map(h => (
+                                                <option key={h} value={h}>{h} hr{h > 1 ? 's' : ''}</option>
+                                            ))}
+                                        </select>
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+                                    </div>
+                                    <span className="text-zinc-500 text-sm">until</span>
+                                    <div className="relative">
+                                        <select
+                                            value={cheapestPeriodUntil}
+                                            onChange={(e) => setCheapestPeriodUntil(e.target.value)}
+                                            className="appearance-none bg-zinc-800/50 text-zinc-200 border border-zinc-700/80 hover:bg-zinc-800/80 focus:outline-none focus:ring-1 focus:ring-green-500/50 rounded-lg px-3 py-1.5 pr-8 text-sm font-medium transition-colors cursor-pointer"
+                                        >
+                                            {Array.from({ length: 24 }).map((_, i) => {
+                                                const hourStr = i.toString().padStart(2, '0') + ':00';
+                                                return <option key={hourStr} value={hourStr}>{hourStr}</option>;
+                                            })}
+                                        </select>
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+                                    </div>
                                 </div>
                             )}
                         </div>
                     </div>
                 </div>
 
-                {/* Bottom Row: Stats & VAT */}
-                <div className="flex flex-col xl:flex-row gap-6 justify-between items-start xl:items-center pt-4 border-t border-zinc-800/50">
-
+                {/* Advanced Settings Content */}
+                <div className="flex flex-col xl:flex-row gap-6 justify-between items-start xl:items-center pt-4 pb-2 border-t border-zinc-800/50 mt-4">
                     {/* Statistical Overlays */}
                     <div className="flex flex-col space-y-2 w-full md:w-auto">
-                        <Label className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Statistical Lines</Label>
                         <div className="flex flex-wrap gap-2">
                             <button
                                 onClick={() => setShowNow(!showNow)}
@@ -146,13 +210,11 @@ export default function Controls({
                             >
                                 95th Pctl
                             </button>
-
                         </div>
                     </div>
 
                     {/* VAT Toggle */}
-                    <div className="flex flex-col space-y-2 w-full md:w-auto">
-                        <Label className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Taxes</Label>
+                    <div className="flex flex-col space-y-2 w-full md:w-auto mt-2 xl:mt-0">
                         <div className="flex flex-wrap gap-2">
                             <button
                                 onClick={() => setIncludeVat(!includeVat)}
@@ -163,7 +225,6 @@ export default function Controls({
                         </div>
                     </div>
                 </div>
-
             </div>
         </div >
     );

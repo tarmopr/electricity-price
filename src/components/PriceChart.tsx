@@ -6,6 +6,7 @@ import {
     AreaChart,
     CartesianGrid,
     ReferenceLine,
+    ReferenceArea,
     ResponsiveContainer,
     Tooltip,
     XAxis,
@@ -31,6 +32,9 @@ interface PriceChartProps {
         p90: number;
         p95: number;
     } | null;
+    showCheapestPeriod: boolean;
+    cheapestPeriodHours: number;
+    cheapestPeriodUntil: string;
 }
 
 export default function PriceChart({
@@ -43,7 +47,10 @@ export default function PriceChart({
     showP75,
     showP90,
     showP95,
-    stats
+    stats,
+    showCheapestPeriod,
+    cheapestPeriodHours,
+    cheapestPeriodUntil
 }: PriceChartProps) {
     const [mounted, setMounted] = useState(false);
     useEffect(() => setMounted(true), []);
@@ -129,6 +136,89 @@ export default function PriceChart({
         }
     }
 
+    // --- CHEAPEST PERIOD CALCULATION ---
+    let cheapestWindowStart: string | null = null;
+    let cheapestWindowEnd: string | null = null;
+    let cheapestAverage: number | null = null;
+
+    if (showCheapestPeriod && chartData.length > 0 && cheapestPeriodHours > 0) {
+        let startIndex = 0;
+        const currentHourStart = new Date(now);
+        currentHourStart.setMinutes(0, 0, 0);
+
+        const foundIndex = chartData.findIndex(item => new Date(item.timestamp).getTime() >= currentHourStart.getTime());
+        if (foundIndex !== -1) {
+            startIndex = foundIndex;
+        } else {
+            // The whole chart is in the past, nothing to highlight
+            startIndex = chartData.length;
+        }
+
+        // Determine the absolute end limit timestamp
+        let endLimitTimestamp = new Date(currentHourStart);
+        if (cheapestPeriodUntil) {
+            const [untilH, untilM] = cheapestPeriodUntil.split(':').map(Number);
+            endLimitTimestamp.setHours(untilH, untilM, 0, 0);
+
+            // If the selected time is earlier in the day than "now", they mean tomorrow's time
+            if (endLimitTimestamp <= currentHourStart) {
+                endLimitTimestamp.setDate(endLimitTimestamp.getDate() + 1);
+            }
+        } else {
+            // Fallback if empty, just use far future
+            endLimitTimestamp = new Date(currentHourStart.getTime() + 100 * 24 * 60 * 60 * 1000);
+        }
+
+        const endLimitMs = endLimitTimestamp.getTime();
+
+        // Ensure we don't look past the length of the data array
+        // Each data point is 1 hour (except when aggregated, but 'hours' logic holds relatively)
+        const windowSize = Math.min(cheapestPeriodHours, chartData.length - startIndex);
+
+        if (windowSize > 0) {
+            let minSum = Infinity;
+            let minIndex = -1;
+
+            for (let i = startIndex; i <= chartData.length - windowSize; i++) {
+                // Determine the end time of this window.
+                // Assuming 1 index is roughly 1 hour in the display (or its aggregated size).
+                // The actual mathematically correct end time is the timestamp of the LAST item in the window + 1 hour.
+                const lastItemInWindow = chartData[i + windowSize - 1];
+                const windowEndMs = new Date(lastItemInWindow.timestamp).getTime() + (60 * 60 * 1000); // add 1 hour to the start of the last bucket
+
+                if (windowEndMs > endLimitMs) {
+                    // This window finishes AFTER the user's "Until" time limit, so skip it (and all subsequent).
+                    break;
+                }
+
+                let currentSum = 0;
+                // Calculate sum for this window
+                for (let j = 0; j < windowSize; j++) {
+                    currentSum += chartData[i + j].displayPrice;
+                }
+
+                if (currentSum < minSum) {
+                    minSum = currentSum;
+                    minIndex = i;
+                }
+            }
+
+            if (minIndex !== -1) {
+                cheapestWindowStart = chartData[minIndex].timestamp;
+                // Ensure the end visually covers the last hour fully
+                const endIndex = minIndex + windowSize - 1;
+                // The timestamp is the start of the final hour in the block.
+                // If we have subsequent data, we highlight UP TO the next hour to make the box fill fully.
+                // If it's the very last data point, we highlight to its start.
+                cheapestWindowEnd = endIndex + 1 < chartData.length
+                    ? chartData[endIndex + 1].timestamp
+                    : chartData[endIndex].timestamp;
+
+                cheapestAverage = minSum / windowSize;
+            }
+        }
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; payload: any }>; label?: string | number }) => {
         if (active && payload && payload.length) {
@@ -191,6 +281,24 @@ export default function PriceChart({
                         tickFormatter={(val) => `${val}¢`}
                     />
                     <Tooltip content={<CustomTooltip />} />
+
+                    {/* Cheapest Period Reference Area */}
+                    {showCheapestPeriod && cheapestWindowStart && cheapestWindowEnd && (
+                        <ReferenceArea
+                            x1={cheapestWindowStart}
+                            x2={cheapestWindowEnd}
+                            fill="#86efac" // subtle green fill
+                            fillOpacity={0.15}
+                            strokeOpacity={0}
+                            label={{
+                                value: `Cheapest ${cheapestPeriodHours}h: ${cheapestAverage?.toFixed(2)} ¢/kWh`,
+                                position: 'insideTop',
+                                fill: '#4ade80',
+                                fontSize: 12,
+                                fontWeight: 'bold'
+                            }}
+                        />
+                    )}
 
                     {/* Current Time Line */}
                     {showNow && currentTimestamp && (
