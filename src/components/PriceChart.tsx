@@ -394,10 +394,11 @@ export default function PriceChart({
                     {showNow && currentTimestamp && (
                         <ReferenceLine
                             x={currentTimestamp}
-                            stroke="#3b82f6"
+                            stroke="#38bdf8" // bright blue
                             strokeDasharray="3 3"
-                            strokeOpacity={0.5}
-                            label={{ position: 'insideTop', value: 'Now', fill: '#3b82f6', fontSize: 12 }}
+                            strokeOpacity={lineOpacity}
+                            style={{ transition: 'opacity 0.3s' }}
+                            label={<CustomReferenceLabel value="Now" fill="#38bdf8" />}
                         />
                     )}
 
