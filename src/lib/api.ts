@@ -160,6 +160,75 @@ export async function getPricesWithPrediction(start: Date, end: Date): Promise<E
 }
 
 /**
+ * Aggregates a high-resolution array of ElectricityPrices into larger N-hour buckets.
+ * Calculates the mathematical average of the priceEurMwh for each bucket.
+ * 
+ * @param prices The raw array of prices, typically spaced 15-minutes apart
+ * @param intervalHours The number of hours each aggregated bucket should span
+ * @returns A new array of averaged ElectricityPrice objects
+ */
+export function aggregatePrices(prices: ElectricityPrice[], intervalHours: number): ElectricityPrice[] {
+    if (!prices || prices.length === 0 || intervalHours <= 0) return prices;
+
+    const aggregated: ElectricityPrice[] = [];
+    const intervalMs = intervalHours * 60 * 60 * 1000;
+
+    let currentBucketStart = prices[0].date.getTime();
+    let currentBucketEnd = currentBucketStart + intervalMs;
+
+    let bucketSumEurMwh = 0;
+    let bucketCount = 0;
+    let bucketAllPredicted = true;
+
+    for (const price of prices) {
+        const time = price.date.getTime();
+
+        if (time >= currentBucketEnd) {
+            if (bucketCount > 0) {
+                const avgEurMwh = bucketSumEurMwh / bucketCount;
+                const bucketDate = new Date(currentBucketStart);
+                aggregated.push({
+                    timestamp: bucketDate.toISOString(),
+                    date: bucketDate,
+                    priceEurMwh: avgEurMwh,
+                    priceCentsKwh: convertEurMwhToCentsKwh(avgEurMwh),
+                    isPredicted: bucketAllPredicted
+                });
+            }
+
+            while (time >= currentBucketEnd) {
+                currentBucketStart += intervalMs;
+                currentBucketEnd += intervalMs;
+            }
+
+            bucketSumEurMwh = 0;
+            bucketCount = 0;
+            bucketAllPredicted = true;
+        }
+
+        bucketSumEurMwh += price.priceEurMwh;
+        bucketCount++;
+        if (!price.isPredicted) {
+            bucketAllPredicted = false;
+        }
+    }
+
+    if (bucketCount > 0) {
+        const avgEurMwh = bucketSumEurMwh / bucketCount;
+        const bucketDate = new Date(currentBucketStart);
+        aggregated.push({
+            timestamp: bucketDate.toISOString(),
+            date: bucketDate,
+            priceEurMwh: avgEurMwh,
+            priceCentsKwh: convertEurMwhToCentsKwh(avgEurMwh),
+            isPredicted: bucketAllPredicted
+        });
+    }
+
+    return aggregated;
+}
+
+/**
  * Utility to fetch data for the last 24 hours and the next 24 (or available) hours,
  * and predict missing future hours up to the end of tomorrow.
  */

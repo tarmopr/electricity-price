@@ -5,6 +5,7 @@ import {
     getPricesWithPrediction,
     getCurrentPrice,
     calculateStatistics,
+    aggregatePrices,
     ElectricityPrice
 } from '@/lib/api';
 import {
@@ -96,7 +97,33 @@ export default function Dashboard() {
                         end = endOfToday();
                 }
 
-                const data = await getPricesWithPrediction(start, end);
+                const rawData = await getPricesWithPrediction(start, end);
+
+                // --- DATA AGGREGATION LOGIC ---
+                let data = rawData;
+                if (timeframe === 'week') {
+                    // 1-hour intervals (average 4 points -> 1)
+                    data = aggregatePrices(rawData, 1);
+                } else if (timeframe === 'month') {
+                    // 6-hour intervals (average 24 points -> 1)
+                    data = aggregatePrices(rawData, 6);
+                } else if (timeframe === 'quarter') {
+                    // 12-hour intervals (average 48 points -> 1)
+                    data = aggregatePrices(rawData, 12);
+                } else if (timeframe === 'custom') {
+                    const daysDifference = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+                    if (daysDifference > 90) {
+                        // 24-hour intervals for custom ranges longer than 3 months
+                        data = aggregatePrices(rawData, 24);
+                    } else if (daysDifference > 30) {
+                        data = aggregatePrices(rawData, 12);
+                    } else if (daysDifference > 7) {
+                        data = aggregatePrices(rawData, 6);
+                    } else if (daysDifference > 3) {
+                        data = aggregatePrices(rawData, 1);
+                    }
+                }
+
                 setPrices(data);
 
                 // Extract precise current price and previous
