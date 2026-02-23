@@ -417,6 +417,7 @@ export default function PriceChart({
                         tick={{ fill: '#71717a', fontSize: 12 }}
                         tickFormatter={(val) => `${val}¢`}
                         domain={[calculatedMin, 'auto']}
+                        allowDataOverflow={true}
                         style={{ opacity: isHovering ? 0.6 : 1, transition: 'opacity 0.3s' }}
                     />
                     <Tooltip
