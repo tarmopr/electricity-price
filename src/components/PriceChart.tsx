@@ -156,18 +156,26 @@ export default function PriceChart({
         }
 
         // Determine the absolute end limit timestamp
-        let endLimitTimestamp = new Date(currentHourStart);
+        let baseTimeForLimit = currentHourStart;
+        if (startIndex < chartData.length) {
+            const firstAnalyzedItemTime = new Date(chartData[startIndex].timestamp);
+            if (firstAnalyzedItemTime > baseTimeForLimit) {
+                baseTimeForLimit = firstAnalyzedItemTime;
+            }
+        }
+
+        let endLimitTimestamp = new Date(baseTimeForLimit);
         if (cheapestPeriodUntil) {
             const [untilH, untilM] = cheapestPeriodUntil.split(':').map(Number);
             endLimitTimestamp.setHours(untilH, untilM, 0, 0);
 
-            // If the selected time is earlier in the day than "now", they mean tomorrow's time
-            if (endLimitTimestamp <= currentHourStart) {
+            // If the selected time is earlier in the day than our starting point
+            if (endLimitTimestamp <= baseTimeForLimit) {
                 endLimitTimestamp.setDate(endLimitTimestamp.getDate() + 1);
             }
         } else {
             // Fallback if empty, just use far future
-            endLimitTimestamp = new Date(currentHourStart.getTime() + 100 * 24 * 60 * 60 * 1000);
+            endLimitTimestamp = new Date(baseTimeForLimit.getTime() + 100 * 24 * 60 * 60 * 1000);
         }
 
         const endLimitMs = endLimitTimestamp.getTime();
