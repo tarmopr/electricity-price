@@ -96,6 +96,7 @@ export default function Controls({
                                     <option value="yesterday">Yesterday</option>
                                     <option value="today">Today</option>
                                     <option value="tomorrow">Tomorrow</option>
+                                    <option value="next_week">Next Week</option>
                                     <option value="week">Past Week</option>
                                     <option value="month">Past Month</option>
                                     <option value="quarter">Past Quarter</option>

@@ -12,7 +12,7 @@ import {
     startOfYesterday, endOfYesterday,
     startOfToday, endOfToday,
     startOfTomorrow, endOfTomorrow,
-    subDays, subMonths,
+    subDays, subMonths, addDays,
     format
 } from 'date-fns';
 import PriceChart from './PriceChart';
@@ -20,7 +20,7 @@ import CurrentPriceCard from './CurrentPriceCard';
 import Controls from './Controls';
 import { RefreshCw } from 'lucide-react';
 
-export type Timeframe = 'yesterday' | 'today' | 'tomorrow' | 'week' | 'month' | 'quarter' | 'custom';
+export type Timeframe = 'yesterday' | 'today' | 'tomorrow' | 'next_week' | 'week' | 'month' | 'quarter' | 'custom';
 
 export default function Dashboard() {
     const [prices, setPrices] = useState<ElectricityPrice[]>([]);
@@ -71,6 +71,10 @@ export default function Dashboard() {
                         start = startOfTomorrow();
                         end = endOfTomorrow();
                         break;
+                    case 'next_week':
+                        start = startOfTomorrow();
+                        end = addDays(endOfTomorrow(), 6); // Tomorrow + 6 days = 7 days total
+                        break;
                     case 'week':
                         start = subDays(startOfToday(), 7);
                         end = endOfToday();
@@ -103,7 +107,7 @@ export default function Dashboard() {
 
                 // --- DATA AGGREGATION LOGIC ---
                 let data = rawData;
-                if (timeframe === 'week') {
+                if (timeframe === 'week' || timeframe === 'next_week') {
                     // 1-hour intervals (average 4 points -> 1)
                     data = aggregatePrices(rawData, 1);
                 } else if (timeframe === 'month') {
