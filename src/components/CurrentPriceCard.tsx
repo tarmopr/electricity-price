@@ -32,11 +32,16 @@ export default function CurrentPriceCard({ currentPrice, previousPrice, nextPric
     const isNextDown = nextValue ? nextValue < priceValue : false;
     const nextDiff = nextValue ? Math.abs(nextValue - priceValue) : 0;
 
+    const isCheap = medianValue !== null ? priceValue <= medianValue : true;
+    const glowColor = isCheap ? 'bg-green-500' : 'bg-red-500';
+    const borderColor = isCheap ? 'border-green-500/20 hover:border-green-500/40' : 'border-red-500/20 hover:border-red-500/40';
+    const shadowColor = isCheap ? 'hover:shadow-[0_0_30px_rgba(34,197,94,0.15)]' : 'hover:shadow-[0_0_30px_rgba(239,68,68,0.15)]';
+
     return (
-        <div className="p-4 lg:p-6 rounded-2xl bg-gradient-to-br from-zinc-900/80 to-zinc-950/80 border border-zinc-800/50 shadow-2xl backdrop-blur-xl relative overflow-hidden group hover:border-zinc-700/50 transition-all duration-500 h-full flex flex-col justify-center">
+        <div className={`p-4 lg:p-6 rounded-2xl bg-gradient-to-br from-zinc-900/80 to-zinc-950/80 border ${borderColor} shadow-xl ${shadowColor} backdrop-blur-2xl relative overflow-hidden group hover:-translate-y-1 transition-all duration-500 h-full flex flex-col justify-center`}>
 
             {/* Decorative background glow */}
-            <div className="absolute -top-10 -right-10 w-32 h-32 bg-green-500/10 rounded-full blur-3xl group-hover:bg-green-500/20 transition-all duration-700"></div>
+            <div className={`absolute -top-10 -right-10 w-32 h-32 ${glowColor}/10 rounded-full blur-3xl group-hover:${glowColor}/20 transition-all duration-700`}></div>
 
             <div className="flex items-center space-x-2 text-zinc-400 mb-1 lg:mb-2 relative z-10">
                 <Zap className="w-4 h-4 text-green-400 shrink-0" />

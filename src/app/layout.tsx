@@ -22,8 +22,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark scroll-smooth overflow-x-hidden w-full">
-      <body className={`${inter.className} bg-zinc-950 text-zinc-50 min-h-screen overflow-x-hidden w-full selection:bg-green-500/30 selection:text-green-200`}>
-        {children}
+      <body className={`${inter.className} bg-zinc-950 text-zinc-50 min-h-screen overflow-x-hidden w-full selection:bg-green-500/30 selection:text-green-200 relative`}>
+        {/* Animated Background */}
+        <div className="fixed inset-0 z-0 pointer-events-none bg-mesh-gradient"></div>
+
+        <div className="relative z-10 w-full min-h-screen">
+          {children}
+        </div>
       </body>
     </html>
   );

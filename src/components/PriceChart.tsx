@@ -227,7 +227,7 @@ export default function PriceChart({
             const isPredicted = data.isPredicted;
 
             return (
-                <div className="bg-zinc-900 border border-zinc-700/50 p-3 rounded-lg shadow-xl backdrop-blur-md">
+                <div className={`bg-zinc-900/90 border ${isPredicted ? 'border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.2)]' : 'border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.2)]'} p-3 rounded-xl backdrop-blur-xl transition-all duration-200`}>
                     <p className="text-zinc-400 text-sm mb-1">
                         {format(date, 'MMM d, HH:mm')}
                         {isPredicted && <span className="ml-2 text-purple-400 italic">(Predicted)</span>}
@@ -280,7 +280,12 @@ export default function PriceChart({
                         tick={{ fill: '#71717a', fontSize: 12 }}
                         tickFormatter={(val) => `${val}¢`}
                     />
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip
+                        content={<CustomTooltip />}
+                        cursor={{ stroke: 'rgba(255,255,255,0.15)', strokeWidth: 2, strokeDasharray: '4 4' }}
+                        isAnimationActive={true}
+                        animationDuration={200}
+                    />
 
                     {/* Cheapest Period Reference Area */}
                     {showCheapestPeriod && cheapestWindowStart && cheapestWindowEnd && (
@@ -326,6 +331,7 @@ export default function PriceChart({
                         fillOpacity={1}
                         fill="url(#colorPast)"
                         isAnimationActive={true}
+                        activeDot={{ r: 6, fill: '#22c55e', stroke: '#fff', strokeWidth: 2, className: 'animate-pulse drop-shadow-[0_0_8px_rgba(34,197,94,0.8)]' }}
                     />
                     <Area
                         type="monotone"
@@ -336,6 +342,7 @@ export default function PriceChart({
                         fillOpacity={1}
                         fill="url(#colorFuture)"
                         isAnimationActive={true}
+                        activeDot={{ r: 6, fill: '#a855f7', stroke: '#fff', strokeWidth: 2, className: 'animate-pulse drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]' }}
                     />
                 </AreaChart>
             </ResponsiveContainer>

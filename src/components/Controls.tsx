@@ -63,7 +63,7 @@ export default function Controls({
     const [isMobileOpen, setIsMobileOpen] = useState(false);
 
     return (
-        <div className="bg-zinc-900/40 p-4 md:p-5 rounded-2xl border border-zinc-800/50 backdrop-blur-md transition-all duration-300 h-full flex flex-col justify-center">
+        <div className="bg-zinc-900/40 p-4 md:p-5 rounded-2xl border border-zinc-800/50 hover:border-zinc-700/80 hover:shadow-[0_8px_30px_rgba(0,0,0,0.4)] backdrop-blur-2xl transition-all duration-500 h-full flex flex-col justify-center hover:-translate-y-0.5">
 
             {/* Mobile Toggle Button */}
             <button
@@ -122,10 +122,10 @@ export default function Controls({
                                 </div>
                             )}
                         </div>
-                    </div>
+                    </div >
 
                     {/* Cheapest Period Feature */}
-                    <div className="flex flex-col space-y-2">
+                    < div className="flex flex-col space-y-2" >
                         <Label className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Discovery</Label>
                         <div className="flex flex-wrap items-center gap-2">
                             <button
@@ -166,13 +166,13 @@ export default function Controls({
                                 </div>
                             )}
                         </div>
-                    </div>
-                </div>
+                    </div >
+                </div >
 
                 {/* Advanced Settings Content */}
-                <div className="flex flex-col xl:flex-row gap-6 justify-between items-start xl:items-center pt-4 pb-2 border-t border-zinc-800/50 mt-4">
+                < div className="flex flex-col xl:flex-row gap-6 justify-between items-start xl:items-center pt-4 pb-2 border-t border-zinc-800/50 mt-4" >
                     {/* Statistical Overlays */}
-                    <div className="flex flex-col space-y-2 w-full md:w-auto">
+                    < div className="flex flex-col space-y-2 w-full md:w-auto" >
                         <div className="flex flex-wrap gap-2">
                             <button
                                 onClick={() => setShowNow(!showNow)}
@@ -211,10 +211,10 @@ export default function Controls({
                                 95th Pctl
                             </button>
                         </div>
-                    </div>
+                    </div >
 
                     {/* VAT Toggle */}
-                    <div className="flex flex-col space-y-2 w-full md:w-auto mt-2 xl:mt-0">
+                    < div className="flex flex-col space-y-2 w-full md:w-auto mt-2 xl:mt-0" >
                         <div className="flex flex-wrap gap-2">
                             <button
                                 onClick={() => setIncludeVat(!includeVat)}
@@ -223,9 +223,9 @@ export default function Controls({
                                 Include VAT (22%)
                             </button>
                         </div>
-                    </div>
-                </div>
-            </div>
+                    </div >
+                </div >
+            </div >
         </div >
     );
 }
