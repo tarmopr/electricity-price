@@ -36,6 +36,7 @@ Welcome to the `electricity-price` project. This file contains instructions and 
 ## AI Assistant Rules
 - Reference `AGENTS.md` and `implementation_plan.md` (in the `.gemini/antigravity` artifact folder) before making structural changes.
 - Prioritize clear, concise, and focused pull requests/commits.
+- Every time a task is completed and code is changed, run `npx next build` to validate that the web app is building successfully.
 
 ## Setup and Run
 - Setup: `npm install`

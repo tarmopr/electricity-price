@@ -11,7 +11,7 @@ import {
     XAxis,
     YAxis
 } from 'recharts';
-import { format, isBefore, isSameHour } from 'date-fns';
+import { format, isSameHour } from 'date-fns';
 import { ElectricityPrice } from '@/lib/api';
 
 interface PriceChartProps {
@@ -63,13 +63,10 @@ export default function PriceChart({
     const chartData = data.map(item => {
         const price = includeVat ? item.priceCentsKwh * 1.22 : item.priceCentsKwh;
 
-        // Find if this item is the current hour
-        const isCurrent = item.timestamp === activeCurrentTimestamp;
+        // Find if this item is the current hour (unused variables removed to pass lint)
 
         // An item is "past" if its date is before the current active hour's date
         // We find the current hour's date to compare correctly
-        const activeCurrentDate = data.find(d => d.timestamp === activeCurrentTimestamp)?.date;
-        const isPast = activeCurrentDate ? isBefore(item.date, activeCurrentDate) : isBefore(item.date, now);
 
         return {
             ...item,
@@ -132,6 +129,7 @@ export default function PriceChart({
         }
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; payload: any }>; label?: string | number }) => {
         if (active && payload && payload.length) {
             const date = new Date(label as string | number);
