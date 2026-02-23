@@ -72,7 +72,7 @@ export default function CurrentPriceCard({ currentPrice, previousPrice, nextPric
                             <span className={isUp ? 'text-red-400 font-medium' : isDown ? 'text-green-400 font-medium' : 'text-zinc-500'}>
                                 {diff.toFixed(2)}¢
                             </span>
-                            <span className="text-zinc-500 hidden sm:inline">vs previous hour</span>
+                            <span className="text-zinc-500 hidden sm:inline">vs previous 15min</span>
                             <span className="text-zinc-500 sm:hidden">prev</span>
                         </div>
                     )}
@@ -85,7 +85,7 @@ export default function CurrentPriceCard({ currentPrice, previousPrice, nextPric
                             <span className={isNextUp ? 'text-red-400 font-medium' : isNextDown ? 'text-green-400 font-medium' : 'text-zinc-500'}>
                                 {nextDiff.toFixed(2)}¢
                             </span>
-                            <span className="text-zinc-500 hidden sm:inline">vs next hour</span>
+                            <span className="text-zinc-500 hidden sm:inline">next 15min</span>
                             <span className="text-zinc-500 sm:hidden">next</span>
                         </div>
                     )}

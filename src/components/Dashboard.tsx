@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import {
-    getPricesForDateRange,
+    getPricesWithPrediction,
     getCurrentPrice,
     calculateStatistics,
     ElectricityPrice
@@ -95,23 +95,41 @@ export default function Dashboard() {
                         end = endOfToday();
                 }
 
-                const data = await getPricesForDateRange(start, end);
+                const data = await getPricesWithPrediction(start, end);
                 setPrices(data);
 
                 // Extract precise current price and previous
                 const current = await getCurrentPrice();
                 setCurrentPrice(current);
 
-                if (current && data.length > 0) {
-                    // Find the hour just before the current one to show trend, and the next hour
+                if (current) {
+                    // Try to find it in the already fetched dataset
                     const currentIdx = data.findIndex(p => p.timestamp === current.timestamp);
-                    if (currentIdx > 0) {
+                    if (currentIdx > 0 && currentIdx < data.length - 1) {
                         setPreviousPrice(data[currentIdx - 1]);
-                    }
-                    if (currentIdx !== -1 && currentIdx < data.length - 1) {
                         setNextPrice(data[currentIdx + 1]);
                     } else {
-                        setNextPrice(null);
+                        // Current time isn't fully enclosed in the selected timeframe, fetch just the surrounding hours
+                        const now = new Date();
+                        const ctxStart = new Date(now);
+                        ctxStart.setHours(now.getHours() - 2);
+                        const ctxEnd = new Date(now);
+                        ctxEnd.setHours(now.getHours() + 2);
+
+                        const contextData = await getPricesWithPrediction(ctxStart, ctxEnd);
+                        const ctxIdx = contextData.findIndex(p => p.timestamp === current.timestamp);
+
+                        if (ctxIdx > 0) {
+                            setPreviousPrice(contextData[ctxIdx - 1]);
+                        } else {
+                            setPreviousPrice(null);
+                        }
+
+                        if (ctxIdx !== -1 && ctxIdx < contextData.length - 1) {
+                            setNextPrice(contextData[ctxIdx + 1]);
+                        } else {
+                            setNextPrice(null);
+                        }
                     }
                 }
             } catch (err: unknown) {

@@ -75,9 +75,24 @@ export default function PriceChart({
             ...item,
             displayPrice: parseFloat(price.toFixed(2)),
             // For visual distinction
-            pastPrice: isPast || isCurrent ? parseFloat(price.toFixed(2)) : null,
-            futurePrice: !isPast && !isCurrent ? parseFloat(price.toFixed(2)) : null,
+            knownPrice: !item.isPredicted ? parseFloat(price.toFixed(2)) : null,
+            predictedPrice: item.isPredicted ? parseFloat(price.toFixed(2)) : null,
         };
+    });
+
+    // Fix Recharts Area visual gaps by connecting the end of one segment to the start of the next.
+    // Recharts requires both dataKeys to be present on the boundary coordinate to draw a continuous line.
+    chartData.forEach((item, i) => {
+        if (i > 0) {
+            const prev = chartData[i - 1];
+
+            // Connect Known to Predicted: Extend the predicted path backwards
+            if (item.predictedPrice !== null && prev.predictedPrice === null) {
+                if (prev.knownPrice !== null) {
+                    prev.predictedPrice = prev.knownPrice;
+                }
+            }
+        }
     });
 
     const currentTimestamp = activeCurrentTimestamp;
@@ -100,13 +115,13 @@ export default function PriceChart({
         }
     }
 
-    // Calculate gradient offsets for pastPrice based on Median
+    // Calculate gradient offsets for knownPrice based on Median
     let medianOffset = 0.5;
     if (chartData.length > 0 && stats) {
-        const pastPrices = chartData.map(d => d.pastPrice).filter((p): p is number => p !== null);
-        if (pastPrices.length > 0) {
-            const dataMax = Math.max(...pastPrices);
-            const dataMin = Math.min(...pastPrices);
+        const knownPrices = chartData.map(d => d.knownPrice).filter((p): p is number => p !== null);
+        if (knownPrices.length > 0) {
+            const dataMax = Math.max(...knownPrices);
+            const dataMin = Math.min(...knownPrices);
 
             if (dataMax > dataMin) {
                 // Median position relative to min and max. 0 is bottom (min), 1 is top (max).
@@ -117,14 +132,20 @@ export default function PriceChart({
         }
     }
 
-    const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string | number }) => {
+    const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; payload: any }>; label?: string | number }) => {
         if (active && payload && payload.length) {
             const date = new Date(label as string | number);
+            const data = payload[0].payload;
+            const isPredicted = data.isPredicted;
+
             return (
                 <div className="bg-zinc-900 border border-zinc-700/50 p-3 rounded-lg shadow-xl backdrop-blur-md">
-                    <p className="text-zinc-400 text-sm mb-1">{format(date, 'MMM d, HH:mm')}</p>
-                    <p className="text-green-400 font-bold text-lg">
-                        {payload[0].value} <span className="text-xs font-normal text-zinc-500">¢/kWh</span>
+                    <p className="text-zinc-400 text-sm mb-1">
+                        {format(date, 'MMM d, HH:mm')}
+                        {isPredicted && <span className="ml-2 text-purple-400 italic">(Predicted)</span>}
+                    </p>
+                    <p className={`font-bold text-lg ${isPredicted ? 'text-purple-400' : 'text-green-400'}`}>
+                        {data.displayPrice} <span className="text-xs font-normal text-zinc-500">¢/kWh</span>
                     </p>
                 </div>
             );
@@ -151,6 +172,10 @@ export default function PriceChart({
                         <linearGradient id="colorFuture" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#a855f7" stopOpacity={0.4} />
                             <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="colorPredicted" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#71717a" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#71717a" stopOpacity={0} />
                         </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#3f3f46" opacity={0.4} />
@@ -189,7 +214,7 @@ export default function PriceChart({
 
                     <Area
                         type="monotone"
-                        dataKey="pastPrice"
+                        dataKey="knownPrice"
                         stroke="url(#colorPast)"
                         strokeWidth={2}
                         fillOpacity={1}
@@ -198,10 +223,10 @@ export default function PriceChart({
                     />
                     <Area
                         type="monotone"
-                        dataKey="futurePrice"
+                        dataKey="predictedPrice"
                         stroke="#a855f7"
                         strokeWidth={2}
-                        strokeDasharray="5 5"
+                        strokeDasharray="4 4"
                         fillOpacity={1}
                         fill="url(#colorFuture)"
                         isAnimationActive={true}

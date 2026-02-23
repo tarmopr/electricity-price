@@ -3,6 +3,7 @@ export interface ElectricityPrice {
     date: Date; // Parsed Date object
     priceEurMwh: number; // Raw price from API
     priceCentsKwh: number; // Converted price
+    isPredicted?: boolean; // Flag to indicate if the price is predicted
 }
 
 export interface PriceDataResponse {
@@ -101,22 +102,117 @@ export async function getPricesForDateRange(start: Date, end: Date): Promise<Ele
 }
 
 /**
- * Utility to fetch data for the last 24 hours and the next 24 (or available) hours
+ * Fetch prices between a start and end date, automatically fetching historical context
+ * to generate and append predicted prices if the end date is in the future.
+ */
+export async function getPricesWithPrediction(start: Date, end: Date): Promise<ElectricityPrice[]> {
+    const now = new Date();
+
+    // If we are looking into the future, we need at least 8 days of history for the prediction algorithm to work
+    let fetchStart = start;
+    if (end > now) {
+        const historyRequired = new Date(now);
+        historyRequired.setDate(historyRequired.getDate() - 8);
+        historyRequired.setMinutes(0, 0, 0);
+
+        if (historyRequired < fetchStart) {
+            fetchStart = historyRequired;
+        }
+    }
+
+    const data = await getPricesForDateRange(fetchStart, end);
+
+    // Filter to start returning from the requested start date
+    const actualData = data.filter(d => d.date.getTime() >= start.getTime());
+    let predictedData: ElectricityPrice[] = [];
+
+    if (end > now && data.length > 0) {
+        predictedData = generatePredictedPrices(data, end);
+        // Ensure we only return predictions that fall within the requested date range
+        predictedData = predictedData.filter(d => d.date.getTime() >= start.getTime());
+    }
+
+    return [...actualData, ...predictedData];
+}
+
+/**
+ * Utility to fetch data for the last 24 hours and the next 24 (or available) hours,
+ * and predict missing future hours up to the end of tomorrow.
  */
 export async function getDashboardPrices(): Promise<ElectricityPrice[]> {
     const now = new Date();
 
-    // Go back ~24 hours from current time
     const start = new Date(now);
     start.setHours(start.getHours() - 24);
     start.setMinutes(0, 0, 0);
 
-    // Go forward to end of tomorrow (API usually has data for tomorrow by ~13:00)
     const end = new Date(now);
     end.setDate(end.getDate() + 2);
     end.setHours(23, 59, 59, 999);
 
-    return getPricesForDateRange(start, end);
+    return getPricesWithPrediction(start, end);
+}
+
+/**
+ * Generate predicted prices for missing hours up to the target end date.
+ * Uses a blended average of the same hour yesterday and the same hour 7 days ago.
+ */
+function generatePredictedPrices(historicalData: ElectricityPrice[], targetEndDate: Date): ElectricityPrice[] {
+    if (historicalData.length === 0) return [];
+
+    const lastActualDataPoint = historicalData[historicalData.length - 1];
+    const predictedPrices: ElectricityPrice[] = [];
+
+    // Start predicting from the hour after the last actual data point
+    let currentPredictionDate = new Date(lastActualDataPoint.date);
+    currentPredictionDate.setHours(currentPredictionDate.getHours() + 1);
+
+    while (currentPredictionDate < targetEndDate) {
+        // Find same hour yesterday
+        const yesterdayDate = new Date(currentPredictionDate);
+        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+        const yesterdayData = historicalData.find(d => d.date.getTime() === yesterdayDate.getTime());
+
+        // Find same hour 7 days ago
+        const lastWeekDate = new Date(currentPredictionDate);
+        lastWeekDate.setDate(lastWeekDate.getDate() - 7);
+        const lastWeekData = historicalData.find(d => d.date.getTime() === lastWeekDate.getTime());
+
+        // Calculate predicted price (average of yesterday and last week, if available)
+        let predictedEurMwh = 0;
+        let sources = 0;
+
+        if (yesterdayData) {
+            predictedEurMwh += yesterdayData.priceEurMwh;
+            sources++;
+        }
+        if (lastWeekData) {
+            predictedEurMwh += lastWeekData.priceEurMwh;
+            sources++;
+        }
+
+        if (sources > 0) {
+            predictedEurMwh /= sources;
+        } else {
+            // Fallback if no history is found: simply replicate the last known value
+            predictedEurMwh = predictedPrices.length > 0
+                ? predictedPrices[predictedPrices.length - 1].priceEurMwh
+                : lastActualDataPoint.priceEurMwh;
+        }
+
+        predictedPrices.push({
+            timestamp: currentPredictionDate.toISOString(),
+            date: new Date(currentPredictionDate),
+            priceEurMwh: predictedEurMwh,
+            priceCentsKwh: convertEurMwhToCentsKwh(predictedEurMwh),
+            isPredicted: true
+        });
+
+        // Move to next hour
+        currentPredictionDate.setHours(currentPredictionDate.getHours() + 1);
+    }
+
+    return predictedPrices;
 }
 
 /**
@@ -167,8 +263,12 @@ export function calculateStatistics(prices: ElectricityPrice[], includeVat: bool
 } | null {
     if (!prices || prices.length === 0) return null;
 
+    // Filter out predicted prices for statistics calculation to avoid skewing
+    const actualPrices = prices.filter(p => !p.isPredicted);
+    if (actualPrices.length === 0) return null;
+
     // Extract base prices and sort them
-    let values = prices.map(p => p.priceCentsKwh);
+    let values = actualPrices.map(p => p.priceCentsKwh);
     if (includeVat) {
         values = values.map(v => applyVat(v));
     }
