@@ -12,10 +12,7 @@ import {
     startOfYesterday, endOfYesterday,
     startOfToday, endOfToday,
     startOfTomorrow, endOfTomorrow,
-    startOfWeek, endOfWeek,
-    startOfMonth, endOfMonth,
-    startOfYear, endOfYear,
-    subDays, subMonths, subYears,
+    subDays, subMonths,
     format
 } from 'date-fns';
 import PriceChart from './PriceChart';
@@ -55,7 +52,7 @@ export default function Dashboard() {
 
                 // Fetch data array
                 let start: Date, end: Date;
-                const now = new Date();
+
                 switch (timeframe) {
                     case 'yesterday':
                         start = startOfYesterday();

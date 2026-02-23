@@ -258,7 +258,7 @@ function generatePredictedPrices(historicalData: ElectricityPrice[], targetEndDa
     const predictedPrices: ElectricityPrice[] = [];
 
     // Start predicting from the hour after the last actual data point
-    let currentPredictionDate = new Date(lastActualDataPoint.date);
+    const currentPredictionDate = new Date(lastActualDataPoint.date);
     currentPredictionDate.setHours(currentPredictionDate.getHours() + 1);
 
     while (currentPredictionDate < targetEndDate) {
