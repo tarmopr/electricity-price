@@ -53,6 +53,7 @@ export default function PriceChart({
     cheapestPeriodUntil
 }: PriceChartProps) {
     const [mounted, setMounted] = useState(false);
+    const [isHovering, setIsHovering] = useState(false);
     useEffect(() => setMounted(true), []);
 
     if (!mounted) {
@@ -227,12 +228,12 @@ export default function PriceChart({
             const isPredicted = data.isPredicted;
 
             return (
-                <div className={`bg-zinc-900/90 border ${isPredicted ? 'border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.2)]' : 'border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.2)]'} p-3 rounded-xl backdrop-blur-xl transition-all duration-200`}>
+                <div className={`bg-zinc-900/90 border ${isPredicted ? 'border-indigo-500/50 shadow-[0_0_20px_rgba(99,102,241,0.3)]' : 'border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.3)]'} p-3 rounded-xl backdrop-blur-xl transition-all duration-200`}>
                     <p className="text-zinc-400 text-sm mb-1">
                         {format(date, 'MMM d, HH:mm')}
-                        {isPredicted && <span className="ml-2 text-purple-400 italic">(Predicted)</span>}
+                        {isPredicted && <span className="ml-2 text-indigo-400 italic">(Predicted)</span>}
                     </p>
-                    <p className={`font-bold text-lg ${isPredicted ? 'text-purple-400' : 'text-green-400'}`}>
+                    <p className={`font-bold text-lg ${isPredicted ? 'text-indigo-400' : 'text-emerald-400'}`}>
                         {data.displayPrice} <span className="text-xs font-normal text-zinc-500">¢/kWh</span>
                     </p>
                 </div>
@@ -241,32 +242,114 @@ export default function PriceChart({
         return null;
     };
 
+    // Custom Label for Reference Lines (Pill shape)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const CustomReferenceLabel = (props: any) => {
+        const { viewBox, value, fill } = props;
+        // The x value provided by recharts for 'insideTopLeft' on Y is usually the left edge (viewBox.x)
+        const x = viewBox.x + 10;
+        const y = viewBox.y - 12; // slightly above the line
+
+        // Handle opacity based on global hover state
+        const opacity = isHovering ? 0.3 : 1;
+
+        return (
+            <g style={{ transition: 'opacity 0.3s ease-in-out', opacity }}>
+                {/* Background Pill */}
+                <rect
+                    x={x - 6}
+                    y={y - 14}
+                    width={value.length * 6.5 + 10} // Roughly approximate width
+                    height={20}
+                    fill="#18181b" // zinc-900
+                    fillOpacity={0.8}
+                    stroke={fill}
+                    strokeOpacity={0.4}
+                    rx={10} // rounded pill
+                />
+                <text
+                    x={x}
+                    y={y}
+                    fill={fill}
+                    fontSize={10}
+                    fontWeight={600}
+                    opacity={0.9}
+                >
+                    {value}
+                </text>
+            </g>
+        );
+    };
+
+    // Custom Cursor for Tooltip (Glowing Band)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const CustomCursor = (props: any) => {
+        const { points, height } = props;
+        if (!points || !points.length) return null;
+
+        const { x } = points[0];
+        const bandWidth = 40;
+
+        return (
+            <rect
+                x={x - bandWidth / 2}
+                y={0}
+                width={bandWidth}
+                height={height || 400}
+                fill="url(#cursorGradient)"
+                opacity={0.5}
+            />
+        );
+    };
+
+    const gridOpacity = isHovering ? 0.1 : 0.4;
+    const lineOpacity = isHovering ? 0.3 : 0.5;
+
     return (
         <div className="w-full h-[400px] mt-4 relative overflow-hidden" style={{ WebkitTapHighlightColor: 'transparent' }}>
             <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} style={{ outline: 'none' }}>
                 <AreaChart
                     data={chartData}
-                    margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                    margin={{ top: 20, right: 10, left: -20, bottom: 0 }}
                     style={{ outline: 'none' }}
+                    onMouseEnter={() => setIsHovering(true)}
+                    onMouseLeave={() => setIsHovering(false)}
+                    onTouchStart={() => setIsHovering(true)}
+                    onTouchEnd={() => setIsHovering(false)}
                 >
                     <defs>
+                        {/* Glow Filter for the main Area stroke */}
+                        <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+                            <feGaussianBlur stdDeviation="4" result="blur" />
+                            <feMerge>
+                                <feMergeNode in="blur" />
+                                <feMergeNode in="SourceGraphic" />
+                            </feMerge>
+                        </filter>
+
+                        <linearGradient id="cursorGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#ffffff" stopOpacity={0.0} />
+                            <stop offset="50%" stopColor="#ffffff" stopOpacity={0.05} />
+                            <stop offset="100%" stopColor="#ffffff" stopOpacity={0.0} />
+                        </linearGradient>
+
                         <linearGradient id="colorPast" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#7f1d1d" stopOpacity={0.8} />
-                            <stop offset={`${Math.max(0, medianOffset - 0.15) * 100}%`} stopColor="#ef4444" stopOpacity={0.6} />
-                            <stop offset={`${medianOffset * 100}%`} stopColor="#3b82f6" stopOpacity={0.6} />
-                            <stop offset={`${Math.min(1, medianOffset + 0.15) * 100}%`} stopColor="#22c55e" stopOpacity={0.6} />
-                            <stop offset="100%" stopColor="#14532d" stopOpacity={0.8} />
+                            <stop offset="0%" stopColor="#0284c7" stopOpacity={0.8} /> {/* Sky Blue */}
+                            <stop offset={`${Math.max(0, medianOffset - 0.15) * 100}%`} stopColor="#0d9488" stopOpacity={0.6} /> {/* Teal */}
+                            <stop offset={`${medianOffset * 100}%`} stopColor="#10b981" stopOpacity={0.6} /> {/* Emerald */}
+                            <stop offset={`${Math.min(1, medianOffset + 0.15) * 100}%`} stopColor="#059669" stopOpacity={0.6} />
+                            <stop offset="100%" stopColor="#064e3b" stopOpacity={0.8} />
                         </linearGradient>
                         <linearGradient id="colorFuture" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#a855f7" stopOpacity={0.4} />
-                            <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
+                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.5} /> {/* Indigo */}
+                            <stop offset="95%" stopColor="#4338ca" stopOpacity={0} />
                         </linearGradient>
                         <linearGradient id="colorPredicted" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#71717a" stopOpacity={0.3} />
                             <stop offset="95%" stopColor="#71717a" stopOpacity={0} />
                         </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#3f3f46" opacity={0.4} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#3f3f46" opacity={gridOpacity} style={{ transition: 'opacity 0.3s' }} />
                     <XAxis
                         dataKey="timestamp"
                         tickFormatter={(tick) => format(new Date(tick), xAxisFormat)}
@@ -274,15 +357,17 @@ export default function PriceChart({
                         tick={{ fill: '#71717a', fontSize: 12 }}
                         tickMargin={10}
                         minTickGap={minTickGap}
+                        style={{ opacity: isHovering ? 0.6 : 1, transition: 'opacity 0.3s' }}
                     />
                     <YAxis
                         stroke="#71717a"
                         tick={{ fill: '#71717a', fontSize: 12 }}
                         tickFormatter={(val) => `${val}¢`}
+                        style={{ opacity: isHovering ? 0.6 : 1, transition: 'opacity 0.3s' }}
                     />
                     <Tooltip
                         content={<CustomTooltip />}
-                        cursor={{ stroke: 'rgba(255,255,255,0.15)', strokeWidth: 2, strokeDasharray: '4 4' }}
+                        cursor={<CustomCursor />}
                         isAnimationActive={true}
                         animationDuration={200}
                     />
@@ -317,32 +402,34 @@ export default function PriceChart({
                     )}
 
                     {/* Statistical Reference Lines */}
-                    {stats && showMean && <ReferenceLine y={stats.mean} stroke="#fcd34d" strokeDasharray="4 4" strokeOpacity={0.5} label={{ position: 'insideTopLeft', value: `Mean ${stats.mean.toFixed(2)} ¢/kWh`, fill: '#fcd34d', fontSize: 10 }} />}
-                    {stats && showMedian && <ReferenceLine y={stats.median} stroke="#f87171" strokeDasharray="4 4" strokeOpacity={0.5} label={{ position: 'insideTopLeft', value: `Median ${stats.median.toFixed(2)} ¢/kWh`, fill: '#f87171', fontSize: 10 }} />}
-                    {stats && showP75 && <ReferenceLine y={stats.p75} stroke="#c084fc" strokeDasharray="4 4" strokeOpacity={0.5} label={{ position: 'insideTopLeft', value: `75th Pctl ${stats.p75.toFixed(2)} ¢/kWh`, fill: '#c084fc', fontSize: 10 }} />}
-                    {stats && showP90 && <ReferenceLine y={stats.p90} stroke="#f472b6" strokeDasharray="4 4" strokeOpacity={0.5} label={{ position: 'insideTopLeft', value: `90th Pctl ${stats.p90.toFixed(2)} ¢/kWh`, fill: '#f472b6', fontSize: 10 }} />}
-                    {stats && showP95 && <ReferenceLine y={stats.p95} stroke="#fb923c" strokeDasharray="4 4" strokeOpacity={0.5} label={{ position: 'insideTopLeft', value: `95th Pctl ${stats.p95.toFixed(2)} ¢/kWh`, fill: '#fb923c', fontSize: 10 }} />}
+                    {stats && showMean && <ReferenceLine y={stats.mean} stroke="#fde047" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<CustomReferenceLabel value={`Mean ${stats.mean.toFixed(2)} ¢`} fill="#fde047" />} />}
+                    {stats && showMedian && <ReferenceLine y={stats.median} stroke="#f43f5e" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<CustomReferenceLabel value={`Median ${stats.median.toFixed(2)} ¢`} fill="#f43f5e" />} />}
+                    {stats && showP75 && <ReferenceLine y={stats.p75} stroke="#a78bfa" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<CustomReferenceLabel value={`75th ${stats.p75.toFixed(2)} ¢`} fill="#a78bfa" />} />}
+                    {stats && showP90 && <ReferenceLine y={stats.p90} stroke="#f472b6" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<CustomReferenceLabel value={`90th ${stats.p90.toFixed(2)} ¢`} fill="#f472b6" />} />}
+                    {stats && showP95 && <ReferenceLine y={stats.p95} stroke="#fb923c" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<CustomReferenceLabel value={`95th ${stats.p95.toFixed(2)} ¢`} fill="#fb923c" />} />}
 
                     <Area
                         type="monotone"
                         dataKey="knownPrice"
                         stroke="url(#colorPast)"
-                        strokeWidth={2}
+                        strokeWidth={3}
                         fillOpacity={1}
                         fill="url(#colorPast)"
                         isAnimationActive={true}
-                        activeDot={{ r: 6, fill: '#22c55e', stroke: '#fff', strokeWidth: 2, className: 'animate-pulse drop-shadow-[0_0_8px_rgba(34,197,94,0.8)]' }}
+                        filter="url(#neonGlow)"
+                        activeDot={{ r: 6, fill: '#10b981', stroke: '#fff', strokeWidth: 2, className: 'animate-pulse drop-shadow-[0_0_12px_rgba(16,185,129,1)]' }}
                     />
                     <Area
                         type="monotone"
                         dataKey="predictedPrice"
-                        stroke="#a855f7"
-                        strokeWidth={2}
+                        stroke="#6366f1"
+                        strokeWidth={3}
                         strokeDasharray="4 4"
                         fillOpacity={1}
                         fill="url(#colorFuture)"
                         isAnimationActive={true}
-                        activeDot={{ r: 6, fill: '#a855f7', stroke: '#fff', strokeWidth: 2, className: 'animate-pulse drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]' }}
+                        filter="url(#neonGlow)"
+                        activeDot={{ r: 6, fill: '#6366f1', stroke: '#fff', strokeWidth: 2, className: 'animate-pulse drop-shadow-[0_0_12px_rgba(99,102,241,1)]' }}
                     />
                 </AreaChart>
             </ResponsiveContainer>
