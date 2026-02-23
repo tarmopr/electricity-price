@@ -96,9 +96,9 @@ export default function Controls({
                                     <option value="yesterday">Yesterday</option>
                                     <option value="today">Today</option>
                                     <option value="tomorrow">Tomorrow</option>
-                                    <option value="week">This Week</option>
-                                    <option value="month">This Month</option>
-                                    <option value="quarter">This Quarter</option>
+                                    <option value="week">Past Week</option>
+                                    <option value="month">Past Month</option>
+                                    <option value="quarter">Past Quarter</option>
                                     <option value="custom">Custom Range</option>
                                 </select>
                                 <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
