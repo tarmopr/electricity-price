@@ -352,6 +352,12 @@ export default function PriceChart({
     const gridOpacity = isHovering ? 0.1 : 0.4;
     const lineOpacity = isHovering ? 0.3 : 0.5;
 
+    // Calculate a hard minimum instead of relying on Recharts 'dataMin' 
+    // to enforce re-rendering when VAT toggles but the underlying array length hasn't changed.
+    const calculatedMin = chartData.length > 0
+        ? Math.min(...chartData.map(d => d.displayPrice))
+        : 0;
+
     return (
         <div className="w-full h-[400px] mt-4 relative overflow-hidden" style={{ WebkitTapHighlightColor: 'transparent' }}>
             <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} style={{ outline: 'none' }}>
@@ -410,7 +416,7 @@ export default function PriceChart({
                         stroke="#71717a"
                         tick={{ fill: '#71717a', fontSize: 12 }}
                         tickFormatter={(val) => `${val}¢`}
-                        domain={['dataMin', 'auto']}
+                        domain={[calculatedMin, 'auto']}
                         style={{ opacity: isHovering ? 0.6 : 1, transition: 'opacity 0.3s' }}
                     />
                     <Tooltip
