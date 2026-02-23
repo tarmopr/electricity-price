@@ -16,10 +16,11 @@ The **Estonia Electricity Price Dashboard** is a premium, highly interactive web
 
 ### 3.2. Interactive Price Chart
 - **Timeline Visualization:** An area chart displaying prices for the selected date range. For wider timeframes, data points are mathematically aggregated (e.g., into 6-hour, 12-hour, or 24-hour buckets) to maintain high rendering performance and responsiveness.
-- **Visual Distinction:** Distinct color coding and styling. The past/current price area uses an aggressive dynamic gradient (Green when below median, Red when spiking above) with darker shades hitting extreme high and low price points for immediate visual emphasis. Future known/predicted prices are styled distinctly (e.g., dashed lines).
-- **Interactivity:** Support for hover state tooltips showing exact time and price.
+- **Visual Distinction:** Distinct color coding and styling. The past/current price area uses an ethereal teal-to-emerald gradient, while future prices use an indigo-to-violet gradient. The chart lines cast a custom neon `<filter>` drop shadow onto the background grid for added physical depth.
+- **Interactivity (Focus Mode):** Support for advanced cinematic hover and touch states. When the user interacts with the chart, the background grid, axes, and statistical lines smoothly dim to 30% opacity to pull visual focus entirely to the active data curve.
+- **Custom Tooltip & Cursor:** A custom soft-glowing vertical band fluidly tracks the user's cursor or finger, triggering a glassmorphism (backdrop-blur) tooltip showing exact time and price. The `activeDot` pulses with a corresponding neon glow.
 - **Dynamic X-Axis:** The time axis dynamically formats based on the selected time span (e.g., `HH:mm` for daily views, `MMM d` for weekly/monthly views, `MMM yyyy` for yearly views).
-- **Responsiveness:** Auto-scaling taking full width of the container while maintaining aspect ratio.
+- **Responsiveness:** Auto-scaling taking full width of the container while maintaining aspect ratio, lifting slightly on hover (`-translate-y`) alongside the main interface cards.
 
 ### 3.3. Advanced Controls & Settings
 - **Collapsible Mobile View:** On narrow screens, the controls are hidden behind a toggle button by default to maximize chart visibility.
@@ -58,8 +59,12 @@ The **Estonia Electricity Price Dashboard** is a premium, highly interactive web
 - **Chunking Mechanism:** To bypass the Elering API's payload size limits, requests spanning long historical periods are automatically chunked into 90-day intervals.
 
 ## 5. Non-Functional Requirements
-- **Performance:** Fast initial load utilizing Next.js Server-Side Rendering (SSR) capabilities where applicable, though most data fetching will be Client-Side due to dynamic time dependencies.
-- **Design:** The UI must be "premium" and modern, avoiding default browser aesthetics. It should utilize dark mode (`#09090b` background), smooth generic fonts (`Inter`), and sleek scrollbars.
+- **Performance:** Fast initial load utilizing Next.js Server-Side Rendering (SSR) capabilities where applicable, though most data fetching will be Client-Side due to dynamic time dependencies. Data aggregation is strictly enforced on large timeframes to prevent browser thread locking.
+- **Design & Aesthetics:** The UI must be highly "premium" and modern, drastically moving beyond simple default aesthetics. It utilizes:
+  - **Dynamic Ambient Background:** A slow-moving mesh gradient that pulses to make the app feel alive.
+  - **Contextual Glows:** The `CurrentPriceCard` projects a soft outer shadow/glow that shifts color (e.g., green to red) based on whether the current electricity price is mathematically cheap or expensive relative to the median.
+  - **Deep Glassmorphism:** Heavy backdrop blurs combined with translucent container borders and subtle hover-lift physics (`translate-y`) on all UI cards.
+  - **Pill Data Badges:** Reusable custom SVG pill-shaped background labels used behind statistical chart text to guarantee legibility regardless of complex background chart paths.
 - **Responsiveness:** The layout must gracefully degrade from a multi-column desktop layout to a stacked, single-column layout on mobile devices. Text wrapping and header padding should dynamically adjust to prevent awkwardly broken sentences on wide screens or cramped text on mobiles.
 - **Error Handling:** Graceful error states if the Elering API is unreachable or returns malformed payloads.
 
