@@ -373,14 +373,14 @@ export default function PriceChart({
                         </linearGradient>
 
                         <linearGradient id="colorPast" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#0284c7" stopOpacity={0.8} /> {/* Sky Blue */}
-                            <stop offset={`${Math.max(0, medianOffset - 0.15) * 100}%`} stopColor="#0d9488" stopOpacity={0.6} /> {/* Teal */}
-                            <stop offset={`${medianOffset * 100}%`} stopColor="#10b981" stopOpacity={0.6} /> {/* Emerald */}
-                            <stop offset={`${Math.min(1, medianOffset + 0.15) * 100}%`} stopColor="#059669" stopOpacity={0.6} />
-                            <stop offset="100%" stopColor="#064e3b" stopOpacity={0.8} />
+                            <stop offset="0%" stopColor="#0284c7" stopOpacity={0.4} /> {/* Sky Blue */}
+                            <stop offset={`${Math.max(0, medianOffset - 0.15) * 100}%`} stopColor="#0d9488" stopOpacity={0.25} /> {/* Teal */}
+                            <stop offset={`${medianOffset * 100}%`} stopColor="#10b981" stopOpacity={0.25} /> {/* Emerald */}
+                            <stop offset={`${Math.min(1, medianOffset + 0.15) * 100}%`} stopColor="#059669" stopOpacity={0.25} />
+                            <stop offset="100%" stopColor="#064e3b" stopOpacity={0.4} />
                         </linearGradient>
                         <linearGradient id="colorFuture" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.5} /> {/* Indigo */}
+                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} /> {/* Indigo */}
                             <stop offset="95%" stopColor="#4338ca" stopOpacity={0} />
                         </linearGradient>
                         <linearGradient id="colorPredicted" x1="0" y1="0" x2="0" y2="1">
