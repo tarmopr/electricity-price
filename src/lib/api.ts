@@ -63,38 +63,62 @@ function formatDateForApi(date: Date, isEnd: boolean = false): string {
 }
 
 /**
- * Fetch prices between a start and end date
+ * Fetch prices between a start and end date, automatically chunking requests
+ * into 3-month intervals to bypass the API's 1-year max limit AND corsproxy.io's 1MB payload limit.
  */
 export async function getPricesForDateRange(start: Date, end: Date): Promise<ElectricityPrice[]> {
+    const CHUNK_SIZE_MS = 90 * 24 * 60 * 60 * 1000; // ~90 days (approx 3 months)
+    let currentStart = new Date(start);
+    let allPrices: ElectricityPrice[] = [];
+
     try {
-        const startStr = encodeURIComponent(formatDateForApi(start, false));
-        const endStr = encodeURIComponent(formatDateForApi(end, true));
-        const url = `${API_BASE_URL}?start=${startStr}&end=${endStr}`;
+        while (currentStart < end) {
+            let currentEnd = new Date(currentStart.getTime() + CHUNK_SIZE_MS);
+            if (currentEnd > end) {
+                currentEnd = end;
+            }
 
-        const res = await fetch(url, {
-            next: { revalidate: 3600 } // Cache for 1 hour to prevent spamming the API
-        });
+            const startStr = encodeURIComponent(formatDateForApi(currentStart, false));
+            // Only use .999Z for the absolute final end date of the user's requested range
+            const isAbsoluteEnd = currentEnd.getTime() === end.getTime();
+            const endStr = encodeURIComponent(formatDateForApi(currentEnd, isAbsoluteEnd));
+            const url = `${API_BASE_URL}?start=${startStr}&end=${endStr}`;
 
-        if (!res.ok) {
-            throw new Error(`Failed to fetch prices: ${res.statusText}`);
+            const res = await fetch(url, {
+                cache: 'no-store' // Force bypass Next.js cache to ensure we get fresh chunked responses
+            });
+
+            if (!res.ok) {
+                const errText = await res.text();
+                throw new Error(`Failed to fetch chunk ${startStr} to ${endStr}: ${res.status} ${res.statusText} - ${errText}`);
+            }
+
+            const json: PriceDataResponse = await res.json();
+
+            if (!json.success || !json.data || !json.data.ee) {
+                throw new Error('Invalid API response format');
+            }
+
+            const chunkPrices = json.data.ee.map(item => {
+                const date = new Date(item.timestamp * 1000);
+                return {
+                    timestamp: date.toISOString(),
+                    date,
+                    priceEurMwh: item.price,
+                    priceCentsKwh: convertEurMwhToCentsKwh(item.price)
+                };
+            });
+
+            allPrices = [...allPrices, ...chunkPrices];
+
+            // Advance the start pointer. Add 1 millisecond so we don't overlap boundaries identically
+            currentStart = new Date(currentEnd.getTime() + 1);
         }
 
-        const json: PriceDataResponse = await res.json();
+        // Remove any exact duplicates that might occur on chunk boundaries and sort
+        const uniquePrices = Array.from(new Map(allPrices.map(item => [item.timestamp, item])).values());
+        return uniquePrices.sort((a, b) => a.date.getTime() - b.date.getTime());
 
-        if (!json.success || !json.data || !json.data.ee) {
-            throw new Error('Invalid API response format');
-        }
-
-        return json.data.ee.map(item => {
-            // API returns unix timestamp in seconds
-            const date = new Date(item.timestamp * 1000);
-            return {
-                timestamp: date.toISOString(),
-                date,
-                priceEurMwh: item.price,
-                priceCentsKwh: convertEurMwhToCentsKwh(item.price)
-            };
-        }).sort((a, b) => a.date.getTime() - b.date.getTime()); // Ensure sorted by time
     } catch (error) {
         console.error('Error fetching electricity prices:', error);
         return [];

@@ -14,6 +14,7 @@ import {
     startOfWeek, endOfWeek,
     startOfMonth, endOfMonth,
     startOfYear, endOfYear,
+    subDays, subMonths, subYears,
     format
 } from 'date-fns';
 import PriceChart from './PriceChart';
@@ -21,7 +22,7 @@ import CurrentPriceCard from './CurrentPriceCard';
 import Controls from './Controls';
 import { RefreshCw } from 'lucide-react';
 
-export type Timeframe = 'yesterday' | 'today' | 'tomorrow' | 'week' | 'month' | 'year' | 'custom';
+export type Timeframe = 'yesterday' | 'today' | 'tomorrow' | 'week' | 'month' | 'quarter' | 'custom';
 
 export default function Dashboard() {
     const [prices, setPrices] = useState<ElectricityPrice[]>([]);
@@ -68,16 +69,16 @@ export default function Dashboard() {
                         end = endOfTomorrow();
                         break;
                     case 'week':
-                        start = startOfWeek(now, { weekStartsOn: 1 });
-                        end = endOfWeek(now, { weekStartsOn: 1 });
+                        start = subDays(startOfToday(), 7);
+                        end = endOfToday();
                         break;
                     case 'month':
-                        start = startOfMonth(now);
-                        end = endOfMonth(now);
+                        start = subMonths(startOfToday(), 1);
+                        end = endOfToday();
                         break;
-                    case 'year':
-                        start = startOfYear(now);
-                        end = endOfYear(now);
+                    case 'quarter':
+                        start = subMonths(startOfToday(), 3);
+                        end = endOfToday();
                         break;
                     case 'custom':
                         start = customStart ? new Date(customStart) : startOfToday();

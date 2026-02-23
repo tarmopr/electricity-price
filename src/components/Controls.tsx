@@ -73,7 +73,7 @@ export default function Controls({
                     <div className="flex flex-col space-y-2 w-full">
                         <Label className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Timeframe</Label>
                         <div className="flex flex-wrap items-center gap-2">
-                            {(['yesterday', 'today', 'tomorrow', 'week', 'month', 'year', 'custom'] as Timeframe[]).map((tf) => (
+                            {(['yesterday', 'today', 'tomorrow', 'week', 'month', 'quarter', 'custom'] as Timeframe[]).map((tf) => (
                                 <button
                                     key={tf}
                                     onClick={() => setTimeframe(tf)}
