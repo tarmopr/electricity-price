@@ -24,15 +24,9 @@ export interface CurrentPriceResponse {
     }[];
 }
 
+// Base APIs (we assemble the exact target dynamically now to properly encode it for codetabs)
 const CORS_PROXY = 'https://api.codetabs.com/v1/proxy/?quest=';
 const ELERING_API = 'https://dashboard.elering.ee/api/nps/price';
-
-// Use CORS proxy for client-side fetching because static export removes Next.js rewrites
-const API_BASE_URL = typeof window !== 'undefined'
-    ? `${CORS_PROXY}${encodeURIComponent(ELERING_API)}`
-    : ELERING_API;
-
-
 
 /**
  * Convert Eur/Mwh to Cents/Kwh
@@ -82,7 +76,14 @@ export async function getPricesForDateRange(start: Date, end: Date): Promise<Ele
             // Only use .999Z for the absolute final end date of the user's requested range
             const isAbsoluteEnd = currentEnd.getTime() === end.getTime();
             const endStr = encodeURIComponent(formatDateForApi(currentEnd, isAbsoluteEnd));
-            const url = `${API_BASE_URL}?start=${startStr}&end=${endStr}`;
+
+            // Build the exact Elering target URL
+            const eleringTarget = `${ELERING_API}?start=${startStr}&end=${endStr}`;
+
+            // If we are in the browser, MUST encode the ENTIRE target so the proxy doesn't steal the &end= param
+            const url = typeof window !== 'undefined'
+                ? `${CORS_PROXY}${encodeURIComponent(eleringTarget)}`
+                : eleringTarget;
 
             const res = await fetch(url, {
                 cache: 'no-store' // Force bypass Next.js cache to ensure we get fresh chunked responses
@@ -313,7 +314,12 @@ function generatePredictedPrices(historicalData: ElectricityPrice[], targetEndDa
  */
 export async function getCurrentPrice(): Promise<ElectricityPrice | null> {
     try {
-        const res = await fetch(`${API_BASE_URL}/EE/current`, {
+        const eleringTarget = `${ELERING_API}/EE/current`;
+        const url = typeof window !== 'undefined'
+            ? `${CORS_PROXY}${encodeURIComponent(eleringTarget)}`
+            : eleringTarget;
+
+        const res = await fetch(url, {
             cache: 'no-store' // Always get fresh current price
         });
 
