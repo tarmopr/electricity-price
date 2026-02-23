@@ -281,6 +281,45 @@ export default function PriceChart({
         );
     };
 
+    // Custom Label for Vertical Reference Lines (Pill shape)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const CustomVerticalReferenceLabel = (props: any) => {
+        const { viewBox, value, fill } = props;
+        const x = viewBox.x + 8;
+        // Push y down significantly so it's not cut off by the top edge overflow bounds
+        const y = viewBox.y + 25;
+
+        // Handle opacity based on global hover state
+        const opacity = isHovering ? 0.3 : 1;
+
+        return (
+            <g style={{ transition: 'opacity 0.3s ease-in-out', opacity }}>
+                {/* Background Pill */}
+                <rect
+                    x={x - 6}
+                    y={y - 14}
+                    width={value.length * 6.5 + 10} // Roughly approximate width
+                    height={20}
+                    fill="#18181b" // zinc-900
+                    fillOpacity={0.8}
+                    stroke={fill}
+                    strokeOpacity={0.4}
+                    rx={10} // rounded pill
+                />
+                <text
+                    x={x}
+                    y={y}
+                    fill={fill}
+                    fontSize={10}
+                    fontWeight={600}
+                    opacity={0.9}
+                >
+                    {value}
+                </text>
+            </g>
+        );
+    };
+
     // Custom Cursor for Tooltip (Glowing Band)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const CustomCursor = (props: any) => {
@@ -398,7 +437,7 @@ export default function PriceChart({
                             strokeDasharray="3 3"
                             strokeOpacity={lineOpacity}
                             style={{ transition: 'opacity 0.3s' }}
-                            label={<CustomReferenceLabel value="Now" fill="#38bdf8" />}
+                            label={<CustomVerticalReferenceLabel value={`Now ${format(now, 'HH:mm')}`} fill="#38bdf8" />}
                         />
                     )}
 
