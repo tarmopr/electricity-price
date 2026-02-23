@@ -11,27 +11,28 @@ The **Estonia Electricity Price Dashboard** is a premium, highly interactive web
 
 ### 3.1. Current Price Widget
 - **Live Price Display:** Shows the exact electricity price for the current hour in cents/kWh.
-- **Trend Indicators:** Displays the price difference (in cents/kWh) compared to both the preceding clock hour and the next clock hour, with visual indicators (green for down, red for up).
+- **Trend Indicators:** Displays the price difference (in cents/kWh) compared to both the preceding clock hour and the next clock hour, with visual indicators (green for down, red for up). On narrow screens, these are displayed horizontally next to the current price to minimize vertical space and maximize chart visibility.
 - **Median Context:** Displays the median price for the currently selected timeframe directly beneath the current price for quick reference.
 
 ### 3.2. Interactive Price Chart
-- **Timeline Visualization:** An area chart displaying prices for the selected date range.
-- **Visual Distinction:** Distinct color coding and styling. The past/current price area uses a dynamic 3-color gradient (Green when below median, Blue near median, Red when spiking above). The future price is styled distinctly (purple dashed line/fill).
+- **Timeline Visualization:** An area chart displaying prices for the selected date range. For wider timeframes, data points are mathematically aggregated (e.g., into 6-hour, 12-hour, or 24-hour buckets) to maintain high rendering performance and responsiveness.
+- **Visual Distinction:** Distinct color coding and styling. The past/current price area uses an aggressive dynamic gradient (Green when below median, Red when spiking above) with darker shades hitting extreme high and low price points for immediate visual emphasis. Future known/predicted prices are styled distinctly (e.g., dashed lines).
 - **Interactivity:** Support for hover state tooltips showing exact time and price.
 - **Dynamic X-Axis:** The time axis dynamically formats based on the selected time span (e.g., `HH:mm` for daily views, `MMM d` for weekly/monthly views, `MMM yyyy` for yearly views).
 - **Responsiveness:** Auto-scaling taking full width of the container while maintaining aspect ratio.
 
 ### 3.3. Advanced Controls & Settings
 - **Collapsible Mobile View:** On narrow screens, the controls are hidden behind a toggle button by default to maximize chart visibility.
-- **Timeframe Scale:** Toggles to quickly switch the displayed data timeframe between Yesterday, Today, Tomorrow, This Week, This Month, and This Year.
-- **Custom Date Range:** Date pickers to fetch and visualize historical or forecasted electricity prices for any custom start and end date combination.
+- **Timeframe Scale:** Toggles to quickly switch the displayed data timeframe between Yesterday, Today, Tomorrow, This Week, This Month, This Quarter, and This Year.
+- **Custom Date Range:** Date pickers to fetch and visualize historical or forecasted electricity prices for any custom start and end date combination. Elering API constraints are bypassed by automatically chunking large requests.
 - **VAT Toggle:** A button allowing users to instantly recalculate all displayed prices to either include or exclude the Estonian Value Added Tax (VAT), which is currently 22%. By default, VAT should be included.
-- **Statistical Overlays:** Toggle buttons to overlay horizontal reference lines on the main chart for mathematical calculations. The reference lines explicitly state their calculated value (e.g., `Mean 9.19 ¢/kWh`) in the chart label:
+- **Statistical Overlays:** Toggle buttons to overlay horizontal reference lines on the main chart for mathematical calculations. The reference lines explicitly state their calculated value (e.g., `Mean 9.19 ¢/kWh`):
   - Mean (Average)
   - Median (50th Percentile)
   - 75th Percentile
   - 90th Percentile
   - 95th Percentile
+- **Future Price Prediction:** Uses a statistical model blending the identical hour from yesterday and 7 days ago to predict upcoming prices if the official API payload is incomplete for future hours.
 
 ### 3.4. Auto-Refresh Mechanism
 - The dashboard must automatically poll the API or refresh its data state on a reasonable interval (e.g., every 15 minutes) to ensure the "Current Price" widget accurately rolls over at the top of the hour without requiring a manual page reload.
@@ -52,6 +53,8 @@ The **Estonia Electricity Price Dashboard** is a premium, highly interactive web
   - `GET https://dashboard.elering.ee/api/nps/price/EE/current`
   - `GET https://dashboard.elering.ee/api/nps/price?start={iso_start}&end={iso_end}`
 - **Data Transformation:** The API returns payloads in `€/MWh` and Unix timestamps. The application must convert these to `¢/kWh` (divide by 10) and properly localize timestamps to the user's browser timezone.
+- **CORS Proxy:** Client-side fetches route through a CORS proxy (`https://api.codetabs.com/v1/proxy/?quest=`) to circumvent browser restrictions when querying the Elering API directly.
+- **Chunking Mechanism:** To bypass the Elering API's payload size limits, requests spanning long historical periods are automatically chunked into 90-day intervals.
 
 ## 5. Non-Functional Requirements
 - **Performance:** Fast initial load utilizing Next.js Server-Side Rendering (SSR) capabilities where applicable, though most data fetching will be Client-Side due to dynamic time dependencies.
@@ -59,7 +62,7 @@ The **Estonia Electricity Price Dashboard** is a premium, highly interactive web
 - **Responsiveness:** The layout must gracefully degrade from a multi-column desktop layout to a stacked, single-column layout on mobile devices. Text wrapping and header padding should dynamically adjust to prevent awkwardly broken sentences on wide screens or cramped text on mobiles.
 - **Error Handling:** Graceful error states if the Elering API is unreachable or returns malformed payloads.
 
-## 6. Future Considerations (Out of Scope for MVP)
+## 6. Future Considerations
 - Multi-region support (e.g., adding Finland, Latvia, Lithuania).
-- Long-term historical data ranges (e.g., past 30 days, 1 year).
 - Push notifications or alerts for price thresholds.
+- User accounts / saved preferences.
