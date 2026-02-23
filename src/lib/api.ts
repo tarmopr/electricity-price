@@ -53,8 +53,12 @@ export function applyVat(price: number, vatRate: number = 0.22): number {
 /**
  * Formats a given date to the API's required ISO string format (UTC)
  */
-function formatDateForApi(date: Date): string {
-    return date.toISOString().replace('.000Z', '.999Z');
+function formatDateForApi(date: Date, isEnd: boolean = false): string {
+    const isoString = date.toISOString();
+    if (isEnd) {
+        return isoString.replace('.000Z', '.999Z');
+    }
+    return isoString;
 }
 
 /**
@@ -62,8 +66,8 @@ function formatDateForApi(date: Date): string {
  */
 export async function getPricesForDateRange(start: Date, end: Date): Promise<ElectricityPrice[]> {
     try {
-        const startStr = encodeURIComponent(formatDateForApi(start));
-        const endStr = encodeURIComponent(formatDateForApi(end));
+        const startStr = encodeURIComponent(formatDateForApi(start, false));
+        const endStr = encodeURIComponent(formatDateForApi(end, true));
         const url = `${API_BASE_URL}?start=${startStr}&end=${endStr}`;
 
         const res = await fetch(url, {
