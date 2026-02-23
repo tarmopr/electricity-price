@@ -24,7 +24,7 @@ export interface CurrentPriceResponse {
     }[];
 }
 
-const CORS_PROXY = 'https://corsproxy.io/?';
+const CORS_PROXY = 'https://api.codetabs.com/v1/proxy/?quest=';
 const ELERING_API = 'https://dashboard.elering.ee/api/nps/price';
 
 // Use CORS proxy for client-side fetching because static export removes Next.js rewrites
@@ -64,10 +64,10 @@ function formatDateForApi(date: Date, isEnd: boolean = false): string {
 
 /**
  * Fetch prices between a start and end date, automatically chunking requests
- * into 1-month intervals to bypass the API's 1-year max limit AND corsproxy.io's payload limit.
+ * into 3-month intervals to bypass the API's 1-year max limit.
  */
 export async function getPricesForDateRange(start: Date, end: Date): Promise<ElectricityPrice[]> {
-    const CHUNK_SIZE_MS = 30 * 24 * 60 * 60 * 1000; // ~30 days (1 month)
+    const CHUNK_SIZE_MS = 90 * 24 * 60 * 60 * 1000; // ~90 days (approx 3 months)
     let currentStart = new Date(start);
     let allPrices: ElectricityPrice[] = [];
 
