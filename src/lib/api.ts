@@ -64,10 +64,10 @@ function formatDateForApi(date: Date, isEnd: boolean = false): string {
 
 /**
  * Fetch prices between a start and end date, automatically chunking requests
- * into 3-month intervals to bypass the API's 1-year max limit AND corsproxy.io's 1MB payload limit.
+ * into 1-month intervals to bypass the API's 1-year max limit AND corsproxy.io's payload limit.
  */
 export async function getPricesForDateRange(start: Date, end: Date): Promise<ElectricityPrice[]> {
-    const CHUNK_SIZE_MS = 90 * 24 * 60 * 60 * 1000; // ~90 days (approx 3 months)
+    const CHUNK_SIZE_MS = 30 * 24 * 60 * 60 * 1000; // ~30 days (1 month)
     let currentStart = new Date(start);
     let allPrices: ElectricityPrice[] = [];
 
