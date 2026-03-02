@@ -1,18 +1,8 @@
 import type { NextConfig } from "next";
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
-const isGithubActions = process.env.GITHUB_ACTIONS || false;
+const nextConfig: NextConfig = {};
 
-let repo = '';
-if (isGithubActions && process.env.GITHUB_REPOSITORY) {
-  repo = process.env.GITHUB_REPOSITORY.replace(/.*?\//, '');
-}
-
-const nextConfig: NextConfig = {
-  output: "export",
-  basePath: isGithubActions ? `/${repo}` : '',
-  images: {
-    unoptimized: true,
-  }
-};
+initOpenNextCloudflareForDev();
 
 export default nextConfig;
