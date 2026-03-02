@@ -41,6 +41,9 @@ yarn-error.log*
 .dev.vars
 .wrangler
 
+# claude code local settings
+.claude/settings.local.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
