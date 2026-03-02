@@ -24,9 +24,9 @@ export interface CurrentPriceResponse {
     }[];
 }
 
-// Base APIs (we assemble the exact target dynamically now to properly encode it for codetabs)
-const CORS_PROXY = 'https://api.codetabs.com/v1/proxy/?quest=';
-const ELERING_API = 'https://dashboard.elering.ee/api/nps/price';
+// Server-side API routes (proxy to Elering, no CORS issues)
+const PRICES_API = '/api/prices';
+const CURRENT_PRICE_API = '/api/prices/current';
 
 /**
  * Convert Eur/Mwh to Cents/Kwh
@@ -72,21 +72,15 @@ export async function getPricesForDateRange(start: Date, end: Date): Promise<Ele
                 currentEnd = end;
             }
 
-            const startStr = encodeURIComponent(formatDateForApi(currentStart, false));
+            const startStr = formatDateForApi(currentStart, false);
             // Only use .999Z for the absolute final end date of the user's requested range
             const isAbsoluteEnd = currentEnd.getTime() === end.getTime();
-            const endStr = encodeURIComponent(formatDateForApi(currentEnd, isAbsoluteEnd));
+            const endStr = formatDateForApi(currentEnd, isAbsoluteEnd);
 
-            // Build the exact Elering target URL
-            const eleringTarget = `${ELERING_API}?start=${startStr}&end=${endStr}`;
-
-            // If we are in the browser, MUST encode the ENTIRE target so the proxy doesn't steal the &end= param
-            const url = typeof window !== 'undefined'
-                ? `${CORS_PROXY}${encodeURIComponent(eleringTarget)}`
-                : eleringTarget;
+            const url = `${PRICES_API}?start=${encodeURIComponent(startStr)}&end=${encodeURIComponent(endStr)}`;
 
             const res = await fetch(url, {
-                cache: 'no-store' // Force bypass Next.js cache to ensure we get fresh chunked responses
+                cache: 'no-store'
             });
 
             if (!res.ok) {
@@ -314,13 +308,8 @@ function generatePredictedPrices(historicalData: ElectricityPrice[], targetEndDa
  */
 export async function getCurrentPrice(): Promise<ElectricityPrice | null> {
     try {
-        const eleringTarget = `${ELERING_API}/EE/current`;
-        const url = typeof window !== 'undefined'
-            ? `${CORS_PROXY}${encodeURIComponent(eleringTarget)}`
-            : eleringTarget;
-
-        const res = await fetch(url, {
-            cache: 'no-store' // Always get fresh current price
+        const res = await fetch(CURRENT_PRICE_API, {
+            cache: 'no-store'
         });
 
         if (!res.ok) {
