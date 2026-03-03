@@ -4,7 +4,6 @@ import {
   buildPatternHeatmap,
   priceToColor,
   getHeatmapWeekRange,
-  HeatmapData,
 } from "@/lib/heatmapData";
 import { ElectricityPrice } from "@/lib/api";
 
@@ -394,7 +393,6 @@ describe("heatmapData", () => {
     });
 
     it("returns week range for 'this_week' with multiple highlighted dates", () => {
-      const now = new Date();
       const result = getHeatmapWeekRange(
         "this_week",
         new Date(),

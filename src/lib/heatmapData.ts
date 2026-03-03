@@ -339,7 +339,7 @@ export interface HeatmapWeekRange {
 export function getHeatmapWeekRange(
   period: Period,
   periodStart: Date,
-  periodEnd: Date
+  _periodEnd: Date
 ): HeatmapWeekRange | null {
   const SINGLE_DAY_TIMEFRAMES: Period[] = [
     "yesterday",

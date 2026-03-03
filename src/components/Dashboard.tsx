@@ -44,7 +44,7 @@ export type ViewMode = 'chart' | 'heatmap';
 
 export default function Dashboard() {
     const [prices, setPrices] = useState<ElectricityPrice[]>([]);
-    const [rawPrices, setRawPrices] = useState<ElectricityPrice[]>([]);
+    const [_rawPrices, setRawPrices] = useState<ElectricityPrice[]>([]);
     const [currentPrice, setCurrentPrice] = useState<ElectricityPrice | null>(null);
     const [previousPrice, setPreviousPrice] = useState<ElectricityPrice | null>(null);
     const [nextPrice, setNextPrice] = useState<ElectricityPrice | null>(null);
@@ -97,7 +97,7 @@ export default function Dashboard() {
 
         // Clean the URL params after restoring (don't pollute browser history)
         window.history.replaceState({}, '', window.location.pathname);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line
     }, []);
 
     // Request notification permission when alerts are first enabled
