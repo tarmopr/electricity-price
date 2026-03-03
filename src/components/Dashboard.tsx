@@ -37,7 +37,7 @@ import ShareButton from './ShareButton';
 import { decodeParamsToState } from '@/lib/shareState';
 import { getHeatmapWeekRange } from '@/lib/heatmapData';
 import { findCheapestWindow } from '@/lib/cheapestWindow';
-import { RefreshCw, BarChart3, Grid3X3 } from 'lucide-react';
+import { RefreshCw, BarChart3, Grid3X3, Info } from 'lucide-react';
 
 export type Period = 'yesterday' | 'today' | 'tomorrow' | 'this_week' | 'last_7_days' | 'next_7_days' | 'last_30_days' | 'custom';
 export type ViewMode = 'chart' | 'heatmap';
@@ -316,6 +316,11 @@ export default function Dashboard() {
         return findCheapestWindow(chartData, costDurationHours, costUntilHour, scanFrom);
     }, [prices, costDurationHours, costUntilHour, includeVat, period]);
 
+    // Show info banner when tomorrow is selected but official prices aren't published yet
+    const allPredicted = useMemo(() => {
+        return period === 'tomorrow' && prices.length > 0 && prices.every(p => p.isPredicted);
+    }, [period, prices]);
+
     if (loading && prices.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center h-[60vh] text-zinc-400 space-y-4">
@@ -388,6 +393,16 @@ export default function Dashboard() {
                     />
                 </div>
             </div>
+
+            {/* Tomorrow prediction banner */}
+            {allPredicted && (
+                <div className="flex items-start gap-3 bg-indigo-500/10 border border-indigo-500/30 rounded-2xl p-4">
+                    <Info className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+                    <p className="text-sm text-indigo-200/80">
+                        Official prices typically published around 14:00 CET. Showing predictions based on recent patterns.
+                    </p>
+                </div>
+            )}
 
             {/* View Mode Toggle + Main Visualization */}
             <div className="bg-zinc-900/40 p-2 sm:p-6 rounded-3xl border border-zinc-800/80 hover:border-zinc-700/60 transition-all duration-500 shadow-[0_8px_30px_rgba(0,0,0,0.3)] hover:shadow-[0_8px_40px_rgba(0,0,0,0.4)] hover:-translate-y-1 backdrop-blur-2xl">
