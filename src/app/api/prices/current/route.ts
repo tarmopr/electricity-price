@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getDB } from "@/lib/db";
 
+export const runtime = "edge";
+
 const ELERING_API = "https://dashboard.elering.ee/api/nps/price";
 
 export async function GET() {
