@@ -70,24 +70,24 @@ export async function recomputeHourlyAverages(
 
 /**
  * Recompute daily averages for affected dates.
+ * Uses hourly_averages as source to ensure equal hour weighting regardless
+ * of whether raw data is 15-min or 1-hour granularity.
  */
 export async function recomputeDailyAverages(
   db: D1Database,
   startTimestamp: number,
   endTimestamp: number
 ): Promise<void> {
-  // Convert timestamps to date strings for grouping
-  // We compute daily averages from raw 15-min prices for accuracy
   await db
     .prepare(
       `INSERT OR REPLACE INTO daily_averages (date, avg_price, min_price, max_price, data_points)
        SELECT
          strftime('%Y-%m-%d', timestamp, 'unixepoch') as date_str,
-         AVG(price_cents_kwh) as avg_price,
-         MIN(price_cents_kwh) as min_price,
-         MAX(price_cents_kwh) as max_price,
+         AVG(avg_price) as avg_price,
+         MIN(min_price) as min_price,
+         MAX(max_price) as max_price,
          COUNT(*) as data_points
-       FROM prices
+       FROM hourly_averages
        WHERE timestamp >= ? AND timestamp < ?
        GROUP BY date_str`
     )
@@ -97,6 +97,8 @@ export async function recomputeDailyAverages(
 
 /**
  * Recompute weekly averages for affected weeks.
+ * Uses hourly_averages as source to ensure equal hour weighting regardless
+ * of whether raw data is 15-min or 1-hour granularity.
  */
 export async function recomputeWeeklyAverages(
   db: D1Database,
@@ -109,11 +111,11 @@ export async function recomputeWeeklyAverages(
        SELECT
          CAST(strftime('%Y', timestamp, 'unixepoch') AS INTEGER) as year,
          CAST(strftime('%W', timestamp, 'unixepoch') AS INTEGER) as week,
-         AVG(price_cents_kwh) as avg_price,
-         MIN(price_cents_kwh) as min_price,
-         MAX(price_cents_kwh) as max_price,
+         AVG(avg_price) as avg_price,
+         MIN(min_price) as min_price,
+         MAX(max_price) as max_price,
          COUNT(*) as data_points
-       FROM prices
+       FROM hourly_averages
        WHERE timestamp >= ? AND timestamp < ?
        GROUP BY year, week`
     )
@@ -123,6 +125,8 @@ export async function recomputeWeeklyAverages(
 
 /**
  * Recompute monthly averages for affected months.
+ * Uses hourly_averages as source to ensure equal hour weighting regardless
+ * of whether raw data is 15-min or 1-hour granularity.
  */
 export async function recomputeMonthlyAverages(
   db: D1Database,
@@ -135,11 +139,11 @@ export async function recomputeMonthlyAverages(
        SELECT
          CAST(strftime('%Y', timestamp, 'unixepoch') AS INTEGER) as year,
          CAST(strftime('%m', timestamp, 'unixepoch') AS INTEGER) as month,
-         AVG(price_cents_kwh) as avg_price,
-         MIN(price_cents_kwh) as min_price,
-         MAX(price_cents_kwh) as max_price,
+         AVG(avg_price) as avg_price,
+         MIN(min_price) as min_price,
+         MAX(max_price) as max_price,
          COUNT(*) as data_points
-       FROM prices
+       FROM hourly_averages
        WHERE timestamp >= ? AND timestamp < ?
        GROUP BY year, month`
     )
@@ -149,6 +153,8 @@ export async function recomputeMonthlyAverages(
 
 /**
  * Recompute weekday-hour averages for affected year+month periods.
+ * Uses hourly_averages as source to ensure equal hour weighting regardless
+ * of whether raw data is 15-min or 1-hour granularity.
  * Uses strftime('%w') which returns 0=Sunday, so we convert to ISO: 0=Monday.
  */
 export async function recomputeWeekdayHourAverages(
@@ -168,9 +174,9 @@ export async function recomputeWeekdayHourAverages(
            ELSE CAST(strftime('%w', timestamp, 'unixepoch') AS INTEGER) - 1
          END as weekday,
          CAST(strftime('%H', timestamp, 'unixepoch') AS INTEGER) as hour,
-         AVG(price_cents_kwh) as avg_price,
+         avg_price as avg_price,
          COUNT(*) as sample_count
-       FROM prices
+       FROM hourly_averages
        WHERE timestamp >= ? AND timestamp < ?
        GROUP BY year, month, weekday, hour`
     )
@@ -180,6 +186,11 @@ export async function recomputeWeekdayHourAverages(
 
 /**
  * Run all aggregate recomputations for a given time range.
+ *
+ * Hourly averages are computed from raw prices (normalizes mixed 15-min/1-hour data).
+ * All higher-level aggregates (daily, weekly, monthly, weekday-hour) are computed
+ * from hourly_averages to ensure each hour is weighted equally regardless of
+ * the raw data granularity.
  */
 export async function recomputeAllAggregates(
   db: D1Database,
@@ -202,7 +213,9 @@ export async function recomputeAllAggregates(
   const expandedStart = Math.floor(monthStart.getTime() / 1000);
   const expandedEnd = Math.floor(monthEnd.getTime() / 1000);
 
-  await recomputeHourlyAverages(db, startTimestamp, endTimestamp);
+  // 1. Hourly averages from raw prices (expanded range so higher-level aggs have data)
+  await recomputeHourlyAverages(db, expandedStart, expandedEnd);
+  // 2. All higher-level aggregates from hourly_averages (equal hour weighting)
   await recomputeDailyAverages(db, expandedStart, expandedEnd);
   await recomputeWeeklyAverages(db, expandedStart, expandedEnd);
   await recomputeMonthlyAverages(db, expandedStart, expandedEnd);
