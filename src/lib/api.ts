@@ -338,6 +338,158 @@ export async function getCurrentPrice(): Promise<ElectricityPrice | null> {
 }
 
 /**
+ * Fetch prices for a heatmap week view, including 4-week historical predictions
+ * for any missing date-hour slots within the week range.
+ *
+ * This fetches the week range + 28 days of history, then fills in missing slots
+ * with averaged prices from the same weekday+hour over the previous 4 weeks.
+ */
+export async function getHeatmapPricesWithPredictions(
+  weekStart: Date,
+  weekEnd: Date
+): Promise<ElectricityPrice[]> {
+  // Fetch 28 days before weekStart for prediction context + the week itself
+  const historyStart = new Date(weekStart);
+  historyStart.setDate(historyStart.getDate() - 28);
+
+  const allData = await getPricesWithPrediction(historyStart, weekEnd);
+
+  // Separate historical (before week) and week data
+  const weekStartMs = weekStart.getTime();
+  const weekEndMs = weekEnd.getTime();
+
+  const historicalData = allData.filter(
+    (p) => p.date.getTime() < weekStartMs && !p.isPredicted
+  );
+  const weekData = allData.filter(
+    (p) => p.date.getTime() >= weekStartMs && p.date.getTime() <= weekEndMs
+  );
+
+  // Build a set of existing (date-hour) keys within the week (non-predicted only)
+  const existingKeys = new Set<string>();
+  for (const p of weekData) {
+    if (!p.isPredicted) {
+      // Use Europe/Tallinn timezone for consistent date-hour keys
+      const local = new Date(p.date);
+      const dateStr = local.toLocaleDateString("en-CA", {
+        timeZone: "Europe/Tallinn",
+      });
+      const hour = parseInt(
+        local.toLocaleString("en-US", {
+          timeZone: "Europe/Tallinn",
+          hour: "2-digit",
+          hour12: false,
+        }),
+        10
+      );
+      existingKeys.add(`${dateStr}-${hour}`);
+    }
+  }
+
+  // Group historical data by (weekday, hour) for 4-week average predictions
+  // weekday: 0=Sun..6=Sat (JS standard)
+  const weekdayHourAvg = new Map<
+    string,
+    { sum: number; count: number }
+  >();
+
+  for (const p of historicalData) {
+    const local = new Date(p.date);
+    const tallinnDate = local.toLocaleDateString("en-CA", {
+      timeZone: "Europe/Tallinn",
+    });
+    const tallinnDay = new Date(tallinnDate + "T12:00:00").getDay();
+    const hour = parseInt(
+      local.toLocaleString("en-US", {
+        timeZone: "Europe/Tallinn",
+        hour: "2-digit",
+        hour12: false,
+      }),
+      10
+    );
+    const key = `${tallinnDay}-${hour}`;
+
+    if (!weekdayHourAvg.has(key)) {
+      weekdayHourAvg.set(key, { sum: 0, count: 0 });
+    }
+    const bucket = weekdayHourAvg.get(key)!;
+    bucket.sum += p.priceCentsKwh;
+    bucket.count += 1;
+  }
+
+  // Generate predicted prices for missing hour slots in the week
+  const predictedPrices: ElectricityPrice[] = [];
+  const current = new Date(weekStart);
+
+  while (current <= weekEnd) {
+    const local = new Date(current);
+    const dateStr = local.toLocaleDateString("en-CA", {
+      timeZone: "Europe/Tallinn",
+    });
+    const hour = parseInt(
+      local.toLocaleString("en-US", {
+        timeZone: "Europe/Tallinn",
+        hour: "2-digit",
+        hour12: false,
+      }),
+      10
+    );
+
+    const slotKey = `${dateStr}-${hour}`;
+
+    if (!existingKeys.has(slotKey)) {
+      // Check if we already have a predicted value from getPricesWithPrediction
+      const existingPredicted = weekData.find(
+        (p) =>
+          p.isPredicted &&
+          p.date.getTime() === current.getTime()
+      );
+
+      if (!existingPredicted) {
+        // Generate 4-week average prediction
+        const tallinnDate = local.toLocaleDateString("en-CA", {
+          timeZone: "Europe/Tallinn",
+        });
+        const tallinnDay = new Date(tallinnDate + "T12:00:00").getDay();
+        const wdKey = `${tallinnDay}-${hour}`;
+        const avg = weekdayHourAvg.get(wdKey);
+
+        if (avg && avg.count > 0) {
+          const avgPrice = avg.sum / avg.count;
+          predictedPrices.push({
+            timestamp: current.toISOString(),
+            date: new Date(current),
+            priceEurMwh: avgPrice * 10, // convert back from cents/kWh to EUR/MWh
+            priceCentsKwh: avgPrice,
+            isPredicted: true,
+          });
+        }
+      }
+    }
+
+    // Move to next hour
+    current.setHours(current.getHours() + 1);
+  }
+
+  // Combine week data + new predictions, sort by date
+  const combined = [...weekData, ...predictedPrices];
+  combined.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  // Deduplicate by timestamp (prefer non-predicted)
+  const seen = new Map<string, ElectricityPrice>();
+  for (const p of combined) {
+    const existing = seen.get(p.timestamp);
+    if (!existing || (existing.isPredicted && !p.isPredicted)) {
+      seen.set(p.timestamp, p);
+    }
+  }
+
+  return Array.from(seen.values()).sort(
+    (a, b) => a.date.getTime() - b.date.getTime()
+  );
+}
+
+/**
  * Calculate statistical measures (Median, Percentiles, Mean)
  */
 export function calculateStatistics(prices: ElectricityPrice[], includeVat: boolean = false): {

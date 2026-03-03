@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Label } from '@/components/ui/label';
-import { Timeframe } from './Dashboard';
-import { ChevronDown, ChevronUp, Settings2 } from 'lucide-react';
+import { Period } from './Dashboard';
+import { AlertConfig, AlertDirection } from '@/lib/priceAlerts';
+import { ChevronDown, ChevronUp, Settings2, Bell } from 'lucide-react';
 
 interface ControlsProps {
     includeVat: boolean;
@@ -18,18 +19,14 @@ interface ControlsProps {
     setShowP90: (val: boolean) => void;
     showP95: boolean;
     setShowP95: (val: boolean) => void;
-    timeframe: Timeframe;
-    setTimeframe: (val: Timeframe) => void;
+    period: Period;
+    setPeriod: (val: Period) => void;
     customStart: string;
     setCustomStart: (val: string) => void;
     customEnd: string;
     setCustomEnd: (val: string) => void;
-    showCheapestPeriod: boolean;
-    setShowCheapestPeriod: (val: boolean) => void;
-    cheapestPeriodHours: number;
-    setCheapestPeriodHours: (val: number) => void;
-    cheapestPeriodUntil: string;
-    setCheapestPeriodUntil: (val: string) => void;
+    alertConfig: AlertConfig;
+    setAlertConfig: (val: AlertConfig) => void;
 }
 
 export default function Controls({
@@ -47,18 +44,14 @@ export default function Controls({
     setShowP90,
     showP95,
     setShowP95,
-    timeframe,
-    setTimeframe,
+    period,
+    setPeriod,
     customStart,
     setCustomStart,
     customEnd,
     setCustomEnd,
-    showCheapestPeriod,
-    setShowCheapestPeriod,
-    cheapestPeriodHours,
-    setCheapestPeriodHours,
-    cheapestPeriodUntil,
-    setCheapestPeriodUntil
+    alertConfig,
+    setAlertConfig
 }: ControlsProps) {
     const [isMobileOpen, setIsMobileOpen] = useState(false);
 
@@ -80,22 +73,23 @@ export default function Controls({
             {/* The Controls Content */}
             <div className={`${isMobileOpen ? 'flex' : 'hidden'} md:flex flex-col space-y-4 mt-4 md:mt-0 pt-4 md:pt-0 border-t border-zinc-800/50 md:border-0`}>
 
-                {/* Top Row: Timeframe & Dates & Cheapest Period */}
+                {/* Top Row: Period & Price Alert */}
                 <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
 
-                    {/* Timeframe Selector & Custom Dates */}
+                    {/* Period Selector & Custom Dates */}
                     <div className="flex flex-col space-y-2">
-                        <Label className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Timeframe</Label>
+                        <Label className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Period</Label>
                         <div className="flex flex-wrap items-center gap-3">
                             <div className="relative">
                                 <select
-                                    value={timeframe}
-                                    onChange={(e) => setTimeframe(e.target.value as Timeframe)}
+                                    value={period}
+                                    onChange={(e) => setPeriod(e.target.value as Period)}
                                     className="appearance-none bg-zinc-800/50 text-zinc-200 border border-zinc-700/80 hover:bg-zinc-800/80 focus:outline-none focus:ring-1 focus:ring-green-500/50 rounded-lg px-4 py-1.5 pr-8 text-sm font-medium transition-colors cursor-pointer"
                                 >
                                     <option value="yesterday">Yesterday</option>
                                     <option value="today">Today</option>
                                     <option value="tomorrow">Tomorrow</option>
+                                    <option value="this_week">Current Week</option>
                                     <option value="next_week">Next Week</option>
                                     <option value="week">Past Week</option>
                                     <option value="month">Past Month</option>
@@ -105,7 +99,7 @@ export default function Controls({
                                 <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
                             </div>
 
-                            {timeframe === 'custom' && (
+                            {period === 'custom' && (
                                 <div className="flex items-center gap-2">
                                     <input
                                         type="date"
@@ -123,57 +117,52 @@ export default function Controls({
                                 </div>
                             )}
                         </div>
-                    </div >
+                    </div>
 
-                    {/* Cheapest Period Feature */}
-                    < div className="flex flex-col space-y-2" >
-                        <Label className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Discovery</Label>
+                    {/* Price Alert Settings */}
+                    <div className="flex flex-col space-y-2">
+                        <Label className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Price Alert</Label>
                         <div className="flex flex-wrap items-center gap-2">
                             <button
-                                onClick={() => setShowCheapestPeriod(!showCheapestPeriod)}
-                                className={`px-3 py-1.5 rounded-lg text-sm transition-all border ${showCheapestPeriod ? 'bg-green-400/20 text-green-300 border-green-400/50' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800'}`}
+                                onClick={() => setAlertConfig({ ...alertConfig, enabled: !alertConfig.enabled })}
+                                className={`px-3 py-1.5 rounded-lg text-sm transition-all border flex items-center gap-1.5 ${alertConfig.enabled ? 'bg-yellow-400/20 text-yellow-300 border-yellow-400/50' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800'}`}
                             >
-                                Highlight Cheapest
+                                <Bell className="w-3.5 h-3.5" />
+                                Alert
                             </button>
 
-                            {showCheapestPeriod && (
+                            {alertConfig.enabled && (
                                 <div className="flex items-center gap-2">
                                     <div className="relative">
                                         <select
-                                            value={cheapestPeriodHours}
-                                            onChange={(e) => setCheapestPeriodHours(Number(e.target.value))}
-                                            className="appearance-none bg-zinc-800/50 text-zinc-200 border border-zinc-700/80 hover:bg-zinc-800/80 focus:outline-none focus:ring-1 focus:ring-green-500/50 rounded-lg px-3 py-1.5 pr-8 text-sm font-medium transition-colors cursor-pointer"
+                                            value={alertConfig.direction}
+                                            onChange={(e) => setAlertConfig({ ...alertConfig, direction: e.target.value as AlertDirection })}
+                                            className="appearance-none bg-zinc-800/50 text-zinc-200 border border-zinc-700/80 hover:bg-zinc-800/80 focus:outline-none focus:ring-1 focus:ring-yellow-500/50 rounded-lg px-3 py-1.5 pr-8 text-sm font-medium transition-colors cursor-pointer"
                                         >
-                                            {[1, 2, 3, 4, 5, 6, 7, 8].map(h => (
-                                                <option key={h} value={h}>{h} hr{h > 1 ? 's' : ''}</option>
-                                            ))}
+                                            <option value="below">Below</option>
+                                            <option value="above">Above</option>
                                         </select>
                                         <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
                                     </div>
-                                    <span className="text-zinc-500 text-sm">until</span>
-                                    <div className="relative">
-                                        <select
-                                            value={cheapestPeriodUntil}
-                                            onChange={(e) => setCheapestPeriodUntil(e.target.value)}
-                                            className="appearance-none bg-zinc-800/50 text-zinc-200 border border-zinc-700/80 hover:bg-zinc-800/80 focus:outline-none focus:ring-1 focus:ring-green-500/50 rounded-lg px-3 py-1.5 pr-8 text-sm font-medium transition-colors cursor-pointer"
-                                        >
-                                            {Array.from({ length: 24 }).map((_, i) => {
-                                                const hourStr = i.toString().padStart(2, '0') + ':00';
-                                                return <option key={hourStr} value={hourStr}>{hourStr}</option>;
-                                            })}
-                                        </select>
-                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
-                                    </div>
+                                    <input
+                                        type="number"
+                                        step="0.5"
+                                        min="0"
+                                        value={alertConfig.threshold}
+                                        onChange={(e) => setAlertConfig({ ...alertConfig, threshold: parseFloat(e.target.value) || 0 })}
+                                        className="w-20 bg-zinc-800/50 border border-zinc-700/80 text-zinc-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-yellow-500/50 text-center"
+                                    />
+                                    <span className="text-zinc-500 text-sm whitespace-nowrap">¢/kWh</span>
                                 </div>
                             )}
                         </div>
-                    </div >
-                </div >
+                    </div>
+                </div>
 
                 {/* Advanced Settings Content */}
-                < div className="flex flex-col xl:flex-row gap-6 justify-between items-start xl:items-center pt-4 pb-2 border-t border-zinc-800/50 mt-4" >
+                <div className="flex flex-col xl:flex-row gap-6 justify-between items-start xl:items-center pt-4 pb-2 border-t border-zinc-800/50 mt-4">
                     {/* Statistical Overlays */}
-                    < div className="flex flex-col space-y-2 w-full md:w-auto" >
+                    <div className="flex flex-col space-y-2 w-full md:w-auto">
                         <div className="flex flex-wrap gap-2">
                             <button
                                 onClick={() => setShowNow(!showNow)}
@@ -212,10 +201,10 @@ export default function Controls({
                                 95th Pctl
                             </button>
                         </div>
-                    </div >
+                    </div>
 
                     {/* VAT Toggle */}
-                    < div className="flex flex-col space-y-2 w-full md:w-auto mt-2 xl:mt-0" >
+                    <div className="flex flex-col space-y-2 w-full md:w-auto mt-2 xl:mt-0">
                         <div className="flex flex-wrap gap-2">
                             <button
                                 onClick={() => setIncludeVat(!includeVat)}
@@ -224,9 +213,9 @@ export default function Controls({
                                 Include VAT (22%)
                             </button>
                         </div>
-                    </div >
-                </div >
-            </div >
-        </div >
+                    </div>
+                </div>
+            </div>
+        </div>
     );
 }

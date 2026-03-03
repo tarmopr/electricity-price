@@ -14,6 +14,7 @@ import {
 } from 'recharts';
 import { format, isSameHour } from 'date-fns';
 import { ElectricityPrice } from '@/lib/api';
+import { CheapestWindow } from '@/lib/cheapestWindow';
 
 interface PriceChartProps {
     data: ElectricityPrice[];
@@ -32,9 +33,7 @@ interface PriceChartProps {
         p90: number;
         p95: number;
     } | null;
-    showCheapestPeriod: boolean;
-    cheapestPeriodHours: number;
-    cheapestPeriodUntil: string;
+    cheapestWindow: CheapestWindow | null;
 }
 
 export default function PriceChart({
@@ -48,9 +47,7 @@ export default function PriceChart({
     showP90,
     showP95,
     stats,
-    showCheapestPeriod,
-    cheapestPeriodHours,
-    cheapestPeriodUntil
+    cheapestWindow
 }: PriceChartProps) {
     const [mounted, setMounted] = useState(false);
     const [isHovering, setIsHovering] = useState(false);
@@ -70,11 +67,6 @@ export default function PriceChart({
     // Process data for the chart, including color coding for past vs future
     const chartData = data.map(item => {
         const price = includeVat ? item.priceCentsKwh * 1.22 : item.priceCentsKwh;
-
-        // Find if this item is the current hour (unused variables removed to pass lint)
-
-        // An item is "past" if its date is before the current active hour's date
-        // We find the current hour's date to compare correctly
 
         return {
             ...item,
@@ -133,97 +125,6 @@ export default function PriceChart({
                 // Gradients go top-to-bottom, so y=0 is top (max), y=1 is bottom (min).
                 medianOffset = (dataMax - stats.median) / (dataMax - dataMin);
                 medianOffset = Math.max(0, Math.min(1, medianOffset)); // Clamp
-            }
-        }
-    }
-
-    // --- CHEAPEST PERIOD CALCULATION ---
-    let cheapestWindowStart: string | null = null;
-    let cheapestWindowEnd: string | null = null;
-    let cheapestAverage: number | null = null;
-
-    if (showCheapestPeriod && chartData.length > 0 && cheapestPeriodHours > 0) {
-        let startIndex = 0;
-        const currentHourStart = new Date(now);
-        currentHourStart.setMinutes(0, 0, 0);
-
-        const foundIndex = chartData.findIndex(item => new Date(item.timestamp).getTime() >= currentHourStart.getTime());
-        if (foundIndex !== -1) {
-            startIndex = foundIndex;
-        } else {
-            // The whole chart is in the past, nothing to highlight
-            startIndex = chartData.length;
-        }
-
-        // Determine the absolute end limit timestamp
-        let baseTimeForLimit = currentHourStart;
-        if (startIndex < chartData.length) {
-            const firstAnalyzedItemTime = new Date(chartData[startIndex].timestamp);
-            if (firstAnalyzedItemTime > baseTimeForLimit) {
-                baseTimeForLimit = firstAnalyzedItemTime;
-            }
-        }
-
-        let endLimitTimestamp = new Date(baseTimeForLimit);
-        if (cheapestPeriodUntil) {
-            const [untilH, untilM] = cheapestPeriodUntil.split(':').map(Number);
-            endLimitTimestamp.setHours(untilH, untilM, 0, 0);
-
-            // If the selected time is earlier in the day than our starting point
-            if (endLimitTimestamp <= baseTimeForLimit) {
-                endLimitTimestamp.setDate(endLimitTimestamp.getDate() + 1);
-            }
-        } else {
-            // Fallback if empty, just use far future
-            endLimitTimestamp = new Date(baseTimeForLimit.getTime() + 100 * 24 * 60 * 60 * 1000);
-        }
-
-        const endLimitMs = endLimitTimestamp.getTime();
-
-        // Ensure we don't look past the length of the data array
-        // Each data point is 1 hour (except when aggregated, but 'hours' logic holds relatively)
-        const windowSize = Math.min(cheapestPeriodHours, chartData.length - startIndex);
-
-        if (windowSize > 0) {
-            let minSum = Infinity;
-            let minIndex = -1;
-
-            for (let i = startIndex; i <= chartData.length - windowSize; i++) {
-                // Determine the end time of this window.
-                // Assuming 1 index is roughly 1 hour in the display (or its aggregated size).
-                // The actual mathematically correct end time is the timestamp of the LAST item in the window + 1 hour.
-                const lastItemInWindow = chartData[i + windowSize - 1];
-                const windowEndMs = new Date(lastItemInWindow.timestamp).getTime() + (60 * 60 * 1000); // add 1 hour to the start of the last bucket
-
-                if (windowEndMs > endLimitMs) {
-                    // This window finishes AFTER the user's "Until" time limit, so skip it (and all subsequent).
-                    break;
-                }
-
-                let currentSum = 0;
-                // Calculate sum for this window
-                for (let j = 0; j < windowSize; j++) {
-                    currentSum += chartData[i + j].displayPrice;
-                }
-
-                if (currentSum < minSum) {
-                    minSum = currentSum;
-                    minIndex = i;
-                }
-            }
-
-            if (minIndex !== -1) {
-                cheapestWindowStart = chartData[minIndex].timestamp;
-                // Ensure the end visually covers the last hour fully
-                const endIndex = minIndex + windowSize - 1;
-                // The timestamp is the start of the final hour in the block.
-                // If we have subsequent data, we highlight UP TO the next hour to make the box fill fully.
-                // If it's the very last data point, we highlight to its start.
-                cheapestWindowEnd = endIndex + 1 < chartData.length
-                    ? chartData[endIndex + 1].timestamp
-                    : chartData[endIndex].timestamp;
-
-                cheapestAverage = minSum / windowSize;
             }
         }
     }
@@ -352,7 +253,7 @@ export default function PriceChart({
     const gridOpacity = isHovering ? 0.1 : 0.4;
     const lineOpacity = isHovering ? 0.3 : 0.5;
 
-    // Calculate a hard minimum instead of relying on Recharts 'dataMin' 
+    // Calculate a hard minimum instead of relying on Recharts 'dataMin'
     // to enforce re-rendering when VAT toggles but the underlying array length hasn't changed.
     const calculatedMin = chartData.length > 0
         ? Math.min(...chartData.map(d => d.displayPrice))
@@ -427,16 +328,16 @@ export default function PriceChart({
                         animationDuration={200}
                     />
 
-                    {/* Cheapest Period Reference Area */}
-                    {showCheapestPeriod && cheapestWindowStart && cheapestWindowEnd && (
+                    {/* Cheapest Window Reference Area */}
+                    {cheapestWindow && (
                         <ReferenceArea
-                            x1={cheapestWindowStart}
-                            x2={cheapestWindowEnd}
+                            x1={cheapestWindow.startTimestamp}
+                            x2={cheapestWindow.endTimestamp}
                             fill="#86efac" // subtle green fill
                             fillOpacity={0.15}
                             strokeOpacity={0}
                             label={{
-                                value: `Cheapest ${cheapestPeriodHours}h: ${cheapestAverage?.toFixed(2)} ¢/kWh`,
+                                value: `Cheapest ${cheapestWindow.hours}h: ${cheapestWindow.averagePrice.toFixed(2)} ¢/kWh`,
                                 position: 'insideTop',
                                 fill: '#4ade80',
                                 fontSize: 12,
