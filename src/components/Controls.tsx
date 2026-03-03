@@ -1,8 +1,26 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
 import { Period } from './Dashboard';
 import { AlertConfig, AlertDirection } from '@/lib/priceAlerts';
 import { ChevronDown, ChevronUp, Settings2, Bell } from 'lucide-react';
+
+/** Primary periods shown as always-visible pills */
+const PRIMARY_PERIODS: { value: Period; label: string }[] = [
+    { value: 'yesterday', label: 'Yesterday' },
+    { value: 'today', label: 'Today' },
+    { value: 'tomorrow', label: 'Tomorrow' },
+];
+
+/** Secondary periods hidden behind "More" dropdown */
+const MORE_PERIODS: { value: Period; label: string }[] = [
+    { value: 'this_week', label: 'This Week' },
+    { value: 'last_7_days', label: 'Last 7 Days' },
+    { value: 'next_7_days', label: 'Next 7 Days' },
+    { value: 'last_30_days', label: 'Last 30 Days' },
+    { value: 'custom', label: 'Custom' },
+];
+
+const ALL_MORE_VALUES = new Set(MORE_PERIODS.map((p) => p.value));
 
 interface ControlsProps {
     includeVat: boolean;
@@ -54,6 +72,28 @@ export default function Controls({
     setAlertConfig
 }: ControlsProps) {
     const [isMobileOpen, setIsMobileOpen] = useState(false);
+    const [moreOpen, setMoreOpen] = useState(false);
+    const moreRef = useRef<HTMLDivElement>(null);
+
+    // Close "More" dropdown on outside click
+    useEffect(() => {
+        function handleClickOutside(e: MouseEvent) {
+            if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
+                setMoreOpen(false);
+            }
+        }
+        if (moreOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [moreOpen]);
+
+    const isMoreActive = ALL_MORE_VALUES.has(period);
+    const activeMoreLabel = MORE_PERIODS.find((p) => p.value === period)?.label;
+
+    const pillBase = 'px-3 py-1.5 rounded-lg text-sm transition-all border font-medium';
+    const pillActive = 'bg-emerald-400/20 text-emerald-300 border-emerald-400/50';
+    const pillInactive = 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800';
 
     return (
         <div className="bg-zinc-900/40 p-4 md:p-5 rounded-2xl border border-zinc-800/50 hover:border-zinc-700/80 hover:shadow-[0_8px_30px_rgba(0,0,0,0.4)] backdrop-blur-2xl transition-all duration-500 h-full flex flex-col justify-center hover:-translate-y-0.5">
@@ -79,24 +119,48 @@ export default function Controls({
                     {/* Period Selector & Custom Dates */}
                     <div className="flex flex-col space-y-2">
                         <Label className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Period</Label>
-                        <div className="flex flex-wrap items-center gap-3">
-                            <div className="relative">
-                                <select
-                                    value={period}
-                                    onChange={(e) => setPeriod(e.target.value as Period)}
-                                    className="appearance-none bg-zinc-800/50 text-zinc-200 border border-zinc-700/80 hover:bg-zinc-800/80 focus:outline-none focus:ring-1 focus:ring-green-500/50 rounded-lg px-4 py-1.5 pr-8 text-sm font-medium transition-colors cursor-pointer"
+                        <div className="flex flex-wrap items-center gap-2">
+                            {/* Primary pills */}
+                            {PRIMARY_PERIODS.map((p) => (
+                                <button
+                                    key={p.value}
+                                    onClick={() => setPeriod(p.value)}
+                                    className={`${pillBase} ${period === p.value ? pillActive : pillInactive}`}
                                 >
-                                    <option value="yesterday">Yesterday</option>
-                                    <option value="today">Today</option>
-                                    <option value="tomorrow">Tomorrow</option>
-                                    <option value="this_week">Current Week</option>
-                                    <option value="next_week">Next Week</option>
-                                    <option value="week">Past Week</option>
-                                    <option value="month">Past Month</option>
-                                    <option value="quarter">Past Quarter</option>
-                                    <option value="custom">Custom Range</option>
-                                </select>
-                                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+                                    {p.label}
+                                </button>
+                            ))}
+
+                            {/* "More" dropdown */}
+                            <div className="relative" ref={moreRef}>
+                                <button
+                                    onClick={() => setMoreOpen(!moreOpen)}
+                                    className={`${pillBase} flex items-center gap-1 ${isMoreActive ? pillActive : pillInactive}`}
+                                >
+                                    {isMoreActive ? activeMoreLabel : 'More'}
+                                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${moreOpen ? 'rotate-180' : ''}`} />
+                                </button>
+
+                                {moreOpen && (
+                                    <div className="absolute top-full left-0 mt-1 z-50 min-w-[160px] bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl py-1">
+                                        {MORE_PERIODS.map((p) => (
+                                            <button
+                                                key={p.value}
+                                                onClick={() => {
+                                                    setPeriod(p.value);
+                                                    setMoreOpen(false);
+                                                }}
+                                                className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                                                    period === p.value
+                                                        ? 'text-emerald-300 bg-emerald-400/10'
+                                                        : 'text-zinc-300 hover:bg-zinc-700/60'
+                                                }`}
+                                            >
+                                                {p.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             {period === 'custom' && (

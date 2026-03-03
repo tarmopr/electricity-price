@@ -359,10 +359,9 @@ describe("heatmapData", () => {
     it("returns null for multi-day periods", () => {
       const start = new Date("2024-06-01");
       const end = new Date("2024-06-07");
-      expect(getHeatmapWeekRange("week", start, end)).toBeNull();
-      expect(getHeatmapWeekRange("month", start, end)).toBeNull();
-      expect(getHeatmapWeekRange("quarter", start, end)).toBeNull();
-      expect(getHeatmapWeekRange("next_week", start, end)).toBeNull();
+      expect(getHeatmapWeekRange("last_7_days", start, end)).toBeNull();
+      expect(getHeatmapWeekRange("last_30_days", start, end)).toBeNull();
+      expect(getHeatmapWeekRange("next_7_days", start, end)).toBeNull();
       expect(getHeatmapWeekRange("custom", start, end)).toBeNull();
     });
 

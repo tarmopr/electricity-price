@@ -46,7 +46,7 @@ describe("shareState", () => {
 
     it("omits custom dates when period is not custom", () => {
       const state: ShareableState = {
-        period: "week",
+        period: "last_7_days",
         includeVat: true,
         viewMode: "chart",
         customStart: "2024-06-01",
@@ -59,7 +59,7 @@ describe("shareState", () => {
 
     it("encodes heatmap view mode", () => {
       const state: ShareableState = {
-        period: "week",
+        period: "last_7_days",
         includeVat: false,
         viewMode: "heatmap",
       };
@@ -94,13 +94,13 @@ describe("shareState", () => {
 
     it("replaces existing search params", () => {
       const state: ShareableState = {
-        period: "week",
+        period: "last_7_days",
         includeVat: false,
         viewMode: "heatmap",
       };
       const url = buildShareUrl("https://example.com?old=param", state);
       expect(url).not.toContain("old=param");
-      expect(url).toContain("tf=week");
+      expect(url).toContain("tf=last_7_days");
     });
   });
 

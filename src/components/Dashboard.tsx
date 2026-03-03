@@ -39,7 +39,7 @@ import { getHeatmapWeekRange } from '@/lib/heatmapData';
 import { findCheapestWindow } from '@/lib/cheapestWindow';
 import { RefreshCw, BarChart3, Grid3X3 } from 'lucide-react';
 
-export type Period = 'yesterday' | 'today' | 'tomorrow' | 'this_week' | 'next_week' | 'week' | 'month' | 'quarter' | 'custom';
+export type Period = 'yesterday' | 'today' | 'tomorrow' | 'this_week' | 'last_7_days' | 'next_7_days' | 'last_30_days' | 'custom';
 export type ViewMode = 'chart' | 'heatmap';
 
 export default function Dashboard() {
@@ -163,20 +163,16 @@ export default function Dashboard() {
                         start = startOfWeek(new Date(), { weekStartsOn: 1 });
                         end = endOfWeek(new Date(), { weekStartsOn: 1 });
                         break;
-                    case 'next_week':
-                        start = startOfTomorrow();
-                        end = addDays(endOfTomorrow(), 6); // Tomorrow + 6 days = 7 days total
-                        break;
-                    case 'week':
+                    case 'last_7_days':
                         start = subDays(startOfToday(), 7);
                         end = endOfToday();
                         break;
-                    case 'month':
-                        start = subMonths(startOfToday(), 1);
-                        end = endOfToday();
+                    case 'next_7_days':
+                        start = startOfTomorrow();
+                        end = addDays(endOfTomorrow(), 6); // Tomorrow + 6 days = 7 days total
                         break;
-                    case 'quarter':
-                        start = subMonths(startOfToday(), 3);
+                    case 'last_30_days':
+                        start = subMonths(startOfToday(), 1);
                         end = endOfToday();
                         break;
                     case 'custom':
@@ -215,15 +211,12 @@ export default function Dashboard() {
 
                 // --- DATA AGGREGATION LOGIC ---
                 let data = rawData;
-                if (period === 'week' || period === 'this_week' || period === 'next_week') {
+                if (period === 'last_7_days' || period === 'this_week' || period === 'next_7_days') {
                     // 1-hour intervals (average 4 points -> 1)
                     data = aggregatePrices(rawData, 1);
-                } else if (period === 'month') {
+                } else if (period === 'last_30_days') {
                     // 6-hour intervals (average 24 points -> 1)
                     data = aggregatePrices(rawData, 6);
-                } else if (period === 'quarter') {
-                    // 12-hour intervals (average 48 points -> 1)
-                    data = aggregatePrices(rawData, 12);
                 } else if (period === 'custom') {
                     const daysDifference = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
                     if (daysDifference > 90) {
