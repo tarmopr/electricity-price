@@ -30,12 +30,15 @@ import CurrentPriceCard from './CurrentPriceCard';
 import Controls from './Controls';
 import PriceAlertBanner from './PriceAlertBanner';
 import CostCalculator from './CostCalculator';
-import { RefreshCw } from 'lucide-react';
+import PriceHeatmap from './PriceHeatmap';
+import { RefreshCw, BarChart3, Grid3X3 } from 'lucide-react';
 
 export type Timeframe = 'yesterday' | 'today' | 'tomorrow' | 'next_week' | 'week' | 'month' | 'quarter' | 'custom';
+export type ViewMode = 'chart' | 'heatmap';
 
 export default function Dashboard() {
     const [prices, setPrices] = useState<ElectricityPrice[]>([]);
+    const [rawPrices, setRawPrices] = useState<ElectricityPrice[]>([]);
     const [currentPrice, setCurrentPrice] = useState<ElectricityPrice | null>(null);
     const [previousPrice, setPreviousPrice] = useState<ElectricityPrice | null>(null);
     const [nextPrice, setNextPrice] = useState<ElectricityPrice | null>(null);
@@ -55,6 +58,9 @@ export default function Dashboard() {
     const [timeframe, setTimeframe] = usePersistedState<Timeframe>('timeframe', 'today');
     const [customStart, setCustomStart] = useState<string>(format(startOfToday(), 'yyyy-MM-dd'));
     const [customEnd, setCustomEnd] = useState<string>(format(endOfToday(), 'yyyy-MM-dd'));
+
+    // View Mode (persisted)
+    const [viewMode, setViewMode] = usePersistedState<ViewMode>('viewMode', 'chart');
 
     // Cheapest Period Settings (persisted)
     const [showCheapestPeriod, setShowCheapestPeriod] = usePersistedState<boolean>('showCheapestPeriod', false);
@@ -160,6 +166,7 @@ export default function Dashboard() {
                 }
 
                 const rawData = await getPricesWithPrediction(start, end);
+                setRawPrices(rawData);
 
                 // --- DATA AGGREGATION LOGIC ---
                 let data = rawData;
@@ -322,23 +329,48 @@ export default function Dashboard() {
                 </div>
             </div>
 
-            {/* Main Chart Area */}
+            {/* View Mode Toggle + Main Visualization */}
             <div className="bg-zinc-900/40 p-2 sm:p-6 rounded-3xl border border-zinc-800/80 hover:border-zinc-700/60 transition-all duration-500 shadow-[0_8px_30px_rgba(0,0,0,0.3)] hover:shadow-[0_8px_40px_rgba(0,0,0,0.4)] hover:-translate-y-1 backdrop-blur-2xl">
-                <PriceChart
-                    data={prices}
-                    currentPrice={currentPrice}
-                    includeVat={includeVat}
-                    showNow={showNow}
-                    showMean={showMean}
-                    showMedian={showMedian}
-                    showP75={showP75}
-                    showP90={showP90}
-                    showP95={showP95}
-                    stats={stats}
-                    showCheapestPeriod={showCheapestPeriod}
-                    cheapestPeriodHours={cheapestPeriodHours}
-                    cheapestPeriodUntil={cheapestPeriodUntil}
-                />
+                {/* View Toggle */}
+                <div className="flex items-center gap-2 px-2 sm:px-0 mb-2">
+                    <button
+                        onClick={() => setViewMode('chart')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all border ${viewMode === 'chart' ? 'bg-emerald-400/20 text-emerald-300 border-emerald-400/50' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800'}`}
+                    >
+                        <BarChart3 className="w-3.5 h-3.5" />
+                        Chart
+                    </button>
+                    <button
+                        onClick={() => setViewMode('heatmap')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all border ${viewMode === 'heatmap' ? 'bg-indigo-400/20 text-indigo-300 border-indigo-400/50' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800'}`}
+                    >
+                        <Grid3X3 className="w-3.5 h-3.5" />
+                        Heatmap
+                    </button>
+                </div>
+
+                {viewMode === 'chart' ? (
+                    <PriceChart
+                        data={prices}
+                        currentPrice={currentPrice}
+                        includeVat={includeVat}
+                        showNow={showNow}
+                        showMean={showMean}
+                        showMedian={showMedian}
+                        showP75={showP75}
+                        showP90={showP90}
+                        showP95={showP95}
+                        stats={stats}
+                        showCheapestPeriod={showCheapestPeriod}
+                        cheapestPeriodHours={cheapestPeriodHours}
+                        cheapestPeriodUntil={cheapestPeriodUntil}
+                    />
+                ) : (
+                    <PriceHeatmap
+                        data={rawPrices}
+                        includeVat={includeVat}
+                    />
+                )}
             </div>
 
             {/* Cost Calculator */}
