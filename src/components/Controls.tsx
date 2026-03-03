@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
 import { Period } from './Dashboard';
 import { AlertConfig, AlertDirection } from '@/lib/priceAlerts';
-import { ChevronDown, ChevronUp, Settings2, Bell } from 'lucide-react';
+import { ChevronDown, ChevronUp, Settings2, Bell, Check } from 'lucide-react';
 
 /** Primary periods shown as always-visible pills */
 const PRIMARY_PERIODS: { value: Period; label: string }[] = [
@@ -22,6 +22,15 @@ const MORE_PERIODS: { value: Period; label: string }[] = [
 
 const ALL_MORE_VALUES = new Set(MORE_PERIODS.map((p) => p.value));
 
+/** Stat overlay items for the "More" dropdown */
+interface StatToggleItem {
+    key: string;
+    label: string;
+    dotColor: string;
+    get: () => boolean;
+    set: () => void;
+}
+
 interface ControlsProps {
     includeVat: boolean;
     setIncludeVat: (val: boolean) => void;
@@ -37,6 +46,10 @@ interface ControlsProps {
     setShowP90: (val: boolean) => void;
     showP95: boolean;
     setShowP95: (val: boolean) => void;
+    showAvg7d: boolean;
+    setShowAvg7d: (val: boolean) => void;
+    showAvg30d: boolean;
+    setShowAvg30d: (val: boolean) => void;
     period: Period;
     setPeriod: (val: Period) => void;
     customStart: string;
@@ -62,6 +75,10 @@ export default function Controls({
     setShowP90,
     showP95,
     setShowP95,
+    showAvg7d,
+    setShowAvg7d,
+    showAvg30d,
+    setShowAvg30d,
     period,
     setPeriod,
     customStart,
@@ -74,8 +91,10 @@ export default function Controls({
     const [isMobileOpen, setIsMobileOpen] = useState(false);
     const [moreOpen, setMoreOpen] = useState(false);
     const moreRef = useRef<HTMLDivElement>(null);
+    const [statMoreOpen, setStatMoreOpen] = useState(false);
+    const statMoreRef = useRef<HTMLDivElement>(null);
 
-    // Close "More" dropdown on outside click
+    // Close period "More" dropdown on outside click
     useEffect(() => {
         function handleClickOutside(e: MouseEvent) {
             if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
@@ -88,12 +107,36 @@ export default function Controls({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [moreOpen]);
 
+    // Close stat "More" dropdown on outside click
+    useEffect(() => {
+        function handleClickOutside(e: MouseEvent) {
+            if (statMoreRef.current && !statMoreRef.current.contains(e.target as Node)) {
+                setStatMoreOpen(false);
+            }
+        }
+        if (statMoreOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [statMoreOpen]);
+
     const isMoreActive = ALL_MORE_VALUES.has(period);
     const activeMoreLabel = MORE_PERIODS.find((p) => p.value === period)?.label;
 
     const pillBase = 'px-3 py-1.5 rounded-lg text-sm transition-all border font-medium';
     const pillActive = 'bg-emerald-400/20 text-emerald-300 border-emerald-400/50';
     const pillInactive = 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800';
+
+    // Secondary stat overlay items (shown in dropdown)
+    const statMoreItems: StatToggleItem[] = [
+        { key: 'p75', label: '75th Pctl', dotColor: 'bg-purple-400', get: () => showP75, set: () => setShowP75(!showP75) },
+        { key: 'p90', label: '90th Pctl', dotColor: 'bg-pink-400', get: () => showP90, set: () => setShowP90(!showP90) },
+        { key: 'p95', label: '95th Pctl', dotColor: 'bg-orange-400', get: () => showP95, set: () => setShowP95(!showP95) },
+        { key: 'avg7d', label: '7-Day Avg', dotColor: 'bg-teal-400', get: () => showAvg7d, set: () => setShowAvg7d(!showAvg7d) },
+        { key: 'avg30d', label: '30-Day Avg', dotColor: 'bg-cyan-400', get: () => showAvg30d, set: () => setShowAvg30d(!showAvg30d) },
+    ];
+
+    const statMoreActiveCount = statMoreItems.filter(i => i.get()).length;
 
     return (
         <div className="bg-zinc-900/40 p-4 md:p-5 rounded-2xl border border-zinc-800/50 hover:border-zinc-700/80 hover:shadow-[0_8px_30px_rgba(0,0,0,0.4)] backdrop-blur-2xl transition-all duration-500 h-full flex flex-col justify-center hover:-translate-y-0.5">
@@ -237,6 +280,7 @@ export default function Controls({
                     {/* Statistical Overlays */}
                     <div className="flex flex-col space-y-2 w-full md:w-auto">
                         <div className="flex flex-wrap gap-2">
+                            {/* Primary stat buttons */}
                             <button
                                 onClick={() => setShowNow(!showNow)}
                                 aria-pressed={showNow}
@@ -258,27 +302,44 @@ export default function Controls({
                             >
                                 Median
                             </button>
-                            <button
-                                onClick={() => setShowP75(!showP75)}
-                                aria-pressed={showP75}
-                                className={`px-3 py-1.5 rounded-lg text-sm transition-all border ${showP75 ? 'bg-purple-400/20 text-purple-300 border-purple-400/50' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800'}`}
-                            >
-                                75th Pctl
-                            </button>
-                            <button
-                                onClick={() => setShowP90(!showP90)}
-                                aria-pressed={showP90}
-                                className={`px-3 py-1.5 rounded-lg text-sm transition-all border ${showP90 ? 'bg-pink-400/20 text-pink-300 border-pink-400/50' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800'}`}
-                            >
-                                90th Pctl
-                            </button>
-                            <button
-                                onClick={() => setShowP95(!showP95)}
-                                aria-pressed={showP95}
-                                className={`px-3 py-1.5 rounded-lg text-sm transition-all border ${showP95 ? 'bg-orange-400/20 text-orange-300 border-orange-400/50' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800'}`}
-                            >
-                                95th Pctl
-                            </button>
+
+                            {/* Secondary stat "More" dropdown */}
+                            <div className="relative" ref={statMoreRef}>
+                                <button
+                                    onClick={() => setStatMoreOpen(!statMoreOpen)}
+                                    aria-expanded={statMoreOpen}
+                                    aria-haspopup="true"
+                                    className={`${pillBase} flex items-center gap-1 ${statMoreActiveCount > 0 ? 'bg-zinc-700/60 text-zinc-200 border-zinc-600' : pillInactive}`}
+                                >
+                                    More{statMoreActiveCount > 0 && (
+                                        <span className="ml-0.5 text-[10px] bg-zinc-500/40 text-zinc-300 px-1.5 py-0.5 rounded-full leading-none">
+                                            {statMoreActiveCount}
+                                        </span>
+                                    )}
+                                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${statMoreOpen ? 'rotate-180' : ''}`} />
+                                </button>
+
+                                {statMoreOpen && (
+                                    <div className="absolute top-full left-0 mt-1 z-50 min-w-[170px] bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl py-1">
+                                        {statMoreItems.map((item) => {
+                                            const active = item.get();
+                                            return (
+                                                <button
+                                                    key={item.key}
+                                                    onClick={item.set}
+                                                    className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2 ${
+                                                        active ? 'text-zinc-100 bg-zinc-700/40' : 'text-zinc-400 hover:bg-zinc-700/30'
+                                                    }`}
+                                                >
+                                                    <span className={`w-2 h-2 rounded-full ${item.dotColor} shrink-0`} />
+                                                    <span className="flex-1">{item.label}</span>
+                                                    {active && <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
 

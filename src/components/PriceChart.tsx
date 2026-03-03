@@ -5,6 +5,7 @@ import {
     Area,
     AreaChart,
     CartesianGrid,
+    Line,
     ReferenceLine,
     ReferenceArea,
     ResponsiveContainer,
@@ -13,7 +14,7 @@ import {
     YAxis
 } from 'recharts';
 import { format, isSameHour } from 'date-fns';
-import { ElectricityPrice } from '@/lib/api';
+import { ElectricityPrice, HourlyAveragePattern } from '@/lib/api';
 import { CheapestWindow } from '@/lib/cheapestWindow';
 
 interface PriceChartProps {
@@ -34,6 +35,10 @@ interface PriceChartProps {
         p95: number;
     } | null;
     cheapestWindow: CheapestWindow | null;
+    avg7dPattern: HourlyAveragePattern | null;
+    avg30dPattern: HourlyAveragePattern | null;
+    showAvg7d: boolean;
+    showAvg30d: boolean;
 }
 
 export default function PriceChart({
@@ -47,7 +52,11 @@ export default function PriceChart({
     showP90,
     showP95,
     stats,
-    cheapestWindow
+    cheapestWindow,
+    avg7dPattern,
+    avg30dPattern,
+    showAvg7d,
+    showAvg30d
 }: PriceChartProps) {
     const [mounted, setMounted] = useState(false);
     const [isHovering, setIsHovering] = useState(false);
@@ -96,6 +105,11 @@ export default function PriceChart({
     // Process data for the chart, including color coding for past vs future
     const chartData = data.map(item => {
         const price = includeVat ? item.priceCentsKwh * 1.22 : item.priceCentsKwh;
+        const hour = item.date.getHours();
+
+        // Look up hourly average patterns for overlay lines
+        const raw7d = showAvg7d && avg7dPattern ? avg7dPattern.get(hour) ?? null : null;
+        const raw30d = showAvg30d && avg30dPattern ? avg30dPattern.get(hour) ?? null : null;
 
         return {
             ...item,
@@ -103,6 +117,8 @@ export default function PriceChart({
             // For visual distinction
             knownPrice: !item.isPredicted ? parseFloat(price.toFixed(2)) : null,
             predictedPrice: item.isPredicted ? parseFloat(price.toFixed(2)) : null,
+            avg7d: raw7d !== null ? parseFloat((includeVat ? raw7d * 1.22 : raw7d).toFixed(2)) : null,
+            avg30d: raw30d !== null ? parseFloat((includeVat ? raw30d * 1.22 : raw30d).toFixed(2)) : null,
         };
     });
 
@@ -437,6 +453,36 @@ export default function PriceChart({
                         filter="url(#neonGlow)"
                         activeDot={{ r: 6, fill: '#6366f1', stroke: '#fff', strokeWidth: 2, className: 'animate-pulse drop-shadow-[0_0_12px_rgba(99,102,241,1)]' }}
                     />
+
+                    {/* Historical Average Overlay Lines */}
+                    {showAvg7d && avg7dPattern && (
+                        <Line
+                            type="monotone"
+                            dataKey="avg7d"
+                            stroke="#2dd4bf"
+                            strokeWidth={2}
+                            strokeDasharray="6 3"
+                            dot={false}
+                            strokeOpacity={0.6}
+                            isAnimationActive={true}
+                            name="7-Day Avg"
+                            connectNulls={false}
+                        />
+                    )}
+                    {showAvg30d && avg30dPattern && (
+                        <Line
+                            type="monotone"
+                            dataKey="avg30d"
+                            stroke="#22d3ee"
+                            strokeWidth={2}
+                            strokeDasharray="6 3"
+                            dot={false}
+                            strokeOpacity={0.6}
+                            isAnimationActive={true}
+                            name="30-Day Avg"
+                            connectNulls={false}
+                        />
+                    )}
                 </AreaChart>
             </ResponsiveContainer>
         </div>

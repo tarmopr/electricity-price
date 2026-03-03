@@ -8,7 +8,9 @@ import {
     calculateStatistics,
     aggregatePrices,
     applyVat,
-    ElectricityPrice
+    getHourlyAveragePattern,
+    ElectricityPrice,
+    HourlyAveragePattern
 } from '@/lib/api';
 import { usePersistedState } from '@/lib/usePersistedState';
 import {
@@ -61,6 +63,12 @@ export default function Dashboard() {
     const [showP75, setShowP75] = usePersistedState<boolean>('showP75', false);
     const [showP90, setShowP90] = usePersistedState<boolean>('showP90', false);
     const [showP95, setShowP95] = usePersistedState<boolean>('showP95', false);
+    const [showAvg7d, setShowAvg7d] = usePersistedState<boolean>('showAvg7d', false);
+    const [showAvg30d, setShowAvg30d] = usePersistedState<boolean>('showAvg30d', false);
+
+    // Historical average patterns (fetched on demand)
+    const [avg7dPattern, setAvg7dPattern] = useState<HourlyAveragePattern | null>(null);
+    const [avg30dPattern, setAvg30dPattern] = useState<HourlyAveragePattern | null>(null);
 
     // Period Settings (persisted, except custom dates which reset daily)
     const [period, setPeriod] = usePersistedState<Period>('period', 'today');
@@ -136,6 +144,16 @@ export default function Dashboard() {
             lastNotifiedPriceRef.current = null;
         }
     }, [currentPrice, alertConfig, includeVat]);
+
+    // Fetch hourly average patterns when toggles are enabled
+    useEffect(() => {
+        if (showAvg7d && !avg7dPattern) {
+            getHourlyAveragePattern(7).then(setAvg7dPattern).catch(() => {});
+        }
+        if (showAvg30d && !avg30dPattern) {
+            getHourlyAveragePattern(30).then(setAvg30dPattern).catch(() => {});
+        }
+    }, [showAvg7d, showAvg30d, avg7dPattern, avg30dPattern]);
 
     useEffect(() => {
         async function fetchData() {
@@ -382,6 +400,10 @@ export default function Dashboard() {
                         setShowP90={setShowP90}
                         showP95={showP95}
                         setShowP95={setShowP95}
+                        showAvg7d={showAvg7d}
+                        setShowAvg7d={setShowAvg7d}
+                        showAvg30d={showAvg30d}
+                        setShowAvg30d={setShowAvg30d}
                         period={period}
                         setPeriod={setPeriod}
                         customStart={customStart}
@@ -450,6 +472,10 @@ export default function Dashboard() {
                         showP95={showP95}
                         stats={stats}
                         cheapestWindow={costCalcOpen ? cheapestWindow : null}
+                        avg7dPattern={avg7dPattern}
+                        avg30dPattern={avg30dPattern}
+                        showAvg7d={showAvg7d}
+                        showAvg30d={showAvg30d}
                     />
                 ) : (
                     <PriceHeatmap
