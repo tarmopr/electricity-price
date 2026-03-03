@@ -8,14 +8,15 @@
 export interface ConsumptionPreset {
   label: string;
   kWh: number;
+  durationHours: number;
 }
 
 export const PRESETS: ConsumptionPreset[] = [
-  { label: "EV Charge", kWh: 40 },
-  { label: "Washing Machine", kWh: 2 },
-  { label: "Dryer", kWh: 3.5 },
-  { label: "Dishwasher", kWh: 1.8 },
-  { label: "Sauna", kWh: 15 },
+  { label: "EV Charge", kWh: 40, durationHours: 8 },
+  { label: "Washing Machine", kWh: 2, durationHours: 2 },
+  { label: "Dryer", kWh: 3.5, durationHours: 2 },
+  { label: "Dishwasher", kWh: 1.8, durationHours: 2 },
+  { label: "Sauna", kWh: 15, durationHours: 3 },
 ];
 
 export interface CostEstimate {

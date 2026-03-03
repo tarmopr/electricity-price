@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
     getPricesWithPrediction,
+    getHeatmapPricesWithPredictions,
     getCurrentPrice,
     calculateStatistics,
     aggregatePrices,
@@ -22,6 +23,7 @@ import {
     startOfYesterday, endOfYesterday,
     startOfToday, endOfToday,
     startOfTomorrow, endOfTomorrow,
+    startOfWeek, endOfWeek,
     subDays, subMonths, addDays,
     format
 } from 'date-fns';
@@ -33,9 +35,11 @@ import CostCalculator from './CostCalculator';
 import PriceHeatmap from './PriceHeatmap';
 import ShareButton from './ShareButton';
 import { decodeParamsToState } from '@/lib/shareState';
+import { getHeatmapWeekRange } from '@/lib/heatmapData';
+import { findCheapestWindow } from '@/lib/cheapestWindow';
 import { RefreshCw, BarChart3, Grid3X3 } from 'lucide-react';
 
-export type Timeframe = 'yesterday' | 'today' | 'tomorrow' | 'next_week' | 'week' | 'month' | 'quarter' | 'custom';
+export type Period = 'yesterday' | 'today' | 'tomorrow' | 'this_week' | 'next_week' | 'week' | 'month' | 'quarter' | 'custom';
 export type ViewMode = 'chart' | 'heatmap';
 
 export default function Dashboard() {
@@ -44,6 +48,8 @@ export default function Dashboard() {
     const [currentPrice, setCurrentPrice] = useState<ElectricityPrice | null>(null);
     const [previousPrice, setPreviousPrice] = useState<ElectricityPrice | null>(null);
     const [nextPrice, setNextPrice] = useState<ElectricityPrice | null>(null);
+    const [heatmapPrices, setHeatmapPrices] = useState<ElectricityPrice[]>([]);
+    const [highlightedDates, setHighlightedDates] = useState<string[] | undefined>();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -56,18 +62,19 @@ export default function Dashboard() {
     const [showP90, setShowP90] = usePersistedState<boolean>('showP90', false);
     const [showP95, setShowP95] = usePersistedState<boolean>('showP95', false);
 
-    // Timeframe Settings (persisted, except custom dates which reset daily)
-    const [timeframe, setTimeframe] = usePersistedState<Timeframe>('timeframe', 'today');
+    // Period Settings (persisted, except custom dates which reset daily)
+    const [period, setPeriod] = usePersistedState<Period>('period', 'today');
     const [customStart, setCustomStart] = useState<string>(format(startOfToday(), 'yyyy-MM-dd'));
     const [customEnd, setCustomEnd] = useState<string>(format(endOfToday(), 'yyyy-MM-dd'));
 
     // View Mode (persisted)
     const [viewMode, setViewMode] = usePersistedState<ViewMode>('viewMode', 'chart');
 
-    // Cheapest Period Settings (persisted)
-    const [showCheapestPeriod, setShowCheapestPeriod] = usePersistedState<boolean>('showCheapestPeriod', false);
-    const [cheapestPeriodHours, setCheapestPeriodHours] = usePersistedState<number>('cheapestPeriodHours', 1);
-    const [cheapestPeriodUntil, setCheapestPeriodUntil] = usePersistedState<string>('cheapestPeriodUntil', "22:00");
+    // Cost Calculator Settings (persisted)
+    const [costConsumptionKwh, setCostConsumptionKwh] = usePersistedState<number>('costKwh', 40);
+    const [costDurationHours, setCostDurationHours] = usePersistedState<number>('costDuration', 8);
+    const [costUntilHour, setCostUntilHour] = usePersistedState<number | null>('costUntil', 22);
+    const [costActivePreset, setCostActivePreset] = usePersistedState<string>('costPreset', 'EV Charge');
 
     // Price Alert Settings (persisted)
     const [alertConfig, setAlertConfig] = usePersistedState<AlertConfig>('alertConfig', DEFAULT_ALERT_CONFIG);
@@ -82,13 +89,11 @@ export default function Dashboard() {
         const shared = decodeParamsToState(params);
         if (!shared) return;
 
-        if (shared.timeframe) setTimeframe(shared.timeframe);
+        if (shared.period) setPeriod(shared.period);
         if (shared.includeVat !== undefined) setIncludeVat(shared.includeVat);
         if (shared.viewMode) setViewMode(shared.viewMode);
         if (shared.customStart) setCustomStart(shared.customStart);
         if (shared.customEnd) setCustomEnd(shared.customEnd);
-        if (shared.showCheapestPeriod !== undefined) setShowCheapestPeriod(shared.showCheapestPeriod);
-        if (shared.cheapestPeriodHours !== undefined) setCheapestPeriodHours(shared.cheapestPeriodHours);
 
         // Clean the URL params after restoring (don't pollute browser history)
         window.history.replaceState({}, '', window.location.pathname);
@@ -141,7 +146,7 @@ export default function Dashboard() {
                 // Fetch data array
                 let start: Date, end: Date;
 
-                switch (timeframe) {
+                switch (period) {
                     case 'yesterday':
                         start = startOfYesterday();
                         end = endOfYesterday();
@@ -153,6 +158,10 @@ export default function Dashboard() {
                     case 'tomorrow':
                         start = startOfTomorrow();
                         end = endOfTomorrow();
+                        break;
+                    case 'this_week':
+                        start = startOfWeek(new Date(), { weekStartsOn: 1 });
+                        end = endOfWeek(new Date(), { weekStartsOn: 1 });
                         break;
                     case 'next_week':
                         start = startOfTomorrow();
@@ -189,18 +198,33 @@ export default function Dashboard() {
                 const rawData = await getPricesWithPrediction(start, end);
                 setRawPrices(rawData);
 
+                // --- HEATMAP WEEK DATA ---
+                // For single-day periods and this_week, expand to full week with predictions
+                const weekRange = getHeatmapWeekRange(period, start, end);
+                if (weekRange) {
+                    const heatmapData = await getHeatmapPricesWithPredictions(
+                        weekRange.weekStart,
+                        weekRange.weekEnd
+                    );
+                    setHeatmapPrices(heatmapData);
+                    setHighlightedDates(weekRange.highlightedDates);
+                } else {
+                    setHeatmapPrices(rawData);
+                    setHighlightedDates(undefined);
+                }
+
                 // --- DATA AGGREGATION LOGIC ---
                 let data = rawData;
-                if (timeframe === 'week' || timeframe === 'next_week') {
+                if (period === 'week' || period === 'this_week' || period === 'next_week') {
                     // 1-hour intervals (average 4 points -> 1)
                     data = aggregatePrices(rawData, 1);
-                } else if (timeframe === 'month') {
+                } else if (period === 'month') {
                     // 6-hour intervals (average 24 points -> 1)
                     data = aggregatePrices(rawData, 6);
-                } else if (timeframe === 'quarter') {
+                } else if (period === 'quarter') {
                     // 12-hour intervals (average 48 points -> 1)
                     data = aggregatePrices(rawData, 12);
-                } else if (timeframe === 'custom') {
+                } else if (period === 'custom') {
                     const daysDifference = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
                     if (daysDifference > 90) {
                         // 24-hour intervals for custom ranges longer than 3 months
@@ -227,7 +251,7 @@ export default function Dashboard() {
                         setPreviousPrice(data[currentIdx - 1]);
                         setNextPrice(data[currentIdx + 1]);
                     } else {
-                        // Current time isn't fully enclosed in the selected timeframe, fetch just the surrounding hours
+                        // Current time isn't fully enclosed in the selected period, fetch just the surrounding hours
                         const now = new Date();
                         const ctxStart = new Date(now);
                         ctxStart.setHours(now.getHours() - 2);
@@ -266,10 +290,38 @@ export default function Dashboard() {
         // Refresh data every 15 minutes to ensure current hour is accurate
         const interval = setInterval(fetchData, 15 * 60 * 1000);
         return () => clearInterval(interval);
-    }, [timeframe, customStart, customEnd]);
+    }, [period, customStart, customEnd]);
 
     // Calculate statistics only once when prices or VAT settings change
     const stats = calculateStatistics(prices, includeVat);
+
+    // Cost Calculator open state (persisted) — controls cheapest window visibility
+    const [costCalcOpen, setCostCalcOpen] = usePersistedState<boolean>('costCalcOpen', false);
+
+    // Compute cheapest window from cost calculator settings
+    const cheapestWindow = useMemo(() => {
+        if (costDurationHours <= 0 || prices.length === 0) return null;
+
+        // Always aggregate to 1-hour buckets before cheapest window calculation.
+        // Raw data may be in 15-minute intervals for today/tomorrow periods.
+        const hourlyPrices = aggregatePrices(prices, 1);
+        const chartData = hourlyPrices.map(p => ({
+            timestamp: p.timestamp,
+            displayPrice: includeVat ? applyVat(p.priceCentsKwh) : p.priceCentsKwh,
+        }));
+
+        // Determine scan start based on period
+        let scanFrom: Date;
+        if (period === 'tomorrow') {
+            scanFrom = startOfTomorrow();
+        } else {
+            // For today, this_week, and all other periods: start from now
+            scanFrom = new Date();
+            scanFrom.setMinutes(0, 0, 0);
+        }
+
+        return findCheapestWindow(chartData, costDurationHours, costUntilHour, scanFrom);
+    }, [prices, costDurationHours, costUntilHour, includeVat, period]);
 
     if (loading && prices.length === 0) {
         return (
@@ -332,18 +384,12 @@ export default function Dashboard() {
                         setShowP90={setShowP90}
                         showP95={showP95}
                         setShowP95={setShowP95}
-                        timeframe={timeframe}
-                        setTimeframe={setTimeframe}
+                        period={period}
+                        setPeriod={setPeriod}
                         customStart={customStart}
                         setCustomStart={setCustomStart}
                         customEnd={customEnd}
                         setCustomEnd={setCustomEnd}
-                        showCheapestPeriod={showCheapestPeriod}
-                        setShowCheapestPeriod={setShowCheapestPeriod}
-                        cheapestPeriodHours={cheapestPeriodHours}
-                        setCheapestPeriodHours={setCheapestPeriodHours}
-                        cheapestPeriodUntil={cheapestPeriodUntil}
-                        setCheapestPeriodUntil={setCheapestPeriodUntil}
                         alertConfig={alertConfig}
                         setAlertConfig={handleSetAlertConfig}
                     />
@@ -372,13 +418,11 @@ export default function Dashboard() {
                     </div>
                     <ShareButton
                         state={{
-                            timeframe,
+                            period,
                             includeVat,
                             viewMode,
-                            customStart: timeframe === 'custom' ? customStart : undefined,
-                            customEnd: timeframe === 'custom' ? customEnd : undefined,
-                            showCheapestPeriod,
-                            cheapestPeriodHours,
+                            customStart: period === 'custom' ? customStart : undefined,
+                            customEnd: period === 'custom' ? customEnd : undefined,
                         }}
                     />
                 </div>
@@ -395,20 +439,22 @@ export default function Dashboard() {
                         showP90={showP90}
                         showP95={showP95}
                         stats={stats}
-                        showCheapestPeriod={showCheapestPeriod}
-                        cheapestPeriodHours={cheapestPeriodHours}
-                        cheapestPeriodUntil={cheapestPeriodUntil}
+                        cheapestWindow={costCalcOpen ? cheapestWindow : null}
                     />
                 ) : (
                     <PriceHeatmap
-                        data={rawPrices}
+                        data={heatmapPrices}
                         includeVat={includeVat}
+                        highlightedDates={highlightedDates}
+                        cheapestWindow={costCalcOpen ? cheapestWindow : null}
                     />
                 )}
             </div>
 
             {/* Cost Calculator */}
             <CostCalculator
+                isOpen={costCalcOpen}
+                setIsOpen={setCostCalcOpen}
                 currentPrice={
                     currentPrice
                         ? includeVat
@@ -416,9 +462,17 @@ export default function Dashboard() {
                             : currentPrice.priceCentsKwh
                         : null
                 }
-                cheapestPrice={stats?.min ?? null}
+                cheapestWindowPrice={cheapestWindow?.averagePrice ?? null}
                 meanPrice={stats?.mean ?? null}
                 maxPrice={stats?.max ?? null}
+                consumptionKwh={costConsumptionKwh}
+                setConsumptionKwh={setCostConsumptionKwh}
+                durationHours={costDurationHours}
+                setDurationHours={setCostDurationHours}
+                untilHour={costUntilHour}
+                setUntilHour={setCostUntilHour}
+                activePreset={costActivePreset}
+                setActivePreset={setCostActivePreset}
             />
 
         </div>

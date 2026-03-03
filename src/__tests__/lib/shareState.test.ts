@@ -11,7 +11,7 @@ describe("shareState", () => {
   describe("encodeStateToParams", () => {
     it("encodes basic state", () => {
       const state: ShareableState = {
-        timeframe: "today",
+        period: "today",
         includeVat: true,
         viewMode: "chart",
       };
@@ -23,7 +23,7 @@ describe("shareState", () => {
 
     it("encodes VAT off as 0", () => {
       const state: ShareableState = {
-        timeframe: "today",
+        period: "today",
         includeVat: false,
         viewMode: "chart",
       };
@@ -31,9 +31,9 @@ describe("shareState", () => {
       expect(params).toContain("vat=0");
     });
 
-    it("includes custom dates when timeframe is custom", () => {
+    it("includes custom dates when period is custom", () => {
       const state: ShareableState = {
-        timeframe: "custom",
+        period: "custom",
         includeVat: true,
         viewMode: "chart",
         customStart: "2024-06-01",
@@ -44,9 +44,9 @@ describe("shareState", () => {
       expect(params).toContain("ce=2024-06-07");
     });
 
-    it("omits custom dates when timeframe is not custom", () => {
+    it("omits custom dates when period is not custom", () => {
       const state: ShareableState = {
-        timeframe: "week",
+        period: "week",
         includeVat: true,
         viewMode: "chart",
         customStart: "2024-06-01",
@@ -57,47 +57,32 @@ describe("shareState", () => {
       expect(params).not.toContain("ce=");
     });
 
-    it("includes cheapest period settings when enabled", () => {
-      const state: ShareableState = {
-        timeframe: "today",
-        includeVat: true,
-        viewMode: "chart",
-        showCheapestPeriod: true,
-        cheapestPeriodHours: 3,
-      };
-      const params = encodeStateToParams(state);
-      expect(params).toContain("cp=1");
-      expect(params).toContain("cph=3");
-    });
-
-    it("omits cheapest period when not enabled", () => {
-      const state: ShareableState = {
-        timeframe: "today",
-        includeVat: true,
-        viewMode: "chart",
-        showCheapestPeriod: false,
-        cheapestPeriodHours: 3,
-      };
-      const params = encodeStateToParams(state);
-      expect(params).not.toContain("cp=");
-      expect(params).not.toContain("cph=");
-    });
-
     it("encodes heatmap view mode", () => {
       const state: ShareableState = {
-        timeframe: "week",
+        period: "week",
         includeVat: false,
         viewMode: "heatmap",
       };
       const params = encodeStateToParams(state);
       expect(params).toContain("vm=heatmap");
     });
+
+    it("does not include cheapest period params (removed feature)", () => {
+      const state: ShareableState = {
+        period: "today",
+        includeVat: true,
+        viewMode: "chart",
+      };
+      const params = encodeStateToParams(state);
+      expect(params).not.toContain("cp=");
+      expect(params).not.toContain("cph=");
+    });
   });
 
   describe("buildShareUrl", () => {
     it("builds a complete URL with params", () => {
       const state: ShareableState = {
-        timeframe: "today",
+        period: "today",
         includeVat: true,
         viewMode: "chart",
       };
@@ -109,7 +94,7 @@ describe("shareState", () => {
 
     it("replaces existing search params", () => {
       const state: ShareableState = {
-        timeframe: "week",
+        period: "week",
         includeVat: false,
         viewMode: "heatmap",
       };
@@ -134,7 +119,7 @@ describe("shareState", () => {
       const params = new URLSearchParams("tf=today&vat=1&vm=chart");
       const state = decodeParamsToState(params);
       expect(state).not.toBeNull();
-      expect(state!.timeframe).toBe("today");
+      expect(state!.period).toBe("today");
       expect(state!.includeVat).toBe(true);
       expect(state!.viewMode).toBe("chart");
     });
@@ -150,23 +135,16 @@ describe("shareState", () => {
         "tf=custom&cs=2024-06-01&ce=2024-06-07"
       );
       const state = decodeParamsToState(params);
-      expect(state!.timeframe).toBe("custom");
+      expect(state!.period).toBe("custom");
       expect(state!.customStart).toBe("2024-06-01");
       expect(state!.customEnd).toBe("2024-06-07");
     });
 
-    it("decodes cheapest period settings", () => {
-      const params = new URLSearchParams("tf=today&cp=1&cph=4");
-      const state = decodeParamsToState(params);
-      expect(state!.showCheapestPeriod).toBe(true);
-      expect(state!.cheapestPeriodHours).toBe(4);
-    });
-
-    it("ignores invalid timeframe values", () => {
-      const params = new URLSearchParams("tf=invalid_timeframe");
+    it("ignores invalid period values", () => {
+      const params = new URLSearchParams("tf=invalid_period");
       const state = decodeParamsToState(params);
       expect(state).not.toBeNull();
-      expect(state!.timeframe).toBeUndefined();
+      expect(state!.period).toBeUndefined();
     });
 
     it("ignores invalid view mode values", () => {
@@ -175,33 +153,41 @@ describe("shareState", () => {
       expect(state!.viewMode).toBeUndefined();
     });
 
-    it("clamps cheapest period hours to valid range", () => {
-      const params = new URLSearchParams("tf=today&cp=1&cph=99");
+    it("decodes this_week period", () => {
+      const params = new URLSearchParams("tf=this_week&vat=1&vm=chart");
       const state = decodeParamsToState(params);
-      expect(state!.cheapestPeriodHours).toBeUndefined(); // 99 > 8, rejected
+      expect(state).not.toBeNull();
+      expect(state!.period).toBe("this_week");
+    });
+
+    it("roundtrips this_week encode/decode", () => {
+      const original: ShareableState = {
+        period: "this_week",
+        includeVat: true,
+        viewMode: "heatmap",
+      };
+      const encoded = encodeStateToParams(original);
+      const decoded = decodeParamsToState(new URLSearchParams(encoded));
+      expect(decoded!.period).toBe("this_week");
     });
 
     it("roundtrips encode/decode correctly", () => {
       const original: ShareableState = {
-        timeframe: "custom",
+        period: "custom",
         includeVat: false,
         viewMode: "heatmap",
         customStart: "2024-01-15",
         customEnd: "2024-02-20",
-        showCheapestPeriod: true,
-        cheapestPeriodHours: 5,
       };
 
       const encoded = encodeStateToParams(original);
       const decoded = decodeParamsToState(new URLSearchParams(encoded));
 
-      expect(decoded!.timeframe).toBe(original.timeframe);
+      expect(decoded!.period).toBe(original.period);
       expect(decoded!.includeVat).toBe(original.includeVat);
       expect(decoded!.viewMode).toBe(original.viewMode);
       expect(decoded!.customStart).toBe(original.customStart);
       expect(decoded!.customEnd).toBe(original.customEnd);
-      expect(decoded!.showCheapestPeriod).toBe(true);
-      expect(decoded!.cheapestPeriodHours).toBe(5);
     });
   });
 

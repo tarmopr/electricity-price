@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { ChevronDown, ChevronUp, Calculator, Zap } from "lucide-react";
 import {
   PRESETS,
@@ -9,26 +8,43 @@ import {
 } from "@/lib/costCalculator";
 
 interface CostCalculatorProps {
+  isOpen: boolean;
+  setIsOpen: (val: boolean) => void;
   currentPrice: number | null;
-  cheapestPrice: number | null;
+  cheapestWindowPrice: number | null;
   meanPrice: number | null;
   maxPrice: number | null;
+  consumptionKwh: number;
+  setConsumptionKwh: (val: number) => void;
+  durationHours: number;
+  setDurationHours: (val: number) => void;
+  untilHour: number | null;
+  setUntilHour: (val: number | null) => void;
+  activePreset: string;
+  setActivePreset: (val: string) => void;
 }
 
 export default function CostCalculator({
+  isOpen,
+  setIsOpen,
   currentPrice,
-  cheapestPrice,
+  cheapestWindowPrice,
   meanPrice,
   maxPrice,
+  consumptionKwh,
+  setConsumptionKwh,
+  durationHours,
+  setDurationHours,
+  untilHour,
+  setUntilHour,
+  activePreset,
+  setActivePreset,
 }: CostCalculatorProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [consumptionKwh, setConsumptionKwh] = useState<number>(40);
-  const [activePreset, setActivePreset] = useState<string>("EV Charge");
 
   const estimates = buildEstimates(
     consumptionKwh,
     currentPrice,
-    cheapestPrice,
+    cheapestWindowPrice,
     meanPrice,
     maxPrice
   );
@@ -51,15 +67,35 @@ export default function CostCalculator({
       ? currentEstimate.costEur - cheapestEstimate.costEur
       : null;
 
-  function selectPreset(label: string, kWh: number) {
+  function selectPreset(label: string, kWh: number, duration: number) {
     setActivePreset(label);
     setConsumptionKwh(kWh);
+    setDurationHours(duration);
   }
 
-  function handleCustomInput(value: string) {
+  function handleCustomKwhInput(value: string) {
     const num = parseFloat(value);
     setActivePreset("Custom");
     setConsumptionKwh(isNaN(num) || num < 0 ? 0 : num);
+  }
+
+  function handleDurationInput(value: string) {
+    const num = parseInt(value, 10);
+    setActivePreset("Custom");
+    setDurationHours(isNaN(num) || num < 1 ? 1 : Math.min(num, 24));
+  }
+
+  function handleUntilInput(value: string) {
+    if (value === "" || value === undefined) {
+      setUntilHour(null);
+      return;
+    }
+    const num = parseInt(value, 10);
+    if (isNaN(num)) {
+      setUntilHour(null);
+    } else {
+      setUntilHour(Math.max(0, Math.min(23, num)));
+    }
   }
 
   return (
@@ -76,7 +112,7 @@ export default function CostCalculator({
           </span>
           {!isOpen && consumptionKwh > 0 && currentEstimate && (
             <span className="text-xs text-zinc-500 ml-2 hidden sm:inline">
-              {consumptionKwh} kWh ≈ €{currentEstimate.costEur.toFixed(2)} now
+              {consumptionKwh} kWh · {durationHours}h ≈ €{currentEstimate.costEur.toFixed(2)} now
             </span>
           )}
         </div>
@@ -99,7 +135,7 @@ export default function CostCalculator({
               {PRESETS.map((p) => (
                 <button
                   key={p.label}
-                  onClick={() => selectPreset(p.label, p.kWh)}
+                  onClick={() => selectPreset(p.label, p.kWh, p.durationHours)}
                   className={`px-3 py-1.5 rounded-lg text-sm transition-all border ${
                     activePreset === p.label
                       ? "bg-emerald-400/20 text-emerald-300 border-emerald-400/50"
@@ -108,15 +144,15 @@ export default function CostCalculator({
                 >
                   {p.label}
                   <span className="ml-1.5 text-zinc-500 text-xs">
-                    {p.kWh} kWh
+                    {p.kWh} kWh · {p.durationHours}h
                   </span>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Custom kWh Input */}
-          <div className="flex items-center gap-3">
+          {/* Consumption, Duration & Until inputs */}
+          <div className="flex flex-wrap items-center gap-3">
             <label className="text-xs text-zinc-500 uppercase tracking-wider font-semibold whitespace-nowrap">
               Consumption
             </label>
@@ -126,10 +162,45 @@ export default function CostCalculator({
                 min="0"
                 step="0.5"
                 value={consumptionKwh}
-                onChange={(e) => handleCustomInput(e.target.value)}
+                onChange={(e) => handleCustomKwhInput(e.target.value)}
                 className="w-24 bg-zinc-800/50 border border-zinc-700/80 text-zinc-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 text-center"
               />
               <span className="text-zinc-500 text-sm">kWh</span>
+            </div>
+            <label className="text-xs text-zinc-500 uppercase tracking-wider font-semibold whitespace-nowrap ml-2">
+              Duration
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="1"
+                max="24"
+                step="1"
+                value={durationHours}
+                onChange={(e) => handleDurationInput(e.target.value)}
+                className="w-20 bg-zinc-800/50 border border-zinc-700/80 text-zinc-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 text-center"
+              />
+              <span className="text-zinc-500 text-sm">h</span>
+            </div>
+            <label className="text-xs text-zinc-500 uppercase tracking-wider font-semibold whitespace-nowrap ml-2">
+              Until
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="0"
+                max="23"
+                step="1"
+                value={untilHour ?? ""}
+                onChange={(e) => handleUntilInput(e.target.value)}
+                placeholder="—"
+                className="w-20 bg-zinc-800/50 border border-zinc-700/80 text-zinc-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 text-center"
+              />
+              <span className="text-zinc-500 text-sm">
+                {untilHour !== null
+                  ? `${untilHour.toString().padStart(2, "0")}:00`
+                  : "No limit"}
+              </span>
             </div>
           </div>
 

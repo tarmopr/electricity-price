@@ -8,26 +8,36 @@ import {
   priceToColor,
   HeatmapData,
 } from "@/lib/heatmapData";
+import { CheapestWindow, getCheapestWindowHours } from "@/lib/cheapestWindow";
 
 type HeatmapMode = "calendar" | "pattern";
 
 interface PriceHeatmapProps {
   data: ElectricityPrice[];
   includeVat: boolean;
+  highlightedDates?: string[];
+  cheapestWindow?: CheapestWindow | null;
 }
 
-export default function PriceHeatmap({ data, includeVat }: PriceHeatmapProps) {
+export default function PriceHeatmap({
+  data,
+  includeVat,
+  highlightedDates,
+  cheapestWindow,
+}: PriceHeatmapProps) {
   const [mode, setMode] = useState<HeatmapMode>("calendar");
   const [hoveredCell, setHoveredCell] = useState<{
     row: number;
     hour: number;
     price: number | null;
     label: string;
+    isPredicted: boolean;
+    isCheapest: boolean;
   } | null>(null);
 
   const calendarData = useMemo(
-    () => buildCalendarHeatmap(data, includeVat),
-    [data, includeVat]
+    () => buildCalendarHeatmap(data, includeVat, highlightedDates),
+    [data, includeVat, highlightedDates]
   );
 
   const patternData = useMemo(
@@ -37,6 +47,12 @@ export default function PriceHeatmap({ data, includeVat }: PriceHeatmapProps) {
 
   const heatmapData: HeatmapData =
     mode === "calendar" ? calendarData : patternData;
+
+  // Compute cheapest window hour keys for highlighting
+  const cheapestHourKeys = useMemo(() => {
+    if (!cheapestWindow) return new Set<string>();
+    return getCheapestWindowHours(cheapestWindow);
+  }, [cheapestWindow]);
 
   if (heatmapData.rows.length === 0) {
     return (
@@ -86,6 +102,12 @@ export default function PriceHeatmap({ data, includeVat }: PriceHeatmapProps) {
             <span className="font-bold text-emerald-400">
               {hoveredCell.price.toFixed(2)} ¢/kWh
             </span>
+            {hoveredCell.isPredicted && (
+              <span className="text-zinc-500 ml-1">(predicted)</span>
+            )}
+            {hoveredCell.isCheapest && (
+              <span className="text-emerald-400 ml-1">(cheapest window)</span>
+            )}
           </div>
         )}
       </div>
@@ -108,44 +130,62 @@ export default function PriceHeatmap({ data, includeVat }: PriceHeatmapProps) {
 
           {/* Rows */}
           {heatmapData.rows.map((row, rowIdx) => (
-            <div key={row.label + rowIdx} className="flex items-center">
+            <div
+              key={row.label + rowIdx}
+              className={`flex items-center transition-opacity duration-200 ${
+                row.isHighlighted === false ? "opacity-40" : ""
+              }`}
+            >
               {/* Row Label */}
               <div className="w-24 shrink-0 text-xs text-zinc-400 pr-2 text-right truncate">
                 {row.label}
               </div>
 
               {/* Cells */}
-              {row.cells.map((cell) => (
-                <div
-                  key={cell.hour}
-                  className="flex-1 aspect-square m-[1px] rounded-sm cursor-crosshair transition-all duration-150 hover:ring-1 hover:ring-white/30 hover:scale-110 hover:z-10"
-                  style={{
-                    backgroundColor: priceToColor(
-                      cell.price,
-                      heatmapData.minPrice,
-                      heatmapData.maxPrice
-                    ),
-                  }}
-                  onMouseEnter={() =>
-                    setHoveredCell({
-                      row: rowIdx,
-                      hour: cell.hour,
-                      price: cell.price,
-                      label: row.label,
-                    })
-                  }
-                  onMouseLeave={() => setHoveredCell(null)}
-                  title={
-                    cell.price !== null
-                      ? `${row.label} ${cell.hour
-                          .toString()
-                          .padStart(2, "0")}:00 — ${cell.price.toFixed(
-                          2
-                        )} ¢/kWh`
-                      : "No data"
-                  }
-                />
-              ))}
+              {row.cells.map((cell) => {
+                const isCheapestCell = row.dateKey
+                  ? cheapestHourKeys.has(`${row.dateKey}:${cell.hour}`)
+                  : false;
+
+                return (
+                  <div
+                    key={cell.hour}
+                    className={`flex-1 aspect-square m-[1px] rounded-sm cursor-crosshair transition-all duration-150 hover:ring-1 hover:ring-white/30 hover:scale-110 hover:z-10 ${
+                      isCheapestCell ? "ring-2 ring-emerald-400/70 z-10" : ""
+                    }`}
+                    style={{
+                      backgroundColor: priceToColor(
+                        cell.price,
+                        heatmapData.minPrice,
+                        heatmapData.maxPrice,
+                        cell.isPredicted
+                      ),
+                    }}
+                    onMouseEnter={() =>
+                      setHoveredCell({
+                        row: rowIdx,
+                        hour: cell.hour,
+                        price: cell.price,
+                        label: row.label,
+                        isPredicted: cell.isPredicted,
+                        isCheapest: isCheapestCell,
+                      })
+                    }
+                    onMouseLeave={() => setHoveredCell(null)}
+                    title={
+                      cell.price !== null
+                        ? `${row.label} ${cell.hour
+                            .toString()
+                            .padStart(2, "0")}:00 — ${cell.price.toFixed(
+                            2
+                          )} ¢/kWh${cell.isPredicted ? " (predicted)" : ""}${
+                            isCheapestCell ? " (cheapest window)" : ""
+                          }`
+                        : "No data"
+                    }
+                  />
+                );
+              })}
             </div>
           ))}
 
@@ -179,6 +219,52 @@ export default function PriceHeatmap({ data, includeVat }: PriceHeatmapProps) {
               {heatmapData.maxPrice.toFixed(1)} ¢/kWh
             </span>
           </div>
+
+          {/* Predicted & Cheapest Window Legend */}
+          {(heatmapData.hasPredictions || cheapestHourKeys.size > 0) && (
+            <div className="flex items-center justify-center gap-3 mt-2">
+              {heatmapData.hasPredictions && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-4 h-4 rounded-sm"
+                      style={{
+                        backgroundColor: priceToColor(
+                          (heatmapData.minPrice + heatmapData.maxPrice) / 2,
+                          heatmapData.minPrice,
+                          heatmapData.maxPrice,
+                          false
+                        ),
+                      }}
+                    />
+                    <span className="text-xs text-zinc-500">Actual</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-4 h-4 rounded-sm"
+                      style={{
+                        backgroundColor: priceToColor(
+                          (heatmapData.minPrice + heatmapData.maxPrice) / 2,
+                          heatmapData.minPrice,
+                          heatmapData.maxPrice,
+                          true
+                        ),
+                      }}
+                    />
+                    <span className="text-xs text-zinc-500">
+                      Predicted (4-week avg)
+                    </span>
+                  </div>
+                </>
+              )}
+              {cheapestHourKeys.size > 0 && (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded-sm ring-2 ring-emerald-400/70" />
+                  <span className="text-xs text-zinc-500">Cheapest window</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

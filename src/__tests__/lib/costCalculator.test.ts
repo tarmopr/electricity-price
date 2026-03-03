@@ -11,17 +11,27 @@ describe("costCalculator", () => {
       expect(PRESETS.length).toBeGreaterThanOrEqual(3);
     });
 
-    it("each preset has a label and positive kWh", () => {
+    it("each preset has a label, positive kWh, and positive durationHours", () => {
       for (const p of PRESETS) {
         expect(p.label).toBeTruthy();
         expect(p.kWh).toBeGreaterThan(0);
+        expect(p.durationHours).toBeGreaterThan(0);
+        expect(p.durationHours).toBeLessThanOrEqual(24);
       }
     });
 
-    it("includes EV Charge at 40 kWh", () => {
+    it("includes EV Charge at 40 kWh and 8 hours", () => {
       const ev = PRESETS.find((p) => p.label === "EV Charge");
       expect(ev).toBeDefined();
       expect(ev!.kWh).toBe(40);
+      expect(ev!.durationHours).toBe(8);
+    });
+
+    it("includes Sauna at 15 kWh and 3 hours", () => {
+      const sauna = PRESETS.find((p) => p.label === "Sauna");
+      expect(sauna).toBeDefined();
+      expect(sauna!.kWh).toBe(15);
+      expect(sauna!.durationHours).toBe(3);
     });
   });
 

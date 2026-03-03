@@ -5,26 +5,22 @@
  * This enables sharing specific views via URL.
  */
 
-import { Timeframe, ViewMode } from "@/components/Dashboard";
+import { Period, ViewMode } from "@/components/Dashboard";
 
 export interface ShareableState {
-  timeframe: Timeframe;
+  period: Period;
   includeVat: boolean;
   viewMode: ViewMode;
   customStart?: string;
   customEnd?: string;
-  showCheapestPeriod?: boolean;
-  cheapestPeriodHours?: number;
 }
 
 const PARAM_MAP = {
-  timeframe: "tf",
+  period: "tf",
   includeVat: "vat",
   viewMode: "vm",
   customStart: "cs",
   customEnd: "ce",
-  showCheapestPeriod: "cp",
-  cheapestPeriodHours: "cph",
 } as const;
 
 /**
@@ -33,24 +29,15 @@ const PARAM_MAP = {
 export function encodeStateToParams(state: ShareableState): string {
   const params = new URLSearchParams();
 
-  params.set(PARAM_MAP.timeframe, state.timeframe);
+  params.set(PARAM_MAP.period, state.period);
   params.set(PARAM_MAP.includeVat, state.includeVat ? "1" : "0");
   params.set(PARAM_MAP.viewMode, state.viewMode);
 
-  if (state.timeframe === "custom" && state.customStart) {
+  if (state.period === "custom" && state.customStart) {
     params.set(PARAM_MAP.customStart, state.customStart);
   }
-  if (state.timeframe === "custom" && state.customEnd) {
+  if (state.period === "custom" && state.customEnd) {
     params.set(PARAM_MAP.customEnd, state.customEnd);
-  }
-  if (state.showCheapestPeriod) {
-    params.set(PARAM_MAP.showCheapestPeriod, "1");
-    if (state.cheapestPeriodHours) {
-      params.set(
-        PARAM_MAP.cheapestPeriodHours,
-        state.cheapestPeriodHours.toString()
-      );
-    }
   }
 
   return params.toString();
@@ -76,23 +63,24 @@ export function buildShareUrl(
 export function decodeParamsToState(
   searchParams: URLSearchParams
 ): Partial<ShareableState> | null {
-  const tf = searchParams.get(PARAM_MAP.timeframe);
+  const tf = searchParams.get(PARAM_MAP.period);
   if (!tf) return null; // No share params present
 
   const state: Partial<ShareableState> = {};
 
-  const validTimeframes: Timeframe[] = [
+  const validPeriods: Period[] = [
     "yesterday",
     "today",
     "tomorrow",
+    "this_week",
     "next_week",
     "week",
     "month",
     "quarter",
     "custom",
   ];
-  if (validTimeframes.includes(tf as Timeframe)) {
-    state.timeframe = tf as Timeframe;
+  if (validPeriods.includes(tf as Period)) {
+    state.period = tf as Period;
   }
 
   const vat = searchParams.get(PARAM_MAP.includeVat);
@@ -110,18 +98,6 @@ export function decodeParamsToState(
 
   const ce = searchParams.get(PARAM_MAP.customEnd);
   if (ce) state.customEnd = ce;
-
-  const cp = searchParams.get(PARAM_MAP.showCheapestPeriod);
-  if (cp === "1") {
-    state.showCheapestPeriod = true;
-    const cph = searchParams.get(PARAM_MAP.cheapestPeriodHours);
-    if (cph) {
-      const hours = parseInt(cph, 10);
-      if (!isNaN(hours) && hours >= 1 && hours <= 8) {
-        state.cheapestPeriodHours = hours;
-      }
-    }
-  }
 
   return state;
 }
