@@ -6,12 +6,14 @@ import {
   buildEstimates,
   CostEstimate,
 } from "@/lib/costCalculator";
+import { CheapestWindow } from "@/lib/cheapestWindow";
+import { format } from "date-fns";
 
 interface CostCalculatorProps {
   isOpen: boolean;
   setIsOpen: (val: boolean) => void;
   currentPrice: number | null;
-  cheapestWindowPrice: number | null;
+  cheapestWindow: CheapestWindow | null;
   meanPrice: number | null;
   maxPrice: number | null;
   consumptionKwh: number;
@@ -24,11 +26,18 @@ interface CostCalculatorProps {
   setActivePreset: (val: string) => void;
 }
 
+/** Format cheapest window time range as "HH:mm–HH:mm" */
+function formatWindowRange(w: CheapestWindow): string {
+  const start = format(new Date(w.startTimestamp), "HH:mm");
+  const end = format(new Date(w.endTimestamp), "HH:mm");
+  return `${start}–${end}`;
+}
+
 export default function CostCalculator({
   isOpen,
   setIsOpen,
   currentPrice,
-  cheapestWindowPrice,
+  cheapestWindow,
   meanPrice,
   maxPrice,
   consumptionKwh,
@@ -40,6 +49,8 @@ export default function CostCalculator({
   activePreset,
   setActivePreset,
 }: CostCalculatorProps) {
+  const cheapestWindowPrice = cheapestWindow?.averagePrice ?? null;
+  const windowRange = cheapestWindow ? formatWindowRange(cheapestWindow) : null;
 
   const estimates = buildEstimates(
     consumptionKwh,
@@ -103,6 +114,8 @@ export default function CostCalculator({
       {/* Header / Toggle */}
       <button
         onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
+        aria-label="Toggle cost calculator"
         className="w-full flex items-center justify-between p-4 md:p-5 text-zinc-300 hover:text-zinc-100 transition-colors"
       >
         <div className="flex items-center space-x-2.5">
@@ -113,6 +126,9 @@ export default function CostCalculator({
           {!isOpen && consumptionKwh > 0 && currentEstimate && (
             <span className="text-xs text-zinc-500 ml-2 hidden sm:inline">
               {consumptionKwh} kWh · {durationHours}h ≈ €{currentEstimate.costEur.toFixed(2)} now
+              {windowRange && (
+                <span className="text-emerald-400/70"> · cheapest {windowRange}</span>
+              )}
             </span>
           )}
         </div>
@@ -136,6 +152,7 @@ export default function CostCalculator({
                 <button
                   key={p.label}
                   onClick={() => selectPreset(p.label, p.kWh, p.durationHours)}
+                  aria-pressed={activePreset === p.label}
                   className={`px-3 py-1.5 rounded-lg text-sm transition-all border ${
                     activePreset === p.label
                       ? "bg-emerald-400/20 text-emerald-300 border-emerald-400/50"
@@ -163,6 +180,7 @@ export default function CostCalculator({
                 step="0.5"
                 value={consumptionKwh}
                 onChange={(e) => handleCustomKwhInput(e.target.value)}
+                aria-label="Consumption in kWh"
                 className="w-24 bg-zinc-800/50 border border-zinc-700/80 text-zinc-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 text-center"
               />
               <span className="text-zinc-500 text-sm">kWh</span>
@@ -178,6 +196,7 @@ export default function CostCalculator({
                 step="1"
                 value={durationHours}
                 onChange={(e) => handleDurationInput(e.target.value)}
+                aria-label="Duration in hours"
                 className="w-20 bg-zinc-800/50 border border-zinc-700/80 text-zinc-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 text-center"
               />
               <span className="text-zinc-500 text-sm">h</span>
@@ -194,6 +213,7 @@ export default function CostCalculator({
                 value={untilHour ?? ""}
                 onChange={(e) => handleUntilInput(e.target.value)}
                 placeholder="—"
+                aria-label="Until hour"
                 className="w-20 bg-zinc-800/50 border border-zinc-700/80 text-zinc-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 text-center"
               />
               <span className="text-zinc-500 text-sm">
@@ -213,6 +233,7 @@ export default function CostCalculator({
                   estimate={est}
                   isCheapest={cheapest?.label === est.label}
                   isMostExpensive={expensive?.label === est.label}
+                  timeRange={est.label === "Cheapest Window" ? windowRange : null}
                 />
               ))}
             </div>
@@ -242,10 +263,12 @@ function EstimateCard({
   estimate,
   isCheapest,
   isMostExpensive,
+  timeRange,
 }: {
   estimate: CostEstimate;
   isCheapest: boolean;
   isMostExpensive: boolean;
+  timeRange: string | null;
 }) {
   let borderClass = "border-zinc-800/50";
   let badgeClass = "";
@@ -274,6 +297,11 @@ function EstimateCard({
       <p className="text-xs text-zinc-600">
         {estimate.priceCentsKwh.toFixed(2)} ¢/kWh
       </p>
+      {timeRange && (
+        <p className="text-xs text-emerald-400/70 font-medium">
+          {timeRange}
+        </p>
+      )}
     </div>
   );
 }

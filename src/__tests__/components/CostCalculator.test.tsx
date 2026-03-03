@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import CostCalculator from "@/components/CostCalculator";
+import { CheapestWindow } from "@/lib/cheapestWindow";
 
 describe("CostCalculator", () => {
   const noopNum = vi.fn();
@@ -8,11 +9,21 @@ describe("CostCalculator", () => {
   const noopStr = vi.fn();
   const noopBool = vi.fn();
 
+  const mockCheapestWindow: CheapestWindow = {
+    startTimestamp: "2024-06-05T02:00:00.000Z",
+    endTimestamp: "2024-06-05T10:00:00.000Z",
+    startHour: 2,
+    hours: 8,
+    averagePrice: 3,
+    startIndex: 2,
+    endIndex: 9,
+  };
+
   const defaultProps = {
     isOpen: false,
     setIsOpen: noopBool,
     currentPrice: 10,
-    cheapestWindowPrice: 3,
+    cheapestWindow: mockCheapestWindow as CheapestWindow | null,
     meanPrice: 8,
     maxPrice: 20,
     consumptionKwh: 40,
@@ -120,7 +131,7 @@ describe("CostCalculator", () => {
       <CostCalculator
         {...openProps}
         currentPrice={null}
-        cheapestWindowPrice={null}
+        cheapestWindow={null}
         meanPrice={null}
         maxPrice={null}
       />
@@ -164,5 +175,13 @@ describe("CostCalculator", () => {
     );
     // No summary should appear (consumptionKwh is 0 and currentPrice is null)
     expect(screen.queryByText(/€.*now/)).not.toBeInTheDocument();
+  });
+
+  it("shows time range in cheapest window estimate card", () => {
+    render(<CostCalculator {...openProps} />);
+    // The cheapest window is 02:00–10:00 UTC
+    // date-fns format uses local time, so the exact output depends on timezone
+    // but the format should contain an en-dash separator
+    expect(screen.getByText(/\d{2}:\d{2}–\d{2}:\d{2}/)).toBeInTheDocument();
   });
 });

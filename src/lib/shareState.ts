@@ -73,10 +73,9 @@ export function decodeParamsToState(
     "today",
     "tomorrow",
     "this_week",
-    "next_week",
-    "week",
-    "month",
-    "quarter",
+    "last_7_days",
+    "next_7_days",
+    "last_30_days",
     "custom",
   ];
   if (validPeriods.includes(tf as Period)) {

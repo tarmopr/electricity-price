@@ -65,12 +65,13 @@ export default function PriceHeatmap({
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" aria-label="Price heatmap">
       {/* Mode Toggle */}
       <div className="flex items-center justify-between">
-        <div className="flex gap-2">
+        <div className="flex gap-2" role="group" aria-label="Heatmap mode">
           <button
             onClick={() => setMode("calendar")}
+            aria-pressed={mode === "calendar"}
             className={`px-3 py-1.5 rounded-lg text-sm transition-all border ${
               mode === "calendar"
                 ? "bg-emerald-400/20 text-emerald-300 border-emerald-400/50"
@@ -81,6 +82,7 @@ export default function PriceHeatmap({
           </button>
           <button
             onClick={() => setMode("pattern")}
+            aria-pressed={mode === "pattern"}
             className={`px-3 py-1.5 rounded-lg text-sm transition-all border ${
               mode === "pattern"
                 ? "bg-indigo-400/20 text-indigo-300 border-indigo-400/50"

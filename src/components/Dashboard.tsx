@@ -8,7 +8,9 @@ import {
     calculateStatistics,
     aggregatePrices,
     applyVat,
-    ElectricityPrice
+    getHourlyAveragePattern,
+    ElectricityPrice,
+    HourlyAveragePattern
 } from '@/lib/api';
 import { usePersistedState } from '@/lib/usePersistedState';
 import {
@@ -37,9 +39,9 @@ import ShareButton from './ShareButton';
 import { decodeParamsToState } from '@/lib/shareState';
 import { getHeatmapWeekRange } from '@/lib/heatmapData';
 import { findCheapestWindow } from '@/lib/cheapestWindow';
-import { RefreshCw, BarChart3, Grid3X3 } from 'lucide-react';
+import { RefreshCw, BarChart3, Grid3X3, Info } from 'lucide-react';
 
-export type Period = 'yesterday' | 'today' | 'tomorrow' | 'this_week' | 'next_week' | 'week' | 'month' | 'quarter' | 'custom';
+export type Period = 'yesterday' | 'today' | 'tomorrow' | 'this_week' | 'last_7_days' | 'next_7_days' | 'last_30_days' | 'custom';
 export type ViewMode = 'chart' | 'heatmap';
 
 export default function Dashboard() {
@@ -61,6 +63,12 @@ export default function Dashboard() {
     const [showP75, setShowP75] = usePersistedState<boolean>('showP75', false);
     const [showP90, setShowP90] = usePersistedState<boolean>('showP90', false);
     const [showP95, setShowP95] = usePersistedState<boolean>('showP95', false);
+    const [showAvg7d, setShowAvg7d] = usePersistedState<boolean>('showAvg7d', false);
+    const [showAvg30d, setShowAvg30d] = usePersistedState<boolean>('showAvg30d', false);
+
+    // Historical average patterns (fetched on demand)
+    const [avg7dPattern, setAvg7dPattern] = useState<HourlyAveragePattern | null>(null);
+    const [avg30dPattern, setAvg30dPattern] = useState<HourlyAveragePattern | null>(null);
 
     // Period Settings (persisted, except custom dates which reset daily)
     const [period, setPeriod] = usePersistedState<Period>('period', 'today');
@@ -137,6 +145,16 @@ export default function Dashboard() {
         }
     }, [currentPrice, alertConfig, includeVat]);
 
+    // Fetch hourly average patterns when toggles are enabled
+    useEffect(() => {
+        if (showAvg7d && !avg7dPattern) {
+            getHourlyAveragePattern(7).then(setAvg7dPattern).catch(() => {});
+        }
+        if (showAvg30d && !avg30dPattern) {
+            getHourlyAveragePattern(30).then(setAvg30dPattern).catch(() => {});
+        }
+    }, [showAvg7d, showAvg30d, avg7dPattern, avg30dPattern]);
+
     useEffect(() => {
         async function fetchData() {
             try {
@@ -163,20 +181,16 @@ export default function Dashboard() {
                         start = startOfWeek(new Date(), { weekStartsOn: 1 });
                         end = endOfWeek(new Date(), { weekStartsOn: 1 });
                         break;
-                    case 'next_week':
-                        start = startOfTomorrow();
-                        end = addDays(endOfTomorrow(), 6); // Tomorrow + 6 days = 7 days total
-                        break;
-                    case 'week':
+                    case 'last_7_days':
                         start = subDays(startOfToday(), 7);
                         end = endOfToday();
                         break;
-                    case 'month':
-                        start = subMonths(startOfToday(), 1);
-                        end = endOfToday();
+                    case 'next_7_days':
+                        start = startOfTomorrow();
+                        end = addDays(endOfTomorrow(), 6); // Tomorrow + 6 days = 7 days total
                         break;
-                    case 'quarter':
-                        start = subMonths(startOfToday(), 3);
+                    case 'last_30_days':
+                        start = subMonths(startOfToday(), 1);
                         end = endOfToday();
                         break;
                     case 'custom':
@@ -215,15 +229,12 @@ export default function Dashboard() {
 
                 // --- DATA AGGREGATION LOGIC ---
                 let data = rawData;
-                if (period === 'week' || period === 'this_week' || period === 'next_week') {
+                if (period === 'last_7_days' || period === 'this_week' || period === 'next_7_days') {
                     // 1-hour intervals (average 4 points -> 1)
                     data = aggregatePrices(rawData, 1);
-                } else if (period === 'month') {
+                } else if (period === 'last_30_days') {
                     // 6-hour intervals (average 24 points -> 1)
                     data = aggregatePrices(rawData, 6);
-                } else if (period === 'quarter') {
-                    // 12-hour intervals (average 48 points -> 1)
-                    data = aggregatePrices(rawData, 12);
                 } else if (period === 'custom') {
                     const daysDifference = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
                     if (daysDifference > 90) {
@@ -323,6 +334,11 @@ export default function Dashboard() {
         return findCheapestWindow(chartData, costDurationHours, costUntilHour, scanFrom);
     }, [prices, costDurationHours, costUntilHour, includeVat, period]);
 
+    // Show info banner when tomorrow is selected but official prices aren't published yet
+    const allPredicted = useMemo(() => {
+        return period === 'tomorrow' && prices.length > 0 && prices.every(p => p.isPredicted);
+    }, [period, prices]);
+
     if (loading && prices.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center h-[60vh] text-zinc-400 space-y-4">
@@ -384,6 +400,10 @@ export default function Dashboard() {
                         setShowP90={setShowP90}
                         showP95={showP95}
                         setShowP95={setShowP95}
+                        showAvg7d={showAvg7d}
+                        setShowAvg7d={setShowAvg7d}
+                        showAvg30d={showAvg30d}
+                        setShowAvg30d={setShowAvg30d}
                         period={period}
                         setPeriod={setPeriod}
                         customStart={customStart}
@@ -396,13 +416,24 @@ export default function Dashboard() {
                 </div>
             </div>
 
+            {/* Tomorrow prediction banner */}
+            {allPredicted && (
+                <div className="flex items-start gap-3 bg-indigo-500/10 border border-indigo-500/30 rounded-2xl p-4">
+                    <Info className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+                    <p className="text-sm text-indigo-200/80">
+                        Official prices typically published around 14:00 CET. Showing predictions based on recent patterns.
+                    </p>
+                </div>
+            )}
+
             {/* View Mode Toggle + Main Visualization */}
             <div className="bg-zinc-900/40 p-2 sm:p-6 rounded-3xl border border-zinc-800/80 hover:border-zinc-700/60 transition-all duration-500 shadow-[0_8px_30px_rgba(0,0,0,0.3)] hover:shadow-[0_8px_40px_rgba(0,0,0,0.4)] hover:-translate-y-1 backdrop-blur-2xl">
                 {/* View Toggle + Share */}
                 <div className="flex items-center justify-between px-2 sm:px-0 mb-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2" role="group" aria-label="View mode">
                         <button
                             onClick={() => setViewMode('chart')}
+                            aria-pressed={viewMode === 'chart'}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all border ${viewMode === 'chart' ? 'bg-emerald-400/20 text-emerald-300 border-emerald-400/50' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800'}`}
                         >
                             <BarChart3 className="w-3.5 h-3.5" />
@@ -410,6 +441,7 @@ export default function Dashboard() {
                         </button>
                         <button
                             onClick={() => setViewMode('heatmap')}
+                            aria-pressed={viewMode === 'heatmap'}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all border ${viewMode === 'heatmap' ? 'bg-indigo-400/20 text-indigo-300 border-indigo-400/50' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800'}`}
                         >
                             <Grid3X3 className="w-3.5 h-3.5" />
@@ -440,6 +472,10 @@ export default function Dashboard() {
                         showP95={showP95}
                         stats={stats}
                         cheapestWindow={costCalcOpen ? cheapestWindow : null}
+                        avg7dPattern={avg7dPattern}
+                        avg30dPattern={avg30dPattern}
+                        showAvg7d={showAvg7d}
+                        showAvg30d={showAvg30d}
                     />
                 ) : (
                     <PriceHeatmap
@@ -462,7 +498,7 @@ export default function Dashboard() {
                             : currentPrice.priceCentsKwh
                         : null
                 }
-                cheapestWindowPrice={cheapestWindow?.averagePrice ?? null}
+                cheapestWindow={cheapestWindow}
                 meanPrice={stats?.mean ?? null}
                 maxPrice={stats?.max ?? null}
                 consumptionKwh={costConsumptionKwh}

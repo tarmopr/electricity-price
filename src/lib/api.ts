@@ -539,3 +539,51 @@ export function calculateStatistics(prices: ElectricityPrice[], includeVat: bool
         p95: getPercentile(95),
     };
 }
+
+/**
+ * Map from hour-of-day (0-23) to average price in cents/kWh.
+ */
+export type HourlyAveragePattern = Map<number, number>;
+
+/**
+ * Compute per-hour-of-day average prices from historical data.
+ *
+ * Fetches raw prices for the past `days` days, aggregates to hourly buckets,
+ * then groups by hour-of-day and returns the average for each hour.
+ *
+ * @param days Number of past days to include (e.g. 7 or 30)
+ * @returns Map of hour (0-23) → average price in cents/kWh (before VAT)
+ */
+export async function getHourlyAveragePattern(days: number): Promise<HourlyAveragePattern> {
+    const now = new Date();
+    const end = new Date(now);
+    end.setHours(0, 0, 0, 0); // start of today
+
+    const start = new Date(end);
+    start.setDate(start.getDate() - days);
+
+    const rawPrices = await getPricesForDateRange(start, end);
+    const hourlyPrices = aggregatePrices(rawPrices, 1);
+
+    // Group by hour-of-day and accumulate
+    const sums = new Map<number, number>();
+    const counts = new Map<number, number>();
+
+    for (const p of hourlyPrices) {
+        if (p.isPredicted) continue; // only use actual data
+        const hour = p.date.getHours();
+        sums.set(hour, (sums.get(hour) ?? 0) + p.priceCentsKwh);
+        counts.set(hour, (counts.get(hour) ?? 0) + 1);
+    }
+
+    const pattern: HourlyAveragePattern = new Map();
+    for (let h = 0; h < 24; h++) {
+        const sum = sums.get(h);
+        const count = counts.get(h);
+        if (sum !== undefined && count !== undefined && count > 0) {
+            pattern.set(h, sum / count);
+        }
+    }
+
+    return pattern;
+}
