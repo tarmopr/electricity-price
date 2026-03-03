@@ -1,62 +1,77 @@
 /**
- * Post-build script: wraps the OpenNext worker with a Cloudflare Cron Trigger
- * `scheduled` handler that calls the /api/sync endpoint.
+ * Post-build script: injects a Cloudflare Cron Trigger `scheduled` handler
+ * into the OpenNext worker.
  *
- * OpenNext generates `.open-next/worker.js` which only exports a `fetch` handler.
- * Cloudflare Cron Triggers require a `scheduled` export. This script renames the
- * original worker and creates a wrapper that re-exports `fetch` and adds `scheduled`.
+ * OpenNext generates `.open-next/worker.js` with:
+ *   export default { async fetch(request, env, ctx) { ... } };
+ *
+ * Cloudflare Cron Triggers require a `scheduled` export on the same object.
+ * This script modifies the worker in-place:
+ *   1. Replaces `export default {` with `const __worker = {`
+ *   2. Injects the `scheduled` method into the object
+ *   3. Adds `export default __worker;` at the end
+ *
+ * This approach avoids the import/re-export issues that occur when wrapping
+ * with a separate file (wrangler's bundler can't resolve the re-import).
  */
 
-const { readFileSync, writeFileSync, renameSync, existsSync } = require("fs");
+const { readFileSync, writeFileSync, existsSync } = require("fs");
 const { resolve } = require("path");
 
 const workerPath = resolve(__dirname, "../.open-next/worker.js");
-const originalWorkerPath = resolve(__dirname, "../.open-next/worker-original.js");
 
 if (!existsSync(workerPath)) {
-  console.error("Error: .open-next/worker.js not found. Run the OpenNext build first.");
+  console.error(
+    "Error: .open-next/worker.js not found. Run the OpenNext build first."
+  );
   process.exit(1);
 }
 
-// Read the original worker to check if it's already been patched
-const workerContent = readFileSync(workerPath, "utf-8");
-if (workerContent.includes("// SCHEDULED_HANDLER_PATCHED")) {
+let content = readFileSync(workerPath, "utf-8");
+
+if (content.includes("// SCHEDULED_HANDLER_PATCHED")) {
   console.log("Worker already patched with scheduled handler, skipping.");
   process.exit(0);
 }
 
-// Rename original worker
-renameSync(workerPath, originalWorkerPath);
+// Step 1: Replace `export default {` with `const __worker = {`
+// This lets the scheduled handler reference __worker.fetch directly.
+if (!content.includes("export default {")) {
+  console.error("Error: Could not find `export default {` in worker.js");
+  process.exit(1);
+}
+content = content.replace("export default {", "const __worker = {");
 
-// Create wrapper that re-exports the original and adds the scheduled handler
-const wrapper = `// SCHEDULED_HANDLER_PATCHED
-import originalWorker from "./worker-original.js";
+// Step 2: Find the last `};` which closes the worker object literal
+const lastClosingIndex = content.lastIndexOf("};");
+if (lastClosingIndex === -1) {
+  console.error("Error: Could not find closing `};` in worker.js");
+  process.exit(1);
+}
 
-export default {
-  // Delegate all fetch requests to the original OpenNext worker
-  fetch: originalWorker.fetch,
+// Step 3: Inject the scheduled handler before the closing `};`
+const scheduledHandler = `    async scheduled(controller, env, ctx) {
+        const url = "http://localhost/api/sync";
+        console.log(\`[Cron] Triggered at \${new Date(controller.scheduledTime).toISOString()}, calling \${url}\`);
+        try {
+            const request = new Request(url, { method: "POST" });
+            const response = await __worker.fetch(request, env, ctx);
+            const body = await response.text();
+            console.log(\`[Cron] Sync response (\${response.status}): \${body}\`);
+            if (!response.ok) {
+                throw new Error(\`Sync failed with HTTP \${response.status}: \${body}\`);
+            }
+        } catch (error) {
+            console.error("[Cron] Sync error:", error);
+            throw error;
+        }
+    },`;
 
-  // Cloudflare Cron Trigger handler — calls /api/sync to sync prices from Elering
-  async scheduled(controller, env, ctx) {
-    const url = "http://localhost/api/sync";
-    console.log(\`[Cron] Triggered at \${new Date(controller.scheduledTime).toISOString()}, calling \${url}\`);
+const patched =
+  "// SCHEDULED_HANDLER_PATCHED\n" +
+  content.slice(0, lastClosingIndex) +
+  scheduledHandler +
+  "\n};\nexport default __worker;\n";
 
-    try {
-      const request = new Request(url, { method: "POST" });
-      const response = await originalWorker.fetch(request, env, ctx);
-      const body = await response.text();
-      console.log(\`[Cron] Sync response (\${response.status}): \${body}\`);
-
-      if (!response.ok) {
-        throw new Error(\`Sync failed with HTTP \${response.status}: \${body}\`);
-      }
-    } catch (error) {
-      console.error("[Cron] Sync error:", error);
-      throw error;
-    }
-  },
-};
-`;
-
-writeFileSync(workerPath, wrapper, "utf-8");
+writeFileSync(workerPath, patched, "utf-8");
 console.log("Patched .open-next/worker.js with scheduled handler for Cron Triggers.");
