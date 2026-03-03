@@ -161,8 +161,28 @@ export default function PriceChart({
     const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; payload: any }>; label?: string | number }) => {
         if (active && payload && payload.length) {
             const date = new Date(label as string | number);
-            const data = payload[0].payload;
-            const isPredicted = data.isPredicted;
+            const d = payload[0].payload;
+            const isPredicted = d.isPredicted;
+
+            // Compute median comparison badge
+            let medianBadge: React.ReactNode = null;
+            if (stats && stats.median > 0 && d.displayPrice != null) {
+                const pctDiff = ((d.displayPrice - stats.median) / stats.median) * 100;
+                const absPct = Math.abs(pctDiff).toFixed(0);
+                if (pctDiff < 0) {
+                    medianBadge = (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-400/20 text-emerald-300">
+                            {absPct}% below median
+                        </span>
+                    );
+                } else if (pctDiff > 0) {
+                    medianBadge = (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300">
+                            {absPct}% above median
+                        </span>
+                    );
+                }
+            }
 
             return (
                 <div className={`bg-zinc-900/90 border ${isPredicted ? 'border-indigo-500/50 shadow-[0_0_20px_rgba(99,102,241,0.3)]' : 'border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.3)]'} p-3 rounded-xl backdrop-blur-xl transition-all duration-200`}>
@@ -171,8 +191,9 @@ export default function PriceChart({
                         {isPredicted && <span className="ml-2 text-indigo-400 italic">(Predicted)</span>}
                     </p>
                     <p className={`font-bold text-lg ${isPredicted ? 'text-indigo-400' : 'text-emerald-400'}`}>
-                        {data.displayPrice} <span className="text-xs font-normal text-zinc-500">¢/kWh</span>
+                        {d.displayPrice} <span className="text-xs font-normal text-zinc-500">¢/kWh</span>
                     </p>
+                    {medianBadge && <div className="mt-1">{medianBadge}</div>}
                 </div>
             );
         }
