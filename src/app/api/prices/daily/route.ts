@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { getDB } from "@/lib/db";
+import { errorResponse, successResponse } from "@/lib/elering";
 
 export const runtime = "edge";
 
@@ -9,9 +10,9 @@ export async function GET(request: NextRequest) {
   const end = searchParams.get("end");
 
   if (!start || !end) {
-    return NextResponse.json(
-      { error: "Missing required query parameters: start, end (YYYY-MM-DD format)" },
-      { status: 400 }
+    return errorResponse(
+      "Missing required query parameters: start, end (YYYY-MM-DD format)",
+      400
     );
   }
 
@@ -27,15 +28,9 @@ export async function GET(request: NextRequest) {
       .bind(start, end)
       .all();
 
-    return NextResponse.json({
-      success: true,
-      data: results.results,
-    });
+    return successResponse(results.results);
   } catch (error) {
     console.error("Error fetching daily averages:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch daily averages" },
-      { status: 500 }
-    );
+    return errorResponse("Failed to fetch daily averages", 500);
   }
 }

@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { getDB } from "@/lib/db";
+import { errorResponse, successResponse } from "@/lib/elering";
 
 export const runtime = "edge";
 
@@ -9,10 +10,7 @@ export async function GET(request: NextRequest) {
   const month = searchParams.get("month");
 
   if (!year) {
-    return NextResponse.json(
-      { error: "Missing required query parameter: year" },
-      { status: 400 }
-    );
+    return errorResponse("Missing required query parameter: year", 400);
   }
 
   try {
@@ -43,15 +41,9 @@ export async function GET(request: NextRequest) {
         .all();
     }
 
-    return NextResponse.json({
-      success: true,
-      data: results.results,
-    });
+    return successResponse(results.results);
   } catch (error) {
     console.error("Error fetching weekday-hour pattern:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch weekday-hour pattern" },
-      { status: 500 }
-    );
+    return errorResponse("Failed to fetch weekday-hour pattern", 500);
   }
 }
