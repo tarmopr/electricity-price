@@ -31,6 +31,8 @@ import Controls from './Controls';
 import PriceAlertBanner from './PriceAlertBanner';
 import CostCalculator from './CostCalculator';
 import PriceHeatmap from './PriceHeatmap';
+import ShareButton from './ShareButton';
+import { decodeParamsToState } from '@/lib/shareState';
 import { RefreshCw, BarChart3, Grid3X3 } from 'lucide-react';
 
 export type Timeframe = 'yesterday' | 'today' | 'tomorrow' | 'next_week' | 'week' | 'month' | 'quarter' | 'custom';
@@ -73,6 +75,25 @@ export default function Dashboard() {
     const [alertDismissed, setAlertDismissed] = useState(false);
     // Track last notified price to avoid repeated browser notifications
     const lastNotifiedPriceRef = useRef<number | null>(null);
+
+    // Restore state from URL params on mount (for shared links)
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const shared = decodeParamsToState(params);
+        if (!shared) return;
+
+        if (shared.timeframe) setTimeframe(shared.timeframe);
+        if (shared.includeVat !== undefined) setIncludeVat(shared.includeVat);
+        if (shared.viewMode) setViewMode(shared.viewMode);
+        if (shared.customStart) setCustomStart(shared.customStart);
+        if (shared.customEnd) setCustomEnd(shared.customEnd);
+        if (shared.showCheapestPeriod !== undefined) setShowCheapestPeriod(shared.showCheapestPeriod);
+        if (shared.cheapestPeriodHours !== undefined) setCheapestPeriodHours(shared.cheapestPeriodHours);
+
+        // Clean the URL params after restoring (don't pollute browser history)
+        window.history.replaceState({}, '', window.location.pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Request notification permission when alerts are first enabled
     const handleSetAlertConfig = useCallback((config: AlertConfig) => {
@@ -331,22 +352,35 @@ export default function Dashboard() {
 
             {/* View Mode Toggle + Main Visualization */}
             <div className="bg-zinc-900/40 p-2 sm:p-6 rounded-3xl border border-zinc-800/80 hover:border-zinc-700/60 transition-all duration-500 shadow-[0_8px_30px_rgba(0,0,0,0.3)] hover:shadow-[0_8px_40px_rgba(0,0,0,0.4)] hover:-translate-y-1 backdrop-blur-2xl">
-                {/* View Toggle */}
-                <div className="flex items-center gap-2 px-2 sm:px-0 mb-2">
-                    <button
-                        onClick={() => setViewMode('chart')}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all border ${viewMode === 'chart' ? 'bg-emerald-400/20 text-emerald-300 border-emerald-400/50' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800'}`}
-                    >
-                        <BarChart3 className="w-3.5 h-3.5" />
-                        Chart
-                    </button>
-                    <button
-                        onClick={() => setViewMode('heatmap')}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all border ${viewMode === 'heatmap' ? 'bg-indigo-400/20 text-indigo-300 border-indigo-400/50' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800'}`}
-                    >
-                        <Grid3X3 className="w-3.5 h-3.5" />
-                        Heatmap
-                    </button>
+                {/* View Toggle + Share */}
+                <div className="flex items-center justify-between px-2 sm:px-0 mb-2">
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setViewMode('chart')}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all border ${viewMode === 'chart' ? 'bg-emerald-400/20 text-emerald-300 border-emerald-400/50' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800'}`}
+                        >
+                            <BarChart3 className="w-3.5 h-3.5" />
+                            Chart
+                        </button>
+                        <button
+                            onClick={() => setViewMode('heatmap')}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all border ${viewMode === 'heatmap' ? 'bg-indigo-400/20 text-indigo-300 border-indigo-400/50' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800'}`}
+                        >
+                            <Grid3X3 className="w-3.5 h-3.5" />
+                            Heatmap
+                        </button>
+                    </div>
+                    <ShareButton
+                        state={{
+                            timeframe,
+                            includeVat,
+                            viewMode,
+                            customStart: timeframe === 'custom' ? customStart : undefined,
+                            customEnd: timeframe === 'custom' ? customEnd : undefined,
+                            showCheapestPeriod,
+                            cheapestPeriodHours,
+                        }}
+                    />
                 </div>
 
                 {viewMode === 'chart' ? (
