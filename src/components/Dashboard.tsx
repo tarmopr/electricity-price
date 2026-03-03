@@ -470,7 +470,7 @@ export default function Dashboard() {
                             : currentPrice.priceCentsKwh
                         : null
                 }
-                cheapestWindowPrice={cheapestWindow?.averagePrice ?? null}
+                cheapestWindow={cheapestWindow}
                 meanPrice={stats?.mean ?? null}
                 maxPrice={stats?.max ?? null}
                 consumptionKwh={costConsumptionKwh}
