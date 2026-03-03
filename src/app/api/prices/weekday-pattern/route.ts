@@ -2,8 +2,6 @@ import { NextRequest } from "next/server";
 import { getDB } from "@/lib/db";
 import { errorResponse, successResponse } from "@/lib/elering";
 
-export const runtime = "edge";
-
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const year = searchParams.get("year");

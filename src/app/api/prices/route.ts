@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ELERING_API, errorResponse } from "@/lib/elering";
 
-export const runtime = "edge";
-
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const start = searchParams.get("start");

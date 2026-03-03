@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 import { getDB } from "@/lib/db";
 import { ELERING_API, errorResponse, successResponse } from "@/lib/elering";
 
-export const runtime = "edge";
-
 export async function GET() {
   // Try D1 first, fall back to Elering API
   try {

@@ -10,8 +10,6 @@ import {
   successResponse,
 } from "@/lib/elering";
 
-export const runtime = "edge";
-
 /**
  * POST /api/sync — Sync prices from Elering to D1.
  *
