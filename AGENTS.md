@@ -4,41 +4,51 @@ Welcome to the `electricity-price` project. This file contains instructions and 
 
 ## Project Overview
 - **Name:** electricity-price
-- **Purpose:** Analyzing, fetching, or predicting electricity prices (TBD based on implementation).
-- **Target Audience/Users:** Developers & Analysts.
+- **Purpose:** Live Estonian electricity price dashboard with historical data analysis.
+- **Target Audience/Users:** Estonian electricity consumers who want to monitor and analyze energy prices.
 
 ## Tech Stack & Tools
 - **Framework:** Next.js (App Router, React 19)
 - **Language:** TypeScript
+- **Runtime:** Cloudflare Workers via @opennextjs/cloudflare
+- **Database:** Cloudflare D1 (SQLite at edge)
 - **Styling:** Tailwind CSS (Focus on premium, sleek UI, glassmorphism)
-- **Data Fetching:** Native fetch API (calling official public Elering Dashboard API)
+- **Data Fetching:** Native fetch API (server-side proxy to Elering API)
 - **Charting:** Recharts
 - **Icons & Animation:** Lucide-react, Framer-motion
 - **Package Manager:** npm
 
 ## Directory Structure
 - `/src/app`: Next.js App Router pages and global layouts.
+- `/src/app/api`: Server-side API routes (Elering proxy, D1 queries, sync).
 - `/src/components`: UI components (e.g., Dashboard, PriceChart, Controls, CurrentPriceCard).
-- `/src/lib`: Utility functions (e.g., `api.ts` for Elering API integration and data processing/statistical math).
+- `/src/lib`: Utility functions (e.g., `api.ts` for data fetching, `db.ts` for D1 operations).
+- `/db`: Database schema (`schema.sql`).
+- `/scripts`: Build scripts (e.g., `add-scheduled-handler.js` for Cron Triggers).
 
 ## Coding Conventions
 1. **Design First:** The priority is a superb, premium UI/UX. Do not use default/basic styling.
 2. **Components:** Use Server Components by default in App Router, and `'use client'` explicitly for interactive elements (charts, toggles).
 3. **Data Processing:** Handle timezone conversions (UTC to Europe/Tallinn) robustly using `date-fns` or native `Intl`.
 4. **Calculations:** Electricity prices should be displayed in cents/kWh (the API provides €/MWh). VAT (22%) toggle must be respected in all displayed price metrics and charts.
+5. **Database:** All aggregate tables above hourly level are computed from `hourly_averages` (not raw prices) to ensure equal hour weighting regardless of data granularity (15-min vs 1-hour).
 
-# Git rules
+## Git Rules
 - Use conventional commits.
 - Use imperative mood for commit messages.
 - Commit after each task is completed.
-- Do not commit `node_modules` or `.next` folders.
+- Do not commit `node_modules`, `.next`, `.open-next`, or `.wrangler` folders.
 
 ## AI Assistant Rules
-- Reference `AGENTS.md` and `implementation_plan.md` (in the `.gemini/antigravity` artifact folder) before making structural changes.
+- Reference `AGENTS.md` before making structural changes.
 - Prioritize clear, concise, and focused pull requests/commits.
-- Every time a task is completed and code is changed, run `npx next build` to validate that the web app is building successfully.
+- Every time a task is completed and code is changed, run `npm run build` to validate that the web app is building successfully.
+- Run `npm test` after a successful build to validate tests pass.
 
 ## Setup and Run
 - Setup: `npm install`
 - Run locally: `npm run dev`
-- Build for production: `npm run build` && `npm start`
+- Build for production: `npm run build`
+- Preview as Cloudflare Worker: `npm run preview`
+- Deploy to Cloudflare Workers: `npm run deploy`
+- Regenerate Cloudflare types: `npm run cf-typegen`
