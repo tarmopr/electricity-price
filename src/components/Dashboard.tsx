@@ -1,14 +1,23 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
     getPricesWithPrediction,
     getCurrentPrice,
     calculateStatistics,
     aggregatePrices,
+    applyVat,
     ElectricityPrice
 } from '@/lib/api';
 import { usePersistedState } from '@/lib/usePersistedState';
+import {
+    AlertConfig,
+    AlertState,
+    DEFAULT_ALERT_CONFIG,
+    evaluateAlert,
+    requestNotificationPermission,
+    showAlertNotification,
+} from '@/lib/priceAlerts';
 import {
     startOfYesterday, endOfYesterday,
     startOfToday, endOfToday,
@@ -19,6 +28,7 @@ import {
 import PriceChart from './PriceChart';
 import CurrentPriceCard from './CurrentPriceCard';
 import Controls from './Controls';
+import PriceAlertBanner from './PriceAlertBanner';
 import { RefreshCw } from 'lucide-react';
 
 export type Timeframe = 'yesterday' | 'today' | 'tomorrow' | 'next_week' | 'week' | 'month' | 'quarter' | 'custom';
@@ -49,6 +59,50 @@ export default function Dashboard() {
     const [showCheapestPeriod, setShowCheapestPeriod] = usePersistedState<boolean>('showCheapestPeriod', false);
     const [cheapestPeriodHours, setCheapestPeriodHours] = usePersistedState<number>('cheapestPeriodHours', 1);
     const [cheapestPeriodUntil, setCheapestPeriodUntil] = usePersistedState<string>('cheapestPeriodUntil', "22:00");
+
+    // Price Alert Settings (persisted)
+    const [alertConfig, setAlertConfig] = usePersistedState<AlertConfig>('alertConfig', DEFAULT_ALERT_CONFIG);
+    const [activeAlert, setActiveAlert] = useState<AlertState | null>(null);
+    const [alertDismissed, setAlertDismissed] = useState(false);
+    // Track last notified price to avoid repeated browser notifications
+    const lastNotifiedPriceRef = useRef<number | null>(null);
+
+    // Request notification permission when alerts are first enabled
+    const handleSetAlertConfig = useCallback((config: AlertConfig) => {
+        setAlertConfig(config);
+        if (config.enabled) {
+            requestNotificationPermission();
+        }
+        // Reset dismissed state when config changes so user sees new alerts
+        setAlertDismissed(false);
+    }, [setAlertConfig]);
+
+    // Evaluate alert whenever current price or alert config changes
+    useEffect(() => {
+        if (!currentPrice || !alertConfig.enabled) {
+            setActiveAlert(null);
+            return;
+        }
+
+        const price = includeVat
+            ? applyVat(currentPrice.priceCentsKwh)
+            : currentPrice.priceCentsKwh;
+
+        const alert = evaluateAlert(alertConfig, price);
+        setActiveAlert(alert);
+
+        // Send browser notification only once per price change
+        if (alert && lastNotifiedPriceRef.current !== currentPrice.priceCentsKwh) {
+            showAlertNotification(alert);
+            lastNotifiedPriceRef.current = currentPrice.priceCentsKwh;
+        }
+
+        if (!alert) {
+            // Reset dismissed flag when condition clears so next trigger shows
+            setAlertDismissed(false);
+            lastNotifiedPriceRef.current = null;
+        }
+    }, [currentPrice, alertConfig, includeVat]);
 
     useEffect(() => {
         async function fetchData() {
@@ -214,6 +268,14 @@ export default function Dashboard() {
     return (
         <div className="w-full max-w-6xl mx-auto space-y-6">
 
+            {/* Price Alert Banner */}
+            {activeAlert && !alertDismissed && (
+                <PriceAlertBanner
+                    alert={activeAlert}
+                    onDismiss={() => setAlertDismissed(true)}
+                />
+            )}
+
             {/* Top Row: Current Price & Controls */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 border-b border-zinc-800 pb-4 lg:border-none lg:pb-0 h-full">
@@ -253,6 +315,8 @@ export default function Dashboard() {
                         setCheapestPeriodHours={setCheapestPeriodHours}
                         cheapestPeriodUntil={cheapestPeriodUntil}
                         setCheapestPeriodUntil={setCheapestPeriodUntil}
+                        alertConfig={alertConfig}
+                        setAlertConfig={handleSetAlertConfig}
                     />
                 </div>
             </div>

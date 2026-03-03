@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Timeframe } from './Dashboard';
-import { ChevronDown, ChevronUp, Settings2 } from 'lucide-react';
+import { AlertConfig, AlertDirection } from '@/lib/priceAlerts';
+import { ChevronDown, ChevronUp, Settings2, Bell } from 'lucide-react';
 
 interface ControlsProps {
     includeVat: boolean;
@@ -30,6 +31,8 @@ interface ControlsProps {
     setCheapestPeriodHours: (val: number) => void;
     cheapestPeriodUntil: string;
     setCheapestPeriodUntil: (val: string) => void;
+    alertConfig: AlertConfig;
+    setAlertConfig: (val: AlertConfig) => void;
 }
 
 export default function Controls({
@@ -58,7 +61,9 @@ export default function Controls({
     cheapestPeriodHours,
     setCheapestPeriodHours,
     cheapestPeriodUntil,
-    setCheapestPeriodUntil
+    setCheapestPeriodUntil,
+    alertConfig,
+    setAlertConfig
 }: ControlsProps) {
     const [isMobileOpen, setIsMobileOpen] = useState(false);
 
@@ -168,6 +173,45 @@ export default function Controls({
                             )}
                         </div>
                     </div >
+
+                    {/* Price Alert Settings */}
+                    <div className="flex flex-col space-y-2">
+                        <Label className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Price Alert</Label>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <button
+                                onClick={() => setAlertConfig({ ...alertConfig, enabled: !alertConfig.enabled })}
+                                className={`px-3 py-1.5 rounded-lg text-sm transition-all border flex items-center gap-1.5 ${alertConfig.enabled ? 'bg-yellow-400/20 text-yellow-300 border-yellow-400/50' : 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800'}`}
+                            >
+                                <Bell className="w-3.5 h-3.5" />
+                                Alert
+                            </button>
+
+                            {alertConfig.enabled && (
+                                <div className="flex items-center gap-2">
+                                    <div className="relative">
+                                        <select
+                                            value={alertConfig.direction}
+                                            onChange={(e) => setAlertConfig({ ...alertConfig, direction: e.target.value as AlertDirection })}
+                                            className="appearance-none bg-zinc-800/50 text-zinc-200 border border-zinc-700/80 hover:bg-zinc-800/80 focus:outline-none focus:ring-1 focus:ring-yellow-500/50 rounded-lg px-3 py-1.5 pr-8 text-sm font-medium transition-colors cursor-pointer"
+                                        >
+                                            <option value="below">Below</option>
+                                            <option value="above">Above</option>
+                                        </select>
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+                                    </div>
+                                    <input
+                                        type="number"
+                                        step="0.5"
+                                        min="0"
+                                        value={alertConfig.threshold}
+                                        onChange={(e) => setAlertConfig({ ...alertConfig, threshold: parseFloat(e.target.value) || 0 })}
+                                        className="w-20 bg-zinc-800/50 border border-zinc-700/80 text-zinc-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-yellow-500/50 text-center"
+                                    />
+                                    <span className="text-zinc-500 text-sm whitespace-nowrap">¢/kWh</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div >
 
                 {/* Advanced Settings Content */}
