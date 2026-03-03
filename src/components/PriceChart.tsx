@@ -309,7 +309,7 @@ export default function PriceChart({
         : 0;
 
     return (
-        <div className="w-full h-[400px] mt-4 relative overflow-hidden" style={{ WebkitTapHighlightColor: 'transparent' }}>
+        <div className="w-full h-[400px] mt-4 relative overflow-hidden" aria-label="Electricity price chart" role="img" style={{ WebkitTapHighlightColor: 'transparent' }}>
             <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} style={{ outline: 'none' }}>
                 <AreaChart
                     data={chartData}

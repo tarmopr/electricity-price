@@ -114,6 +114,8 @@ export default function CostCalculator({
       {/* Header / Toggle */}
       <button
         onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
+        aria-label="Toggle cost calculator"
         className="w-full flex items-center justify-between p-4 md:p-5 text-zinc-300 hover:text-zinc-100 transition-colors"
       >
         <div className="flex items-center space-x-2.5">
@@ -150,6 +152,7 @@ export default function CostCalculator({
                 <button
                   key={p.label}
                   onClick={() => selectPreset(p.label, p.kWh, p.durationHours)}
+                  aria-pressed={activePreset === p.label}
                   className={`px-3 py-1.5 rounded-lg text-sm transition-all border ${
                     activePreset === p.label
                       ? "bg-emerald-400/20 text-emerald-300 border-emerald-400/50"
@@ -177,6 +180,7 @@ export default function CostCalculator({
                 step="0.5"
                 value={consumptionKwh}
                 onChange={(e) => handleCustomKwhInput(e.target.value)}
+                aria-label="Consumption in kWh"
                 className="w-24 bg-zinc-800/50 border border-zinc-700/80 text-zinc-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 text-center"
               />
               <span className="text-zinc-500 text-sm">kWh</span>
@@ -192,6 +196,7 @@ export default function CostCalculator({
                 step="1"
                 value={durationHours}
                 onChange={(e) => handleDurationInput(e.target.value)}
+                aria-label="Duration in hours"
                 className="w-20 bg-zinc-800/50 border border-zinc-700/80 text-zinc-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 text-center"
               />
               <span className="text-zinc-500 text-sm">h</span>
@@ -208,6 +213,7 @@ export default function CostCalculator({
                 value={untilHour ?? ""}
                 onChange={(e) => handleUntilInput(e.target.value)}
                 placeholder="—"
+                aria-label="Until hour"
                 className="w-20 bg-zinc-800/50 border border-zinc-700/80 text-zinc-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 text-center"
               />
               <span className="text-zinc-500 text-sm">
