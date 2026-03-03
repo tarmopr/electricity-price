@@ -3,7 +3,9 @@
   "main": ".open-next/worker.js",
   "name": "electricity-price",
   "compatibility_date": "2024-12-30",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
@@ -19,6 +21,14 @@
   // 14:00 UTC = 16:00 EET (catches new prices published after 13:00 EET)
   // 02:00 UTC = 04:00 EET (overnight recovery sync)
   "triggers": {
-    "crons": ["0 2,6,10,14,18,22 * * *"]
+    "crons": [
+      "0 2,6,10,14,18,22 * * *"
+    ]
+  },
+  "observability": {
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    }
   }
 }
