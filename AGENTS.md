@@ -22,7 +22,8 @@ Welcome to the `electricity-price` project. This file contains instructions and 
 - `/src/app`: Next.js App Router pages and global layouts.
 - `/src/app/api`: Server-side API routes (Elering proxy, D1 queries, sync).
 - `/src/components`: UI components (e.g., Dashboard, PriceChart, Controls, CurrentPriceCard).
-- `/src/lib`: Utility functions (e.g., `api.ts` for data fetching, `db.ts` for D1 operations).
+- `/src/lib`: Utility functions (e.g., `api.ts` for data fetching, `db.ts` for D1 operations, `usePersistedState.ts` for localStorage persistence).
+- `/src/__tests__`: Test files mirroring the source structure.
 - `/db`: Database schema (`schema.sql`).
 - `/scripts`: Build scripts (e.g., `add-scheduled-handler.js` for Cron Triggers).
 
@@ -45,9 +46,17 @@ Welcome to the `electricity-price` project. This file contains instructions and 
 - Every time a task is completed and code is changed, run `npm run build` to validate that the web app is building successfully.
 - Run `npm test` after a successful build to validate tests pass.
 
+## Testing
+- **Framework:** Vitest 4.x with jsdom environment
+- **Test location:** `src/__tests__/` mirrors the source structure
+- **Run tests:** `npm test` (single run) or `npm run test:watch` (watch mode)
+- **Mocking:** Use `vi.mock()` for modules, `vi.stubGlobal()` for `fetch`. Mock `@opennextjs/cloudflare` in any test that imports from `@/lib/db`.
+- **Rule:** All new code (API routes, utilities, hooks) must have tests. Run both `npm run build` and `npm test` before considering a task complete.
+
 ## Setup and Run
 - Setup: `npm install`
 - Run locally: `npm run dev`
+- Run tests: `npm test`
 - Build for production: `npm run build`
 - Preview as Cloudflare Worker: `npm run preview`
 - Deploy to Cloudflare Workers: `npm run deploy`

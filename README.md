@@ -137,12 +137,54 @@ Prices are synced automatically via Cloudflare Cron Triggers every 4 hours (02:0
 
 The sync is resilient to missed runs — it checks the latest timestamp in the database and fetches only missing data from that point forward.
 
+## Testing
+
+The project uses [Vitest](https://vitest.dev/) with jsdom environment for testing.
+
+### Running Tests
+
+```bash
+# Run all tests once
+npm test
+
+# Run tests in watch mode (re-runs on file changes)
+npm run test:watch
+```
+
+### Test Structure
+
+Tests are located in `src/__tests__/` mirroring the source structure:
+
+```
+src/__tests__/
+├── setup.ts                    # Test setup (jest-dom matchers)
+├── api/
+│   └── prices.test.ts          # API route parameter validation and behavior
+└── lib/
+    ├── api.test.ts             # Client-side utilities (conversion, statistics, aggregation)
+    ├── db.test.ts              # Database utilities (upsert batching, aggregate computation)
+    ├── elering.test.ts         # Server-side Elering API helpers (fetch, response helpers)
+    └── usePersistedState.test.ts  # localStorage persistence hook
+```
+
+### Test Setup
+
+- **Framework:** Vitest 4.x with `@vitejs/plugin-react`
+- **Environment:** jsdom (simulates browser APIs like `localStorage`)
+- **Matchers:** `@testing-library/jest-dom` for DOM assertions
+- **React hooks:** `@testing-library/react` with `renderHook` for hook testing
+- **Mocking:** Vitest's built-in `vi.mock()` and `vi.stubGlobal()` for mocking `fetch`, D1 database, and `@opennextjs/cloudflare`
+
+External dependencies (Cloudflare context, Elering API, D1 database) are mocked in tests. Pure utility functions are tested directly.
+
 ## Available Scripts
 
 | Script | Description |
 |--------|-------------|
 | `npm run dev` | Start local dev server with Turbopack (port 3000) |
 | `npm run build` | Build Next.js for production |
+| `npm test` | Run all tests once |
+| `npm run test:watch` | Run tests in watch mode |
 | `npm run preview` | Build and preview as Cloudflare Worker locally |
 | `npm run deploy` | Build and deploy to Cloudflare Workers |
 | `npm run cf-typegen` | Regenerate Cloudflare Worker types after binding changes |

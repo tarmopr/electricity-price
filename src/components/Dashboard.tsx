@@ -8,6 +8,7 @@ import {
     aggregatePrices,
     ElectricityPrice
 } from '@/lib/api';
+import { usePersistedState } from '@/lib/usePersistedState';
 import {
     startOfYesterday, endOfYesterday,
     startOfToday, endOfToday,
@@ -30,24 +31,24 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // User Settings
-    const [includeVat, setIncludeVat] = useState<boolean>(true);
-    const [showNow, setShowNow] = useState<boolean>(true);
-    const [showMean, setShowMean] = useState<boolean>(false);
-    const [showMedian, setShowMedian] = useState(false);
-    const [showP75, setShowP75] = useState(false);
-    const [showP90, setShowP90] = useState(false);
-    const [showP95, setShowP95] = useState(false);
+    // User Settings (persisted to localStorage across sessions)
+    const [includeVat, setIncludeVat] = usePersistedState<boolean>('includeVat', true);
+    const [showNow, setShowNow] = usePersistedState<boolean>('showNow', true);
+    const [showMean, setShowMean] = usePersistedState<boolean>('showMean', false);
+    const [showMedian, setShowMedian] = usePersistedState<boolean>('showMedian', false);
+    const [showP75, setShowP75] = usePersistedState<boolean>('showP75', false);
+    const [showP90, setShowP90] = usePersistedState<boolean>('showP90', false);
+    const [showP95, setShowP95] = usePersistedState<boolean>('showP95', false);
 
-    // Timeframe Settings
-    const [timeframe, setTimeframe] = useState<Timeframe>('today');
+    // Timeframe Settings (persisted, except custom dates which reset daily)
+    const [timeframe, setTimeframe] = usePersistedState<Timeframe>('timeframe', 'today');
     const [customStart, setCustomStart] = useState<string>(format(startOfToday(), 'yyyy-MM-dd'));
     const [customEnd, setCustomEnd] = useState<string>(format(endOfToday(), 'yyyy-MM-dd'));
 
-    // Cheapest Period Settings
-    const [showCheapestPeriod, setShowCheapestPeriod] = useState<boolean>(false);
-    const [cheapestPeriodHours, setCheapestPeriodHours] = useState<number>(1);
-    const [cheapestPeriodUntil, setCheapestPeriodUntil] = useState<string>("22:00");
+    // Cheapest Period Settings (persisted)
+    const [showCheapestPeriod, setShowCheapestPeriod] = usePersistedState<boolean>('showCheapestPeriod', false);
+    const [cheapestPeriodHours, setCheapestPeriodHours] = usePersistedState<number>('cheapestPeriodHours', 1);
+    const [cheapestPeriodUntil, setCheapestPeriodUntil] = usePersistedState<string>('cheapestPeriodUntil', "22:00");
 
     useEffect(() => {
         async function fetchData() {
