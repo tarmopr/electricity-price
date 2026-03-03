@@ -4,69 +4,13 @@ import {
   upsertPrices,
   recomputeAllAggregates,
 } from "@/lib/db";
+import {
+  fetchFromElering,
+  errorResponse,
+  successResponse,
+} from "@/lib/elering";
 
 export const runtime = "edge";
-
-const ELERING_API = "https://dashboard.elering.ee/api/nps/price";
-const CHUNK_SIZE_MS = 90 * 24 * 60 * 60 * 1000; // ~90 days
-
-interface EleringResponse {
-  success: boolean;
-  data: {
-    ee: { timestamp: number; price: number }[];
-  };
-}
-
-/**
- * Fetch prices from Elering for a date range, chunking into 90-day intervals.
- * Elering API allows max 1 year per request.
- */
-async function fetchFromElering(
-  start: Date,
-  end: Date
-): Promise<{ timestamp: number; priceEurMwh: number }[]> {
-  const allPrices: { timestamp: number; priceEurMwh: number }[] = [];
-  let currentStart = new Date(start);
-
-  while (currentStart < end) {
-    let currentEnd = new Date(currentStart.getTime() + CHUNK_SIZE_MS);
-    if (currentEnd > end) currentEnd = end;
-
-    const startStr = currentStart.toISOString();
-    const isAbsoluteEnd = currentEnd.getTime() === end.getTime();
-    const endStr = isAbsoluteEnd
-      ? currentEnd.toISOString().replace(".000Z", ".999Z")
-      : currentEnd.toISOString();
-
-    const url = `${ELERING_API}?start=${encodeURIComponent(startStr)}&end=${encodeURIComponent(endStr)}`;
-    const res = await fetch(url, { cache: "no-store" });
-
-    if (!res.ok) {
-      throw new Error(
-        `Elering API error: ${res.status} ${res.statusText}`
-      );
-    }
-
-    const json: EleringResponse = await res.json();
-    if (!json.success || !json.data?.ee) {
-      throw new Error("Invalid Elering API response format");
-    }
-
-    for (const item of json.data.ee) {
-      allPrices.push({ timestamp: item.timestamp, priceEurMwh: item.price });
-    }
-
-    currentStart = new Date(currentEnd.getTime() + 1);
-  }
-
-  // Deduplicate by timestamp
-  const seen = new Set<number>();
-  return allPrices.filter((p) => {
-    if (seen.has(p.timestamp)) return false;
-    seen.add(p.timestamp);
-    return true;
-  });
-}
 
 /**
  * POST /api/sync — Sync prices from Elering to D1.
@@ -106,15 +50,15 @@ export async function POST(request: NextRequest) {
       end = manualEnd ? new Date(manualEnd) : defaultEnd;
 
       if (isNaN(start.getTime())) {
-        return NextResponse.json(
-          { error: "Invalid start date format. Use ISO 8601 (e.g., 2025-03-01T00:00:00.000Z)" },
-          { status: 400 }
+        return errorResponse(
+          "Invalid start date format. Use ISO 8601 (e.g., 2025-03-01T00:00:00.000Z)",
+          400
         );
       }
       if (isNaN(end.getTime())) {
-        return NextResponse.json(
-          { error: "Invalid end date format. Use ISO 8601 (e.g., 2025-03-01T23:59:59.999Z)" },
-          { status: 400 }
+        return errorResponse(
+          "Invalid end date format. Use ISO 8601 (e.g., 2025-03-01T23:59:59.999Z)",
+          400
         );
       }
     } else {
@@ -191,25 +135,21 @@ export async function GET() {
       )
       .first<{ latest: number | null; earliest: number | null; total: number }>();
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        latestTimestamp: result?.latest
-          ? new Date(result.latest * 1000).toISOString()
-          : null,
-        earliestTimestamp: result?.earliest
-          ? new Date(result.earliest * 1000).toISOString()
-          : null,
-        totalPricePoints: result?.total || 0,
-      },
+    return successResponse({
+      latestTimestamp: result?.latest
+        ? new Date(result.latest * 1000).toISOString()
+        : null,
+      earliestTimestamp: result?.earliest
+        ? new Date(result.earliest * 1000).toISOString()
+        : null,
+      totalPricePoints: result?.total || 0,
     });
   } catch (error) {
     console.error("Sync status error:", error);
     return NextResponse.json(
       {
         success: false,
-        error:
-          error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
     );

@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { getDB } from "@/lib/db";
+import { ELERING_API, errorResponse, successResponse } from "@/lib/elering";
 
 export const runtime = "edge";
-
-const ELERING_API = "https://dashboard.elering.ee/api/nps/price";
 
 export async function GET() {
   // Try D1 first, fall back to Elering API
@@ -23,11 +22,9 @@ export async function GET() {
       .first<{ timestamp: number; price: number }>();
 
     if (result) {
-      // Return in the same shape as the Elering API for compatibility
-      return NextResponse.json({
-        success: true,
-        data: [{ timestamp: result.timestamp, price: result.price }],
-      });
+      return successResponse([
+        { timestamp: result.timestamp, price: result.price },
+      ]);
     }
   } catch {
     // D1 unavailable or empty — fall through to Elering
@@ -35,13 +32,16 @@ export async function GET() {
 
   // Fallback: fetch directly from Elering
   try {
-    const res = await fetch(`${ELERING_API}/EE/current`, { cache: "no-store" });
+    const res = await fetch(`${ELERING_API}/EE/current`, {
+      cache: "no-store",
+    });
 
     if (!res.ok) {
       const errText = await res.text();
-      return NextResponse.json(
-        { error: `Elering API error: ${res.status} ${res.statusText}`, details: errText },
-        { status: res.status }
+      return errorResponse(
+        `Elering API error: ${res.status} ${res.statusText}`,
+        res.status,
+        errText
       );
     }
 
@@ -49,9 +49,6 @@ export async function GET() {
     return NextResponse.json(data);
   } catch (error) {
     console.error("Error fetching current price:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch current price" },
-      { status: 502 }
-    );
+    return errorResponse("Failed to fetch current price", 502);
   }
 }

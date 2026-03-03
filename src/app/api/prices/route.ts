@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ELERING_API, errorResponse } from "@/lib/elering";
 
 export const runtime = "edge";
-
-const ELERING_API = "https://dashboard.elering.ee/api/nps/price";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -10,10 +9,7 @@ export async function GET(request: NextRequest) {
   const end = searchParams.get("end");
 
   if (!start || !end) {
-    return NextResponse.json(
-      { error: "Missing required query parameters: start, end" },
-      { status: 400 }
-    );
+    return errorResponse("Missing required query parameters: start, end", 400);
   }
 
   try {
@@ -22,9 +18,10 @@ export async function GET(request: NextRequest) {
 
     if (!res.ok) {
       const errText = await res.text();
-      return NextResponse.json(
-        { error: `Elering API error: ${res.status} ${res.statusText}`, details: errText },
-        { status: res.status }
+      return errorResponse(
+        `Elering API error: ${res.status} ${res.statusText}`,
+        res.status,
+        errText
       );
     }
 
@@ -32,9 +29,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(data);
   } catch (error) {
     console.error("Error proxying to Elering API:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch prices from Elering" },
-      { status: 502 }
-    );
+    return errorResponse("Failed to fetch prices from Elering", 502);
   }
 }
