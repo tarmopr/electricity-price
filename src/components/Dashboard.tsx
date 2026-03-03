@@ -29,6 +29,7 @@ import PriceChart from './PriceChart';
 import CurrentPriceCard from './CurrentPriceCard';
 import Controls from './Controls';
 import PriceAlertBanner from './PriceAlertBanner';
+import CostCalculator from './CostCalculator';
 import { RefreshCw } from 'lucide-react';
 
 export type Timeframe = 'yesterday' | 'today' | 'tomorrow' | 'next_week' | 'week' | 'month' | 'quarter' | 'custom';
@@ -339,6 +340,20 @@ export default function Dashboard() {
                     cheapestPeriodUntil={cheapestPeriodUntil}
                 />
             </div>
+
+            {/* Cost Calculator */}
+            <CostCalculator
+                currentPrice={
+                    currentPrice
+                        ? includeVat
+                            ? applyVat(currentPrice.priceCentsKwh)
+                            : currentPrice.priceCentsKwh
+                        : null
+                }
+                cheapestPrice={stats?.min ?? null}
+                meanPrice={stats?.mean ?? null}
+                maxPrice={stats?.max ?? null}
+            />
 
         </div>
     );
