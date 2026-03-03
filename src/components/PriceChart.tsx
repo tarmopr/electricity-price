@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
     Area,
     AreaChart,
@@ -94,6 +94,34 @@ export default function PriceChart({
 
     const currentTimestamp = activeCurrentTimestamp;
 
+    // Map cheapest window timestamps to actual chart data timestamps.
+    // The cheapest window is computed from hourly-aggregated data, but the chart
+    // may display higher-resolution data (e.g. 15-min intervals). Recharts'
+    // categorical X axis requires exact string matches for ReferenceArea x1/x2.
+    const cheapestRef = useMemo(() => {
+        if (!cheapestWindow || chartData.length === 0) return null;
+
+        const startMs = new Date(cheapestWindow.startTimestamp).getTime();
+        const endMs = new Date(cheapestWindow.endTimestamp).getTime();
+
+        let x1: string | null = null;
+        let x2: string | null = null;
+
+        for (const d of chartData) {
+            const t = new Date(d.timestamp).getTime();
+            if (!x1 && t >= startMs) x1 = d.timestamp;
+            if (!x2 && t >= endMs) x2 = d.timestamp;
+            if (x1 && x2) break;
+        }
+
+        // If end timestamp is past chart data, use the last data point
+        if (!x2 && chartData.length > 0) {
+            x2 = chartData[chartData.length - 1].timestamp;
+        }
+
+        return x1 && x2 ? { x1, x2 } : null;
+    // eslint-disable-next-line
+    }, [cheapestWindow, chartData.length]);
 
     // Dynamically determine X-axis format based on the time span
     let xAxisFormat = 'HH:mm';
@@ -329,10 +357,10 @@ export default function PriceChart({
                     />
 
                     {/* Cheapest Window Reference Area */}
-                    {cheapestWindow && (
+                    {cheapestWindow && cheapestRef && (
                         <ReferenceArea
-                            x1={cheapestWindow.startTimestamp}
-                            x2={cheapestWindow.endTimestamp}
+                            x1={cheapestRef.x1}
+                            x2={cheapestRef.x2}
                             fill="#86efac" // subtle green fill
                             fillOpacity={0.15}
                             strokeOpacity={0}
