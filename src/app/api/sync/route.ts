@@ -5,6 +5,8 @@ import {
   recomputeAllAggregates,
 } from "@/lib/db";
 
+export const runtime = "edge";
+
 const ELERING_API = "https://dashboard.elering.ee/api/nps/price";
 const CHUNK_SIZE_MS = 90 * 24 * 60 * 60 * 1000; // ~90 days
 
