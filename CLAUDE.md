@@ -41,6 +41,13 @@ After lint, build, and tests all pass, run a code review using the **review** ag
 - **Skip re-review** if fixes were trivial (typos, formatting, import ordering). Only re-review when logic changed.
 - Minor issues noted in iteration 2+ are informational only — do not fix them to avoid churn.
 
+## Git Commits
+
+- **Always use [Conventional Commits](https://www.conventionalcommits.org/) format:** `type(scope): description`
+- Common types: `feat`, `fix`, `chore`, `refactor`, `test`, `docs`, `ci`, `style`, `perf`
+- Use imperative mood in the description (e.g., "add feature" not "added feature").
+- Scope is optional but encouraged for clarity (e.g., `feat(chart): add zoom controls`).
+
 ## Deployment
 
 - The app deploys to Cloudflare Workers via `npm run deploy` (runs OpenNext build + wrangler deploy).
