@@ -1,55 +1,29 @@
 # Claude Code Instructions
 
-## Agent Instructions
+## Validation (required after every code change)
 
-See [AGENTS.md](./AGENTS.md) for full project conventions, tech stack, coding standards, and git rules.
+1. `npm run build` — must pass.
+2. `npm test` — must pass. All new code needs tests.
+3. Run **review** agent on changed files. Max 3 iterations:
+   - **Iter 1:** Fix all issues (critical, major, minor) → re-validate.
+   - **Iter 2:** Only if iter 1 changed logic. Fix critical/major only → re-validate.
+   - **Iter 3:** Hard stop. Report remaining issues with file paths, line numbers, severity. Let user decide.
+   - Skip re-review for trivial fixes (formatting, naming, imports).
 
-## Build Validation
+## Git
 
-**Always run `npm run build` after making code changes** to validate the project compiles and builds successfully. Do not consider a task complete until the build passes.
+- Conventional Commits: `type(scope): description` — imperative mood.
+- Types: `feat`, `fix`, `chore`, `refactor`, `test`, `docs`, `ci`, `style`, `perf`
 
-## Testing
+## Key Rules
 
-- Tests must be created for all new code (API routes, utility functions, components).
-- After a successful build, run `npm test` to validate that existing functionality still works as expected.
-- Do not consider a task complete until both build and tests pass.
+- Prices: Elering API returns EUR/MWh → display as cents/kWh. Respect VAT (22%) toggle.
+- Timezones: UTC ↔ Europe/Tallinn. Use `date-fns` or `Intl`.
+- Server Components by default. `'use client'` only for interactive elements.
+- Premium UI: Tailwind + glassmorphism. No default/basic styling.
+- `@/` path aliases for all imports.
+- DB aggregation above hourly level: compute from `hourly_averages`, not raw prices.
 
-## Code Review After Validation
+## Deploy
 
-After lint, build, and tests all pass, run a code review using the **review** agent before considering a task complete. Follow this iterative process:
-
-### Iteration 1 (Full Review)
-- Run the review agent on all changed files.
-- Fix **all** issues: critical, major, and minor.
-- Re-run `npm run build` and `npm test` to validate fixes.
-
-### Iteration 2 (Blocking Only)
-- Re-review **only if** iteration 1 fixes changed logic (not just formatting/naming).
-- Fix only **critical and major** issues. Report minor issues as notes but do not fix them.
-- Re-run `npm run build` and `npm test` to validate fixes.
-
-### Iteration 3 (Hard Stop)
-- If critical or blocking issues remain after iteration 2, **stop the loop**.
-- Do not attempt further fixes. Instead, provide a clear report:
-  - List each remaining issue with file path, line number, and severity.
-  - Explain why the issue persists and what would be needed to resolve it.
-  - Let the user decide how to proceed.
-
-### Rules
-- **Never exceed 3 review iterations.** This prevents infinite review-fix loops.
-- **Always re-validate** (build + tests) after any code fix, even minor ones.
-- **Skip re-review** if fixes were trivial (typos, formatting, import ordering). Only re-review when logic changed.
-- Minor issues noted in iteration 2+ are informational only — do not fix them to avoid churn.
-
-## Git Commits
-
-- **Always use [Conventional Commits](https://www.conventionalcommits.org/) format:** `type(scope): description`
-- Common types: `feat`, `fix`, `chore`, `refactor`, `test`, `docs`, `ci`, `style`, `perf`
-- Use imperative mood in the description (e.g., "add feature" not "added feature").
-- Scope is optional but encouraged for clarity (e.g., `feat(chart): add zoom controls`).
-
-## Deployment
-
-- The app deploys to Cloudflare Workers via `npm run deploy` (runs OpenNext build + wrangler deploy).
-- After changes to Cloudflare bindings (D1, KV), regenerate types: `npm run cf-typegen`.
-- Local Cloudflare preview: `npm run preview`.
+- `npm run deploy` (OpenNext + wrangler). After binding changes: `npm run cf-typegen`.
