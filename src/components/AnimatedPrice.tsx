@@ -10,7 +10,7 @@ interface AnimatedPriceProps {
 }
 
 export default function AnimatedPrice({ value, decimals = 2, className }: AnimatedPriceProps) {
-    const motionValue = useMotionValue(value);
+    const motionValue = useMotionValue(0);
     const displayed = useTransform(motionValue, (v) => v.toFixed(decimals));
 
     useEffect(() => {
@@ -18,7 +18,7 @@ export default function AnimatedPrice({ value, decimals = 2, className }: Animat
             duration: 0.6,
             ease: 'easeOut',
         });
-        return controls.stop;
+        return () => controls.stop();
     }, [value, motionValue]);
 
     return <motion.span className={className}>{displayed}</motion.span>;
