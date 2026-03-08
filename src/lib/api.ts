@@ -205,7 +205,7 @@ export function aggregatePrices(prices: ElectricityPrice[], intervalHours: numbe
             timestamp: bucketDate.toISOString(),
             date: bucketDate,
             priceEurMwh: avgEurMwh,
-            priceCentsKwh: convertEurMwhToCentsKwh(avgEurMwh),
+            priceCentsKwh: eurMwhToCentsKwh(avgEurMwh),
             isPredicted: bucketAllPredicted
         });
     }
@@ -319,7 +319,7 @@ export async function getCurrentPrice(): Promise<ElectricityPrice | null> {
             timestamp: date.toISOString(),
             date,
             priceEurMwh: item.price,
-            priceCentsKwh: convertEurMwhToCentsKwh(item.price)
+            priceCentsKwh: eurMwhToCentsKwh(item.price)
         };
     } catch (error) {
         console.error('Error fetching current price:', error);

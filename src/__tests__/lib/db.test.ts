@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { eurMwhToCentsKwh } from "@/lib/db";
+import { eurMwhToCentsKwh } from "@/lib/price";
 
 // Mock getCloudflareContext since it's not available in test environment
 vi.mock("@opennextjs/cloudflare", () => ({

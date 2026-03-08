@@ -41,8 +41,8 @@ export async function POST(request: NextRequest) {
     let start: Date;
     let end: Date;
 
+    // --- Input validation (before any DB or API calls) ---
     if (manualStart) {
-      // Manual mode: use provided start/end
       start = new Date(manualStart);
       end = manualEnd ? new Date(manualEnd) : defaultEnd;
 
@@ -58,16 +58,10 @@ export async function POST(request: NextRequest) {
           400
         );
       }
-
-      // Validate start is before end
       if (start >= end) {
-        return errorResponse(
-          "Start date must be before end date",
-          400
-        );
+        return errorResponse("Start date must be before end date", 400);
       }
 
-      // Validate max range: 2 years (730 days)
       const maxRangeMs = 730 * 24 * 60 * 60 * 1000;
       if (end.getTime() - start.getTime() > maxRangeMs) {
         return errorResponse(
@@ -75,18 +69,20 @@ export async function POST(request: NextRequest) {
           400
         );
       }
-    } else {
+    }
+
+    // --- DB + fetch ---
+    const db = await getDB();
+
+    if (!manualStart) {
       // Automatic mode: resume from latest timestamp in DB
-      const db = await getDB();
       const latest = await db
         .prepare("SELECT MAX(timestamp) as latest FROM prices")
         .first<{ latest: number | null }>();
 
       if (latest?.latest) {
-        // Start from the latest known timestamp (will upsert duplicates harmlessly)
         start = new Date(latest.latest * 1000);
       } else {
-        // DB is empty, fetch last 2 days as starting point
         start = new Date(now);
         start.setDate(start.getDate() - 2);
         start.setHours(0, 0, 0, 0);
@@ -96,7 +92,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch from Elering
-    const prices = await fetchFromElering(start, end);
+    const prices = await fetchFromElering(start!, end!);
 
     if (prices.length === 0) {
       return successResponse({
@@ -104,9 +100,6 @@ export async function POST(request: NextRequest) {
         synced: 0,
       });
     }
-
-    // Get DB connection for upsert and aggregation
-    const db = await getDB();
 
     // Upsert into D1
     await upsertPrices(db, prices);

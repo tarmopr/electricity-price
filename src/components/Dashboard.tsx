@@ -25,10 +25,7 @@ import ShareButton from './ShareButton';
 import { decodeParamsToState } from '@/lib/shareState';
 import { findCheapestWindow, computeWindowAverage } from '@/lib/cheapestWindow';
 import { RefreshCw, BarChart3, Grid3X3, Info } from 'lucide-react';
-import { Period, ViewMode } from '@/lib/types';
-
-// Re-export for backwards compatibility with existing consumers
-export type { Period, ViewMode };
+import type { Period, ViewMode } from '@/lib/types';
 
 export default function Dashboard() {
     // User Settings (persisted to localStorage across sessions)

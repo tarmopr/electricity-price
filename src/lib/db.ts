@@ -1,8 +1,6 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { eurMwhToCentsKwh } from "@/lib/price";
 
-export { eurMwhToCentsKwh };
-
 export async function getDB(): Promise<D1Database> {
   const { env } = await getCloudflareContext({ async: true });
   return (env as { DB: D1Database }).DB;
