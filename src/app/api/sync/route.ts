@@ -69,13 +69,9 @@ export async function POST(request: NextRequest) {
           400
         );
       }
-    }
-
-    // --- DB + fetch ---
-    const db = await getDB();
-
-    if (!manualStart) {
+    } else {
       // Automatic mode: resume from latest timestamp in DB
+      const db = await getDB();
       const latest = await db
         .prepare("SELECT MAX(timestamp) as latest FROM prices")
         .first<{ latest: number | null }>();
@@ -91,8 +87,11 @@ export async function POST(request: NextRequest) {
       end = defaultEnd;
     }
 
+    // --- DB + fetch ---
+    const db = await getDB();
+
     // Fetch from Elering
-    const prices = await fetchFromElering(start!, end!);
+    const prices = await fetchFromElering(start, end);
 
     if (prices.length === 0) {
       return successResponse({

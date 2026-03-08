@@ -19,9 +19,26 @@ export function usePatternOverlays(): UsePatternOverlaysResult {
     const [avg7dPattern, setAvg7dPattern] = useState<HourlyAveragePattern | null>(null);
     const [avg30dPattern, setAvg30dPattern] = useState<HourlyAveragePattern | null>(null);
 
-    // Track whether a fetch has been attempted to prevent infinite retries on error
+    // Track whether a fetch has been attempted to prevent infinite retries on error.
+    // Reset when the overlay is toggled off so toggling off/on acts as a manual retry.
     const fetchedRef = useRef({ avg7d: false, avg30d: false });
 
+    // Reset fetch tracking when overlays are toggled off
+    useEffect(() => {
+        if (!showAvg7d) {
+            fetchedRef.current.avg7d = false;
+            setAvg7dPattern(null);
+        }
+    }, [showAvg7d]);
+
+    useEffect(() => {
+        if (!showAvg30d) {
+            fetchedRef.current.avg30d = false;
+            setAvg30dPattern(null);
+        }
+    }, [showAvg30d]);
+
+    // Fetch pattern data when overlay is enabled
     useEffect(() => {
         if (showAvg7d && !avg7dPattern && !fetchedRef.current.avg7d) {
             fetchedRef.current.avg7d = true;
