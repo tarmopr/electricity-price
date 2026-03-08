@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import {
   getDB,
   upsertPrices,
@@ -33,7 +33,6 @@ export async function POST(request: NextRequest) {
     const manualStart = searchParams.get("start");
     const manualEnd = searchParams.get("end");
 
-    const db = await getDB();
     const now = new Date();
 
     // Default end: 48h from now (covers tomorrow's prices + buffer for data published after ~01:00 EET)
@@ -59,8 +58,26 @@ export async function POST(request: NextRequest) {
           400
         );
       }
+
+      // Validate start is before end
+      if (start >= end) {
+        return errorResponse(
+          "Start date must be before end date",
+          400
+        );
+      }
+
+      // Validate max range: 2 years (730 days)
+      const maxRangeMs = 730 * 24 * 60 * 60 * 1000;
+      if (end.getTime() - start.getTime() > maxRangeMs) {
+        return errorResponse(
+          "Date range exceeds maximum of 2 years",
+          400
+        );
+      }
     } else {
       // Automatic mode: resume from latest timestamp in DB
+      const db = await getDB();
       const latest = await db
         .prepare("SELECT MAX(timestamp) as latest FROM prices")
         .first<{ latest: number | null }>();
@@ -82,12 +99,14 @@ export async function POST(request: NextRequest) {
     const prices = await fetchFromElering(start, end);
 
     if (prices.length === 0) {
-      return NextResponse.json({
-        success: true,
+      return successResponse({
         message: "No new prices to sync",
         synced: 0,
       });
     }
+
+    // Get DB connection for upsert and aggregation
+    const db = await getDB();
 
     // Upsert into D1
     await upsertPrices(db, prices);
@@ -99,8 +118,7 @@ export async function POST(request: NextRequest) {
     // Recompute all aggregates for the affected range
     await recomputeAllAggregates(db, minTimestamp, maxTimestamp + 900);
 
-    return NextResponse.json({
-      success: true,
+    return successResponse({
       message: `Synced ${prices.length} price points`,
       synced: prices.length,
       range: {
@@ -110,12 +128,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Sync error:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown sync error",
-      },
-      { status: 500 }
+    return errorResponse(
+      error instanceof Error ? error.message : "Unknown sync error",
+      500
     );
   }
 }
@@ -144,12 +159,9 @@ export async function GET() {
     });
   } catch (error) {
     console.error("Sync status error:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
+    return errorResponse(
+      error instanceof Error ? error.message : "Unknown error",
+      500
     );
   }
 }

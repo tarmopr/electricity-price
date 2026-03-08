@@ -8,6 +8,7 @@ import {
 } from "@/lib/costCalculator";
 import { CheapestWindow } from "@/lib/cheapestWindow";
 import { format } from "date-fns";
+import { PILL_BASE, pillClass } from "@/lib/styles";
 
 interface CostCalculatorProps {
   isOpen: boolean;
@@ -153,11 +154,7 @@ export default function CostCalculator({
                   key={p.label}
                   onClick={() => selectPreset(p.label, p.kWh, p.durationHours)}
                   aria-pressed={activePreset === p.label}
-                  className={`px-3 py-1.5 rounded-lg text-sm transition-all border ${
-                    activePreset === p.label
-                      ? "bg-emerald-400/20 text-emerald-300 border-emerald-400/50"
-                      : "bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800"
-                  }`}
+                  className={`${PILL_BASE} ${pillClass(activePreset === p.label)}`}
                 >
                   {p.label}
                   <span className="ml-1.5 text-zinc-500 text-xs">

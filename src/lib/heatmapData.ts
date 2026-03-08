@@ -5,8 +5,9 @@
  * calendar (day × hour) and pattern (weekday × hour) heatmaps.
  */
 
-import { ElectricityPrice, applyVat } from "@/lib/api";
-import { Period } from "@/components/Dashboard";
+import { ElectricityPrice } from "@/lib/api";
+import { applyVat } from "@/lib/price";
+import { Period } from "@/lib/types";
 import {
   startOfWeek,
   endOfWeek,

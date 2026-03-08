@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { AlertState } from "@/lib/priceAlerts";
 import { Bell, X } from "lucide-react";
 
@@ -8,7 +9,7 @@ interface PriceAlertBannerProps {
   onDismiss: () => void;
 }
 
-export default function PriceAlertBanner({
+function PriceAlertBanner({
   alert,
   onDismiss,
 }: PriceAlertBannerProps) {
@@ -40,3 +41,5 @@ export default function PriceAlertBanner({
     </div>
   );
 }
+
+export default React.memo(PriceAlertBanner);

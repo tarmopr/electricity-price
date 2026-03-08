@@ -6,13 +6,11 @@
  */
 
 import { NextResponse } from "next/server";
+import { CHUNK_SIZE_MS } from "@/lib/price";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 export const ELERING_API = "https://dashboard.elering.ee/api/nps/price";
-
-/** ~90 days in milliseconds, used for chunking large date ranges */
-const CHUNK_SIZE_MS = 90 * 24 * 60 * 60 * 1000;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

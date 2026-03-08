@@ -1,8 +1,11 @@
+'use client';
+
 import { useState, useRef, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
-import { Period } from './Dashboard';
+import { Period } from '@/lib/types';
 import { AlertConfig, AlertDirection } from '@/lib/priceAlerts';
 import { ChevronDown, ChevronUp, Settings2, Bell, Check } from 'lucide-react';
+import { PILL_BASE, PILL_ACTIVE, PILL_INACTIVE } from '@/lib/styles';
 
 /** Primary periods shown as always-visible pills */
 const PRIMARY_PERIODS: { value: Period; label: string }[] = [
@@ -123,9 +126,9 @@ export default function Controls({
     const isMoreActive = ALL_MORE_VALUES.has(period);
     const activeMoreLabel = MORE_PERIODS.find((p) => p.value === period)?.label;
 
-    const pillBase = 'px-3 py-1.5 rounded-lg text-sm transition-all border font-medium';
-    const pillActive = 'bg-emerald-400/20 text-emerald-300 border-emerald-400/50';
-    const pillInactive = 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800';
+    const pillBase = PILL_BASE;
+    const pillActive = PILL_ACTIVE;
+    const pillInactive = PILL_INACTIVE;
 
     // Secondary stat overlay items (shown in dropdown)
     const statMoreItems: StatToggleItem[] = [

@@ -1,4 +1,6 @@
-import { ElectricityPrice, applyVat } from "@/lib/api";
+import React from "react";
+import { ElectricityPrice } from "@/lib/api";
+import { applyVat } from "@/lib/price";
 import { ArrowDown, ArrowUp, Zap } from "lucide-react";
 import AnimatedPrice from "@/components/AnimatedPrice";
 
@@ -10,7 +12,7 @@ interface CurrentPriceCardProps {
     includeVat: boolean;
 }
 
-export default function CurrentPriceCard({ currentPrice, previousPrice, nextPrice, medianPrice, includeVat }: CurrentPriceCardProps) {
+function CurrentPriceCard({ currentPrice, previousPrice, nextPrice, medianPrice, includeVat }: CurrentPriceCardProps) {
     if (!currentPrice) {
         return (
             <div className="p-4 lg:p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800 animate-pulse h-full min-h-[120px] backdrop-blur-sm flex flex-col justify-center">
@@ -101,3 +103,5 @@ export default function CurrentPriceCard({ currentPrice, previousPrice, nextPric
         </div>
     );
 }
+
+export default React.memo(CurrentPriceCard);

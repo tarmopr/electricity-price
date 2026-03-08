@@ -1,15 +1,11 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { eurMwhToCentsKwh } from "@/lib/price";
+
+export { eurMwhToCentsKwh };
 
 export async function getDB(): Promise<D1Database> {
   const { env } = await getCloudflareContext({ async: true });
   return (env as { DB: D1Database }).DB;
-}
-
-/**
- * Convert €/MWh to ¢/kWh
- */
-export function eurMwhToCentsKwh(priceEurMwh: number): number {
-  return priceEurMwh / 10;
 }
 
 /**
