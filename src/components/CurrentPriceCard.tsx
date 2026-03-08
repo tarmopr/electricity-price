@@ -1,5 +1,6 @@
 import { ElectricityPrice, applyVat } from "@/lib/api";
 import { ArrowDown, ArrowUp, Zap } from "lucide-react";
+import AnimatedPrice from "@/components/AnimatedPrice";
 
 interface CurrentPriceCardProps {
     currentPrice: ElectricityPrice | null;
@@ -52,9 +53,10 @@ export default function CurrentPriceCard({ currentPrice, previousPrice, nextPric
                 {/* Main Price Area */}
                 <div className="flex flex-col space-y-1">
                     <div className="flex items-baseline space-x-2 lg:space-x-3">
-                        <div className="text-4xl lg:text-5xl font-bold tracking-tighter text-white">
-                            {priceValue.toFixed(2)}
-                        </div>
+                        <AnimatedPrice
+                            value={priceValue}
+                            className="text-4xl lg:text-5xl font-bold tracking-tighter text-white"
+                        />
                         <div className="text-base lg:text-lg font-medium text-zinc-500">
                             ¢/kWh
                         </div>
