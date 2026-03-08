@@ -66,7 +66,7 @@ describe("costCalculator", () => {
       expect(result).toHaveLength(4);
 
       const labels = result.map((e) => e.label);
-      expect(labels).toContain("Current Price");
+      expect(labels).toContain("Starting Now");
       expect(labels).toContain("Cheapest Window");
       expect(labels).toContain("Day Average");
       expect(labels).toContain("Peak Price");
@@ -75,7 +75,7 @@ describe("costCalculator", () => {
     it("computes correct cost values", () => {
       const result = buildEstimates(40, 10, 3, 8, 20);
 
-      const current = result.find((e) => e.label === "Current Price")!;
+      const current = result.find((e) => e.label === "Starting Now")!;
       expect(current.costEur).toBe(4); // 10 * 40 / 100
       expect(current.priceCentsKwh).toBe(10);
 
@@ -94,7 +94,7 @@ describe("costCalculator", () => {
       expect(result).toHaveLength(2);
 
       const labels = result.map((e) => e.label);
-      expect(labels).not.toContain("Current Price");
+      expect(labels).not.toContain("Starting Now");
       expect(labels).not.toContain("Day Average");
       expect(labels).toContain("Cheapest Window");
       expect(labels).toContain("Peak Price");

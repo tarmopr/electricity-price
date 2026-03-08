@@ -71,7 +71,7 @@ export default function CostCalculator({
       : null;
 
   // Calculate savings between current and cheapest
-  const currentEstimate = estimates.find((e) => e.label === "Current Price");
+  const currentEstimate = estimates.find((e) => e.label === "Starting Now");
   const cheapestEstimate = estimates.find((e) => e.label === "Cheapest Window");
   const savings =
     currentEstimate && cheapestEstimate

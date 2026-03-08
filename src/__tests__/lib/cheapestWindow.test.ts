@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   findCheapestWindow,
   getCheapestWindowHours,
+  computeWindowAverage,
   CheapestWindow,
 } from "@/lib/cheapestWindow";
 
@@ -214,6 +215,80 @@ describe("cheapestWindow", () => {
       expect(result).not.toBeNull();
       expect(result!.startIndex).toBe(1);
       expect(result!.averagePrice).toBe(-4); // (-3 + -5) / 2
+    });
+  });
+
+  describe("computeWindowAverage", () => {
+    it("returns null for empty prices", () => {
+      expect(computeWindowAverage([], 3, new Date())).toBeNull();
+    });
+
+    it("returns null for zero duration", () => {
+      const prices = makePrices(new Date("2024-06-15T00:00:00Z"), [5, 10, 3]);
+      expect(
+        computeWindowAverage(prices, 0, new Date("2024-06-15T00:00:00Z"))
+      ).toBeNull();
+    });
+
+    it("returns null when scanFrom is after all data", () => {
+      const prices = makePrices(new Date("2024-06-15T00:00:00Z"), [5, 10, 3]);
+      expect(
+        computeWindowAverage(prices, 2, new Date("2024-06-16T00:00:00Z"))
+      ).toBeNull();
+    });
+
+    it("computes average over a 3-hour window", () => {
+      const start = new Date("2024-06-15T00:00:00Z");
+      const prices = makePrices(start, [10, 8, 3, 2, 5, 12, 7]);
+      // Window from 00:00, 3 hours → prices 10, 8, 3
+      expect(computeWindowAverage(prices, 3, start)).toBeCloseTo(7);
+    });
+
+    it("computes average starting from mid-data", () => {
+      const start = new Date("2024-06-15T00:00:00Z");
+      const prices = makePrices(start, [10, 8, 3, 2, 5, 12, 7]);
+      const scanFrom = new Date("2024-06-15T03:00:00Z");
+      // Window from 03:00, 3 hours → prices 2, 5, 12
+      expect(computeWindowAverage(prices, 3, scanFrom)).toBeCloseTo(19 / 3);
+    });
+
+    it("averages available points when window extends beyond data", () => {
+      const start = new Date("2024-06-15T00:00:00Z");
+      const prices = makePrices(start, [10, 8, 3]);
+      // Window from 01:00, 5 hours → only 01, 02 have data → prices 8, 3
+      expect(
+        computeWindowAverage(prices, 5, new Date("2024-06-15T01:00:00Z"))
+      ).toBeCloseTo(5.5);
+    });
+
+    it("returns single price when window contains one point", () => {
+      const start = new Date("2024-06-15T00:00:00Z");
+      const prices = makePrices(start, [10, 8, 3]);
+      expect(
+        computeWindowAverage(prices, 1, new Date("2024-06-15T01:00:00Z"))
+      ).toBe(8);
+    });
+
+    it("handles negative prices", () => {
+      const start = new Date("2024-06-15T00:00:00Z");
+      const prices = makePrices(start, [-5, -3, 2]);
+      expect(computeWindowAverage(prices, 2, start)).toBe(-4);
+    });
+
+    it("returns null for negative duration", () => {
+      const prices = makePrices(new Date("2024-06-15T00:00:00Z"), [5, 10, 3]);
+      expect(
+        computeWindowAverage(prices, -2, new Date("2024-06-15T00:00:00Z"))
+      ).toBeNull();
+    });
+
+    it("returns different averages for different durations", () => {
+      const start = new Date("2024-06-15T00:00:00Z");
+      const prices = makePrices(start, [2, 4, 10, 20]);
+      // 2 hours → (2 + 4) / 2 = 3
+      expect(computeWindowAverage(prices, 2, start)).toBe(3);
+      // 4 hours → (2 + 4 + 10 + 20) / 4 = 9
+      expect(computeWindowAverage(prices, 4, start)).toBe(9);
     });
   });
 

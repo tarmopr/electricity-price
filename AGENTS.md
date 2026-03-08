@@ -32,7 +32,8 @@ Welcome to the `electricity-price` project. This file contains instructions and 
 2. **Components:** Use Server Components by default in App Router, and `'use client'` explicitly for interactive elements (charts, toggles).
 3. **Data Processing:** Handle timezone conversions (UTC to Europe/Tallinn) robustly using `date-fns` or native `Intl`.
 4. **Calculations:** Electricity prices should be displayed in cents/kWh (the API provides €/MWh). VAT (22%) toggle must be respected in all displayed price metrics and charts.
-5. **Database:** All aggregate tables above hourly level are computed from `hourly_averages` (not raw prices) to ensure equal hour weighting regardless of data granularity (15-min vs 1-hour).
+5. **Cost Calculator:** The "Starting Now" estimate uses the average price over the next `durationHours` from now (via `computeWindowAverage` in `cheapestWindow.ts`), not a single-hour spot price. Shared `costChartData`/`costScanFrom` useMemo in `Dashboard.tsx` prepares hourly data for both this and the cheapest window calculation.
+6. **Database:** All aggregate tables above hourly level are computed from `hourly_averages` (not raw prices) to ensure equal hour weighting regardless of data granularity (15-min vs 1-hour).
 
 ## Git Rules
 - Use conventional commits.

@@ -38,7 +38,7 @@ import PriceHeatmap from './PriceHeatmap';
 import ShareButton from './ShareButton';
 import { decodeParamsToState } from '@/lib/shareState';
 import { getHeatmapWeekRange } from '@/lib/heatmapData';
-import { findCheapestWindow } from '@/lib/cheapestWindow';
+import { findCheapestWindow, computeWindowAverage } from '@/lib/cheapestWindow';
 import { RefreshCw, BarChart3, Grid3X3, Info } from 'lucide-react';
 
 export type Period = 'yesterday' | 'today' | 'tomorrow' | 'this_week' | 'last_7_days' | 'next_7_days' | 'last_30_days' | 'custom';
@@ -309,30 +309,33 @@ export default function Dashboard() {
     // Cost Calculator open state (persisted) — controls cheapest window visibility
     const [costCalcOpen, setCostCalcOpen] = usePersistedState<boolean>('costCalcOpen', false);
 
-    // Compute cheapest window from cost calculator settings
-    const cheapestWindow = useMemo(() => {
-        if (costDurationHours <= 0 || prices.length === 0) return null;
-
-        // Always aggregate to 1-hour buckets before cheapest window calculation.
-        // Raw data may be in 15-minute intervals for today/tomorrow periods.
+    // Shared: prepare hourly chart data and scan start for cost calculator
+    const { costChartData, costScanFrom } = useMemo(() => {
+        if (prices.length === 0) return { costChartData: [] as { timestamp: string; displayPrice: number }[], costScanFrom: new Date() };
         const hourlyPrices = aggregatePrices(prices, 1);
-        const chartData = hourlyPrices.map(p => ({
+        const data = hourlyPrices.map(p => ({
             timestamp: p.timestamp,
             displayPrice: includeVat ? applyVat(p.priceCentsKwh) : p.priceCentsKwh,
         }));
-
-        // Determine scan start based on period
         let scanFrom: Date;
         if (period === 'tomorrow') {
             scanFrom = startOfTomorrow();
         } else {
-            // For today, this_week, and all other periods: start from now
             scanFrom = new Date();
             scanFrom.setMinutes(0, 0, 0);
         }
+        return { costChartData: data, costScanFrom: scanFrom };
+    }, [prices, includeVat, period]);
 
-        return findCheapestWindow(chartData, costDurationHours, costUntilHour, scanFrom);
-    }, [prices, costDurationHours, costUntilHour, includeVat, period]);
+    const cheapestWindow = useMemo(() => {
+        if (costDurationHours <= 0 || costChartData.length === 0) return null;
+        return findCheapestWindow(costChartData, costDurationHours, costUntilHour, costScanFrom);
+    }, [costChartData, costDurationHours, costUntilHour, costScanFrom]);
+
+    const currentWindowAvgPrice = useMemo(() => {
+        if (costDurationHours <= 0 || costChartData.length === 0) return null;
+        return computeWindowAverage(costChartData, costDurationHours, costScanFrom);
+    }, [costChartData, costDurationHours, costScanFrom]);
 
     // Show info banner when tomorrow is selected but official prices aren't published yet
     const allPredicted = useMemo(() => {
@@ -491,13 +494,7 @@ export default function Dashboard() {
             <CostCalculator
                 isOpen={costCalcOpen}
                 setIsOpen={setCostCalcOpen}
-                currentPrice={
-                    currentPrice
-                        ? includeVat
-                            ? applyVat(currentPrice.priceCentsKwh)
-                            : currentPrice.priceCentsKwh
-                        : null
-                }
+                currentPrice={currentWindowAvgPrice}
                 cheapestWindow={cheapestWindow}
                 meanPrice={stats?.mean ?? null}
                 maxPrice={stats?.max ?? null}

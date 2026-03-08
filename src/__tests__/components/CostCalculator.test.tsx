@@ -79,7 +79,7 @@ describe("CostCalculator", () => {
   it("shows all 4 estimate cards when open with full data", () => {
     render(<CostCalculator {...openProps} />);
 
-    expect(screen.getByText("Current Price")).toBeInTheDocument();
+    expect(screen.getByText("Starting Now")).toBeInTheDocument();
     expect(screen.getByText("Cheapest Window")).toBeInTheDocument();
     expect(screen.getByText("Day Average")).toBeInTheDocument();
     expect(screen.getByText("Peak Price")).toBeInTheDocument();

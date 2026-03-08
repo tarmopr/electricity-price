@@ -135,6 +135,42 @@ export function findCheapestWindow(
 }
 
 /**
+ * Compute the average price over a time window starting from a given point.
+ *
+ * Works with any data granularity (15-min, hourly, etc.) — averages all data
+ * points whose timestamps fall within [scanFrom, scanFrom + durationHours).
+ *
+ * @param prices - Array of price points with timestamp and displayPrice
+ * @param durationHours - Length of the window in hours
+ * @param scanFrom - Start of the window (typically "now" rounded to the hour)
+ * @returns Average displayPrice of points in the window, or null if none found
+ */
+export function computeWindowAverage(
+  prices: PricePoint[],
+  durationHours: number,
+  scanFrom: Date
+): number | null {
+  if (prices.length === 0 || durationHours <= 0) return null;
+
+  const startMs = scanFrom.getTime();
+  const endMs = startMs + durationHours * 60 * 60 * 1000;
+
+  let sum = 0;
+  let count = 0;
+
+  for (const p of prices) {
+    const t = new Date(p.timestamp).getTime();
+    if (t >= endMs) break;
+    if (t >= startMs) {
+      sum += p.displayPrice;
+      count++;
+    }
+  }
+
+  return count > 0 ? sum / count : null;
+}
+
+/**
  * Get the set of "YYYY-MM-DD:HH" keys covered by a cheapest window.
  * Uses Europe/Tallinn timezone for consistency with heatmap cells.
  *

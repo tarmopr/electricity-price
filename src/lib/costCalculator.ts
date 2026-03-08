@@ -53,7 +53,7 @@ export function buildEstimates(
 
   if (currentPrice !== null) {
     estimates.push({
-      label: "Current Price",
+      label: "Starting Now",
       priceCentsKwh: currentPrice,
       costEur: calcCostEur(currentPrice, consumptionKwh),
     });
