@@ -1,8 +1,11 @@
+'use client';
+
 import { useState, useRef, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
-import { Period } from './Dashboard';
+import { Period } from '@/lib/types';
 import { AlertConfig, AlertDirection } from '@/lib/priceAlerts';
 import { ChevronDown, ChevronUp, Settings2, Bell, Check } from 'lucide-react';
+import { PILL_BASE, PILL_ACTIVE, PILL_INACTIVE } from '@/lib/styles';
 
 /** Primary periods shown as always-visible pills */
 const PRIMARY_PERIODS: { value: Period; label: string }[] = [
@@ -123,10 +126,6 @@ export default function Controls({
     const isMoreActive = ALL_MORE_VALUES.has(period);
     const activeMoreLabel = MORE_PERIODS.find((p) => p.value === period)?.label;
 
-    const pillBase = 'px-3 py-1.5 rounded-lg text-sm transition-all border font-medium';
-    const pillActive = 'bg-emerald-400/20 text-emerald-300 border-emerald-400/50';
-    const pillInactive = 'bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800';
-
     // Secondary stat overlay items (shown in dropdown)
     const statMoreItems: StatToggleItem[] = [
         { key: 'p75', label: '75th Pctl', dotColor: 'bg-purple-400', get: () => showP75, set: () => setShowP75(!showP75) },
@@ -171,7 +170,7 @@ export default function Controls({
                                     key={p.value}
                                     onClick={() => setPeriod(p.value)}
                                     aria-pressed={period === p.value}
-                                    className={`${pillBase} ${period === p.value ? pillActive : pillInactive}`}
+                                    className={`${PILL_BASE} ${period === p.value ? PILL_ACTIVE : PILL_INACTIVE}`}
                                 >
                                     {p.label}
                                 </button>
@@ -183,7 +182,7 @@ export default function Controls({
                                     onClick={() => setMoreOpen(!moreOpen)}
                                     aria-expanded={moreOpen}
                                     aria-haspopup="menu"
-                                    className={`${pillBase} flex items-center gap-1 ${isMoreActive ? pillActive : pillInactive}`}
+                                    className={`${PILL_BASE} flex items-center gap-1 ${isMoreActive ? PILL_ACTIVE : PILL_INACTIVE}`}
                                 >
                                     {isMoreActive ? activeMoreLabel : 'More'}
                                     <ChevronDown className={`w-3.5 h-3.5 transition-transform ${moreOpen ? 'rotate-180' : ''}`} />
@@ -309,7 +308,7 @@ export default function Controls({
                                     onClick={() => setStatMoreOpen(!statMoreOpen)}
                                     aria-expanded={statMoreOpen}
                                     aria-haspopup="true"
-                                    className={`${pillBase} flex items-center gap-1 ${statMoreActiveCount > 0 ? 'bg-zinc-700/60 text-zinc-200 border-zinc-600' : pillInactive}`}
+                                    className={`${PILL_BASE} flex items-center gap-1 ${statMoreActiveCount > 0 ? 'bg-zinc-700/60 text-zinc-200 border-zinc-600' : PILL_INACTIVE}`}
                                 >
                                     More{statMoreActiveCount > 0 && (
                                         <span className="ml-0.5 text-[10px] bg-zinc-500/40 text-zinc-300 px-1.5 py-0.5 rounded-full leading-none">

@@ -15,6 +15,11 @@
 - Conventional Commits: `type(scope): description` — imperative mood.
 - Types: `feat`, `fix`, `chore`, `refactor`, `test`, `docs`, `ci`, `style`, `perf`
 
+## Code Comments
+
+- Preserve comments that describe **intent** or **business logic** (the *why*, not the *what*).
+- Do not remove or rewrite these during refactors — they capture original reasoning that is hard to reconstruct.
+
 ## Key Rules
 
 - Prices: Elering API returns EUR/MWh → display as cents/kWh. Respect VAT (22%) toggle.

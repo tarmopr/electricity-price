@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { animate, motion, useMotionValue, useTransform } from 'framer-motion';
 
 interface AnimatedPriceProps {
@@ -9,7 +9,7 @@ interface AnimatedPriceProps {
     className?: string;
 }
 
-export default function AnimatedPrice({ value, decimals = 2, className }: AnimatedPriceProps) {
+function AnimatedPrice({ value, decimals = 2, className }: AnimatedPriceProps) {
     const motionValue = useMotionValue(0);
     const displayed = useTransform(motionValue, (v) => v.toFixed(decimals));
 
@@ -23,3 +23,5 @@ export default function AnimatedPrice({ value, decimals = 2, className }: Animat
 
     return <motion.span className={className}>{displayed}</motion.span>;
 }
+
+export default React.memo(AnimatedPrice);

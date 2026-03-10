@@ -24,26 +24,17 @@ export interface CurrentPriceResponse {
     }[];
 }
 
+import { eurMwhToCentsKwh, applyVat, CHUNK_SIZE_MS } from "@/lib/price";
+
+// Re-export for backwards compatibility with existing consumers
+export { applyVat, eurMwhToCentsKwh };
+
+/** @deprecated Use `eurMwhToCentsKwh` from `@/lib/price` instead. */
+export const convertEurMwhToCentsKwh = eurMwhToCentsKwh;
+
 // Server-side API routes (proxy to Elering, no CORS issues)
 const PRICES_API = '/api/prices';
 const CURRENT_PRICE_API = '/api/prices/current';
-
-/**
- * Convert Eur/Mwh to Cents/Kwh
- * 1 Eur = 100 Cents
- * 1 Mwh = 1000 Kwh
- * Therefore, (Eur * 100) / 1000 = Cents/Kwh = Eur / 10
- */
-export function convertEurMwhToCentsKwh(price: number): number {
-    return price / 10;
-}
-
-/**
- * Applies VAT to a price if requested
- */
-export function applyVat(price: number, vatRate: number = 0.22): number {
-    return price * (1 + vatRate);
-}
 
 /**
  * Formats a given date to the API's required ISO string format (UTC)
@@ -61,7 +52,6 @@ function formatDateForApi(date: Date, isEnd: boolean = false): string {
  * into 3-month intervals to bypass the API's 1-year max limit.
  */
 export async function getPricesForDateRange(start: Date, end: Date): Promise<ElectricityPrice[]> {
-    const CHUNK_SIZE_MS = 90 * 24 * 60 * 60 * 1000; // ~90 days (approx 3 months)
     let currentStart = new Date(start);
     let allPrices: ElectricityPrice[] = [];
 
@@ -100,7 +90,7 @@ export async function getPricesForDateRange(start: Date, end: Date): Promise<Ele
                     timestamp: date.toISOString(),
                     date,
                     priceEurMwh: item.price,
-                    priceCentsKwh: convertEurMwhToCentsKwh(item.price)
+                    priceCentsKwh: eurMwhToCentsKwh(item.price)
                 };
             });
 
@@ -186,7 +176,7 @@ export function aggregatePrices(prices: ElectricityPrice[], intervalHours: numbe
                     timestamp: bucketDate.toISOString(),
                     date: bucketDate,
                     priceEurMwh: avgEurMwh,
-                    priceCentsKwh: convertEurMwhToCentsKwh(avgEurMwh),
+                    priceCentsKwh: eurMwhToCentsKwh(avgEurMwh),
                     isPredicted: bucketAllPredicted
                 });
             }
@@ -215,7 +205,7 @@ export function aggregatePrices(prices: ElectricityPrice[], intervalHours: numbe
             timestamp: bucketDate.toISOString(),
             date: bucketDate,
             priceEurMwh: avgEurMwh,
-            priceCentsKwh: convertEurMwhToCentsKwh(avgEurMwh),
+            priceCentsKwh: eurMwhToCentsKwh(avgEurMwh),
             isPredicted: bucketAllPredicted
         });
     }
@@ -292,7 +282,7 @@ function generatePredictedPrices(historicalData: ElectricityPrice[], targetEndDa
             timestamp: currentPredictionDate.toISOString(),
             date: new Date(currentPredictionDate),
             priceEurMwh: predictedEurMwh,
-            priceCentsKwh: convertEurMwhToCentsKwh(predictedEurMwh),
+            priceCentsKwh: eurMwhToCentsKwh(predictedEurMwh),
             isPredicted: true
         });
 
@@ -329,7 +319,7 @@ export async function getCurrentPrice(): Promise<ElectricityPrice | null> {
             timestamp: date.toISOString(),
             date,
             priceEurMwh: item.price,
-            priceCentsKwh: convertEurMwhToCentsKwh(item.price)
+            priceCentsKwh: eurMwhToCentsKwh(item.price)
         };
     } catch (error) {
         console.error('Error fetching current price:', error);

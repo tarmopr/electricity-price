@@ -1,33 +1,19 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
-    getPricesWithPrediction,
-    getHeatmapPricesWithPredictions,
-    getCurrentPrice,
     calculateStatistics,
     aggregatePrices,
-    applyVat,
-    getHourlyAveragePattern,
-    ElectricityPrice,
-    HourlyAveragePattern
 } from '@/lib/api';
+import { applyVat } from '@/lib/price';
 import { usePersistedState } from '@/lib/usePersistedState';
+import { useDashboardPrices } from '@/lib/useDashboardPrices';
+import { usePriceAlerts } from '@/lib/usePriceAlerts';
+import { usePatternOverlays } from '@/lib/usePatternOverlays';
 import {
-    AlertConfig,
-    AlertState,
-    DEFAULT_ALERT_CONFIG,
-    evaluateAlert,
-    requestNotificationPermission,
-    showAlertNotification,
-} from '@/lib/priceAlerts';
-import {
-    startOfYesterday, endOfYesterday,
     startOfToday, endOfToday,
-    startOfTomorrow, endOfTomorrow,
-    startOfWeek, endOfWeek,
-    subDays, subMonths, addDays,
-    format
+    startOfTomorrow,
+    format,
 } from 'date-fns';
 import PriceChart from './PriceChart';
 import CurrentPriceCard from './CurrentPriceCard';
@@ -37,24 +23,11 @@ import CostCalculator from './CostCalculator';
 import PriceHeatmap from './PriceHeatmap';
 import ShareButton from './ShareButton';
 import { decodeParamsToState } from '@/lib/shareState';
-import { getHeatmapWeekRange } from '@/lib/heatmapData';
 import { findCheapestWindow, computeWindowAverage } from '@/lib/cheapestWindow';
 import { RefreshCw, BarChart3, Grid3X3, Info } from 'lucide-react';
-
-export type Period = 'yesterday' | 'today' | 'tomorrow' | 'this_week' | 'last_7_days' | 'next_7_days' | 'last_30_days' | 'custom';
-export type ViewMode = 'chart' | 'heatmap';
+import type { Period, ViewMode } from '@/lib/types';
 
 export default function Dashboard() {
-    const [prices, setPrices] = useState<ElectricityPrice[]>([]);
-    const [_rawPrices, setRawPrices] = useState<ElectricityPrice[]>([]);
-    const [currentPrice, setCurrentPrice] = useState<ElectricityPrice | null>(null);
-    const [previousPrice, setPreviousPrice] = useState<ElectricityPrice | null>(null);
-    const [nextPrice, setNextPrice] = useState<ElectricityPrice | null>(null);
-    const [heatmapPrices, setHeatmapPrices] = useState<ElectricityPrice[]>([]);
-    const [highlightedDates, setHighlightedDates] = useState<string[] | undefined>();
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
     // User Settings (persisted to localStorage across sessions)
     const [includeVat, setIncludeVat] = usePersistedState<boolean>('includeVat', true);
     const [showNow, setShowNow] = usePersistedState<boolean>('showNow', true);
@@ -63,12 +36,6 @@ export default function Dashboard() {
     const [showP75, setShowP75] = usePersistedState<boolean>('showP75', false);
     const [showP90, setShowP90] = usePersistedState<boolean>('showP90', false);
     const [showP95, setShowP95] = usePersistedState<boolean>('showP95', false);
-    const [showAvg7d, setShowAvg7d] = usePersistedState<boolean>('showAvg7d', false);
-    const [showAvg30d, setShowAvg30d] = usePersistedState<boolean>('showAvg30d', false);
-
-    // Historical average patterns (fetched on demand)
-    const [avg7dPattern, setAvg7dPattern] = useState<HourlyAveragePattern | null>(null);
-    const [avg30dPattern, setAvg30dPattern] = useState<HourlyAveragePattern | null>(null);
 
     // Period Settings (persisted, except custom dates which reset daily)
     const [period, setPeriod] = usePersistedState<Period>('period', 'today');
@@ -83,13 +50,36 @@ export default function Dashboard() {
     const [costDurationHours, setCostDurationHours] = usePersistedState<number>('costDuration', 8);
     const [costUntilHour, setCostUntilHour] = usePersistedState<number | null>('costUntil', 22);
     const [costActivePreset, setCostActivePreset] = usePersistedState<string>('costPreset', 'EV Charge');
+    const [costCalcOpen, setCostCalcOpen] = usePersistedState<boolean>('costCalcOpen', false);
 
-    // Price Alert Settings (persisted)
-    const [alertConfig, setAlertConfig] = usePersistedState<AlertConfig>('alertConfig', DEFAULT_ALERT_CONFIG);
-    const [activeAlert, setActiveAlert] = useState<AlertState | null>(null);
-    const [alertDismissed, setAlertDismissed] = useState(false);
-    // Track last notified price to avoid repeated browser notifications
-    const lastNotifiedPriceRef = useRef<number | null>(null);
+    // --- Custom Hooks ---
+    const {
+        prices,
+        currentPrice,
+        previousPrice,
+        nextPrice,
+        heatmapPrices,
+        highlightedDates,
+        loading,
+        error,
+    } = useDashboardPrices(period, customStart, customEnd);
+
+    const {
+        alertConfig,
+        setAlertConfig,
+        activeAlert,
+        alertDismissed,
+        dismissAlert,
+    } = usePriceAlerts(currentPrice, includeVat);
+
+    const {
+        showAvg7d,
+        setShowAvg7d,
+        showAvg30d,
+        setShowAvg30d,
+        avg7dPattern,
+        avg30dPattern,
+    } = usePatternOverlays();
 
     // Restore state from URL params on mount (for shared links)
     useEffect(() => {
@@ -105,209 +95,10 @@ export default function Dashboard() {
 
         // Clean the URL params after restoring (don't pollute browser history)
         window.history.replaceState({}, '', window.location.pathname);
-    // eslint-disable-next-line
     }, []);
-
-    // Request notification permission when alerts are first enabled
-    const handleSetAlertConfig = useCallback((config: AlertConfig) => {
-        setAlertConfig(config);
-        if (config.enabled) {
-            requestNotificationPermission();
-        }
-        // Reset dismissed state when config changes so user sees new alerts
-        setAlertDismissed(false);
-    }, [setAlertConfig]);
-
-    // Evaluate alert whenever current price or alert config changes
-    useEffect(() => {
-        if (!currentPrice || !alertConfig.enabled) {
-            setActiveAlert(null);
-            return;
-        }
-
-        const price = includeVat
-            ? applyVat(currentPrice.priceCentsKwh)
-            : currentPrice.priceCentsKwh;
-
-        const alert = evaluateAlert(alertConfig, price);
-        setActiveAlert(alert);
-
-        // Send browser notification only once per price change
-        if (alert && lastNotifiedPriceRef.current !== currentPrice.priceCentsKwh) {
-            showAlertNotification(alert);
-            lastNotifiedPriceRef.current = currentPrice.priceCentsKwh;
-        }
-
-        if (!alert) {
-            // Reset dismissed flag when condition clears so next trigger shows
-            setAlertDismissed(false);
-            lastNotifiedPriceRef.current = null;
-        }
-    }, [currentPrice, alertConfig, includeVat]);
-
-    // Fetch hourly average patterns when toggles are enabled
-    useEffect(() => {
-        if (showAvg7d && !avg7dPattern) {
-            getHourlyAveragePattern(7).then(setAvg7dPattern).catch(() => {});
-        }
-        if (showAvg30d && !avg30dPattern) {
-            getHourlyAveragePattern(30).then(setAvg30dPattern).catch(() => {});
-        }
-    }, [showAvg7d, showAvg30d, avg7dPattern, avg30dPattern]);
-
-    useEffect(() => {
-        async function fetchData() {
-            try {
-                setLoading(true);
-                setError(null);
-
-                // Fetch data array
-                let start: Date, end: Date;
-
-                switch (period) {
-                    case 'yesterday':
-                        start = startOfYesterday();
-                        end = endOfYesterday();
-                        break;
-                    case 'today':
-                        start = startOfToday();
-                        end = endOfToday();
-                        break;
-                    case 'tomorrow':
-                        start = startOfTomorrow();
-                        end = endOfTomorrow();
-                        break;
-                    case 'this_week':
-                        start = startOfWeek(new Date(), { weekStartsOn: 1 });
-                        end = endOfWeek(new Date(), { weekStartsOn: 1 });
-                        break;
-                    case 'last_7_days':
-                        start = subDays(startOfToday(), 7);
-                        end = endOfToday();
-                        break;
-                    case 'next_7_days':
-                        start = startOfTomorrow();
-                        end = addDays(endOfTomorrow(), 6); // Tomorrow + 6 days = 7 days total
-                        break;
-                    case 'last_30_days':
-                        start = subMonths(startOfToday(), 1);
-                        end = endOfToday();
-                        break;
-                    case 'custom':
-                        start = customStart ? new Date(customStart) : startOfToday();
-                        end = customEnd ? new Date(customEnd) : endOfToday();
-                        start.setHours(0, 0, 0, 0);
-                        end.setHours(23, 59, 59, 999);
-                        if (start > end) {
-                            const temp = start;
-                            start = end;
-                            end = temp;
-                        }
-                        break;
-                    default:
-                        start = startOfToday();
-                        end = endOfToday();
-                }
-
-                const rawData = await getPricesWithPrediction(start, end);
-                setRawPrices(rawData);
-
-                // --- HEATMAP WEEK DATA ---
-                // For single-day periods and this_week, expand to full week with predictions
-                const weekRange = getHeatmapWeekRange(period, start, end);
-                if (weekRange) {
-                    const heatmapData = await getHeatmapPricesWithPredictions(
-                        weekRange.weekStart,
-                        weekRange.weekEnd
-                    );
-                    setHeatmapPrices(heatmapData);
-                    setHighlightedDates(weekRange.highlightedDates);
-                } else {
-                    setHeatmapPrices(rawData);
-                    setHighlightedDates(undefined);
-                }
-
-                // --- DATA AGGREGATION LOGIC ---
-                let data = rawData;
-                if (period === 'last_7_days' || period === 'this_week' || period === 'next_7_days') {
-                    // 1-hour intervals (average 4 points -> 1)
-                    data = aggregatePrices(rawData, 1);
-                } else if (period === 'last_30_days') {
-                    // 6-hour intervals (average 24 points -> 1)
-                    data = aggregatePrices(rawData, 6);
-                } else if (period === 'custom') {
-                    const daysDifference = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
-                    if (daysDifference > 90) {
-                        // 24-hour intervals for custom ranges longer than 3 months
-                        data = aggregatePrices(rawData, 24);
-                    } else if (daysDifference > 30) {
-                        data = aggregatePrices(rawData, 12);
-                    } else if (daysDifference > 7) {
-                        data = aggregatePrices(rawData, 6);
-                    } else if (daysDifference > 3) {
-                        data = aggregatePrices(rawData, 1);
-                    }
-                }
-
-                setPrices(data);
-
-                // Extract precise current price and previous
-                const current = await getCurrentPrice();
-                setCurrentPrice(current);
-
-                if (current) {
-                    // Try to find it in the already fetched dataset
-                    const currentIdx = data.findIndex(p => p.timestamp === current.timestamp);
-                    if (currentIdx > 0 && currentIdx < data.length - 1) {
-                        setPreviousPrice(data[currentIdx - 1]);
-                        setNextPrice(data[currentIdx + 1]);
-                    } else {
-                        // Current time isn't fully enclosed in the selected period, fetch just the surrounding hours
-                        const now = new Date();
-                        const ctxStart = new Date(now);
-                        ctxStart.setHours(now.getHours() - 2);
-                        const ctxEnd = new Date(now);
-                        ctxEnd.setHours(now.getHours() + 2);
-
-                        const contextData = await getPricesWithPrediction(ctxStart, ctxEnd);
-                        const ctxIdx = contextData.findIndex(p => p.timestamp === current.timestamp);
-
-                        if (ctxIdx > 0) {
-                            setPreviousPrice(contextData[ctxIdx - 1]);
-                        } else {
-                            setPreviousPrice(null);
-                        }
-
-                        if (ctxIdx !== -1 && ctxIdx < contextData.length - 1) {
-                            setNextPrice(contextData[ctxIdx + 1]);
-                        } else {
-                            setNextPrice(null);
-                        }
-                    }
-                }
-            } catch (err: unknown) {
-                if (err instanceof Error) {
-                    setError(err.message);
-                } else {
-                    setError('Failed to load electricity prices');
-                }
-            } finally {
-                setLoading(false);
-            }
-        }
-
-        fetchData();
-
-        // Refresh data every 15 minutes to ensure current hour is accurate
-        const interval = setInterval(fetchData, 15 * 60 * 1000);
-        return () => clearInterval(interval);
-    }, [period, customStart, customEnd]);
 
     // Calculate statistics only once when prices or VAT settings change
     const stats = calculateStatistics(prices, includeVat);
-
-    // Cost Calculator open state (persisted) — controls cheapest window visibility
-    const [costCalcOpen, setCostCalcOpen] = usePersistedState<boolean>('costCalcOpen', false);
 
     // Shared: prepare hourly chart data and scan start for cost calculator
     const { costChartData, costScanFrom } = useMemo(() => {
@@ -372,7 +163,7 @@ export default function Dashboard() {
             {activeAlert && !alertDismissed && (
                 <PriceAlertBanner
                     alert={activeAlert}
-                    onDismiss={() => setAlertDismissed(true)}
+                    onDismiss={dismissAlert}
                 />
             )}
 
@@ -414,7 +205,7 @@ export default function Dashboard() {
                         customEnd={customEnd}
                         setCustomEnd={setCustomEnd}
                         alertConfig={alertConfig}
-                        setAlertConfig={handleSetAlertConfig}
+                        setAlertConfig={setAlertConfig}
                     />
                 </div>
             </div>

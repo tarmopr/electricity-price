@@ -5,7 +5,7 @@
  * This enables sharing specific views via URL.
  */
 
-import { Period, ViewMode } from "@/components/Dashboard";
+import { Period, ViewMode } from "@/lib/types";
 
 export interface ShareableState {
   period: Period;

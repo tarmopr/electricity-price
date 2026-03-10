@@ -15,6 +15,7 @@ import {
 } from 'recharts';
 import { format, isSameHour } from 'date-fns';
 import { ElectricityPrice, HourlyAveragePattern } from '@/lib/api';
+import { applyVat } from '@/lib/price';
 import { CheapestWindow } from '@/lib/cheapestWindow';
 
 interface PriceChartProps {
@@ -104,7 +105,7 @@ export default function PriceChart({
 
     // Process data for the chart, including color coding for past vs future
     const chartData = data.map(item => {
-        const price = includeVat ? item.priceCentsKwh * 1.22 : item.priceCentsKwh;
+        const price = includeVat ? applyVat(item.priceCentsKwh) : item.priceCentsKwh;
         const hour = item.date.getHours();
 
         // Look up hourly average patterns for overlay lines
@@ -117,8 +118,8 @@ export default function PriceChart({
             // For visual distinction
             knownPrice: !item.isPredicted ? parseFloat(price.toFixed(2)) : null,
             predictedPrice: item.isPredicted ? parseFloat(price.toFixed(2)) : null,
-            avg7d: raw7d !== null ? parseFloat((includeVat ? raw7d * 1.22 : raw7d).toFixed(2)) : null,
-            avg30d: raw30d !== null ? parseFloat((includeVat ? raw30d * 1.22 : raw30d).toFixed(2)) : null,
+            avg7d: raw7d !== null ? parseFloat((includeVat ? applyVat(raw7d) : raw7d).toFixed(2)) : null,
+            avg30d: raw30d !== null ? parseFloat((includeVat ? applyVat(raw30d) : raw30d).toFixed(2)) : null,
         };
     });
 
@@ -216,69 +217,36 @@ export default function PriceChart({
         return null;
     };
 
-    // Custom Label for Reference Lines (Pill shape)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const CustomReferenceLabel = (props: any) => {
-        const { viewBox, value, fill } = props;
-        // The x value provided by recharts for 'insideTopLeft' on Y is usually the left edge (viewBox.x)
-        const x = viewBox.x + 10;
-        const y = viewBox.y - 12; // slightly above the line
+    // Custom pill-shaped label for reference lines (horizontal and vertical)
+    interface ReferenceLabelProps {
+        viewBox?: { x: number; y: number };
+        value?: string;
+        fill?: string;
+        orientation?: 'horizontal' | 'vertical';
+    }
 
-        // Handle opacity based on global hover state
+    const ChartReferenceLabel = ({ viewBox, value, fill, orientation = 'horizontal' }: ReferenceLabelProps) => {
+        if (!viewBox || !value || !fill) return null;
+
+        const x = viewBox.x + (orientation === 'horizontal' ? 10 : 8);
+        const y = orientation === 'horizontal'
+            ? viewBox.y - 12  // slightly above the line
+            : viewBox.y + 25; // below the line (avoids top edge cutoff)
+
         const opacity = isHovering ? 0.3 : 1;
 
         return (
             <g style={{ transition: 'opacity 0.3s ease-in-out', opacity }}>
-                {/* Background Pill */}
                 <rect
                     x={x - 6}
                     y={y - 14}
-                    width={value.length * 6.5 + 10} // Roughly approximate width
+                    width={value.length * 6.5 + 10}
                     height={20}
-                    fill="#18181b" // zinc-900
+                    fill="#18181b"
                     fillOpacity={0.8}
                     stroke={fill}
                     strokeOpacity={0.4}
-                    rx={10} // rounded pill
-                />
-                <text
-                    x={x}
-                    y={y}
-                    fill={fill}
-                    fontSize={10}
-                    fontWeight={600}
-                    opacity={0.9}
-                >
-                    {value}
-                </text>
-            </g>
-        );
-    };
-
-    // Custom Label for Vertical Reference Lines (Pill shape)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const CustomVerticalReferenceLabel = (props: any) => {
-        const { viewBox, value, fill } = props;
-        const x = viewBox.x + 8;
-        // Push y down significantly so it's not cut off by the top edge overflow bounds
-        const y = viewBox.y + 25;
-
-        // Handle opacity based on global hover state
-        const opacity = isHovering ? 0.3 : 1;
-
-        return (
-            <g style={{ transition: 'opacity 0.3s ease-in-out', opacity }}>
-                {/* Background Pill */}
-                <rect
-                    x={x - 6}
-                    y={y - 14}
-                    width={value.length * 6.5 + 10} // Roughly approximate width
-                    height={20}
-                    fill="#18181b" // zinc-900
-                    fillOpacity={0.8}
-                    stroke={fill}
-                    strokeOpacity={0.4}
-                    rx={10} // rounded pill
+                    rx={10}
                 />
                 <text
                     x={x}
@@ -419,16 +387,16 @@ export default function PriceChart({
                             strokeDasharray="3 3"
                             strokeOpacity={lineOpacity}
                             style={{ transition: 'opacity 0.3s' }}
-                            label={<CustomVerticalReferenceLabel value={`Now ${format(now, 'HH:mm')}`} fill="#38bdf8" />}
+                            label={<ChartReferenceLabel orientation="vertical" value={`Now ${format(now, 'HH:mm')}`} fill="#38bdf8" />}
                         />
                     )}
 
                     {/* Statistical Reference Lines */}
-                    {stats && showMean && <ReferenceLine y={stats.mean} stroke="#fde047" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<CustomReferenceLabel value={`Mean ${stats.mean.toFixed(2)} ¢`} fill="#fde047" />} />}
-                    {stats && showMedian && <ReferenceLine y={stats.median} stroke="#f43f5e" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<CustomReferenceLabel value={`Median ${stats.median.toFixed(2)} ¢`} fill="#f43f5e" />} />}
-                    {stats && showP75 && <ReferenceLine y={stats.p75} stroke="#a78bfa" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<CustomReferenceLabel value={`75th ${stats.p75.toFixed(2)} ¢`} fill="#a78bfa" />} />}
-                    {stats && showP90 && <ReferenceLine y={stats.p90} stroke="#f472b6" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<CustomReferenceLabel value={`90th ${stats.p90.toFixed(2)} ¢`} fill="#f472b6" />} />}
-                    {stats && showP95 && <ReferenceLine y={stats.p95} stroke="#fb923c" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<CustomReferenceLabel value={`95th ${stats.p95.toFixed(2)} ¢`} fill="#fb923c" />} />}
+                    {stats && showMean && <ReferenceLine y={stats.mean} stroke="#fde047" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`Mean ${stats.mean.toFixed(2)} ¢`} fill="#fde047" />} />}
+                    {stats && showMedian && <ReferenceLine y={stats.median} stroke="#f43f5e" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`Median ${stats.median.toFixed(2)} ¢`} fill="#f43f5e" />} />}
+                    {stats && showP75 && <ReferenceLine y={stats.p75} stroke="#a78bfa" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`75th ${stats.p75.toFixed(2)} ¢`} fill="#a78bfa" />} />}
+                    {stats && showP90 && <ReferenceLine y={stats.p90} stroke="#f472b6" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`90th ${stats.p90.toFixed(2)} ¢`} fill="#f472b6" />} />}
+                    {stats && showP95 && <ReferenceLine y={stats.p95} stroke="#fb923c" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`95th ${stats.p95.toFixed(2)} ¢`} fill="#fb923c" />} />}
 
                     <Area
                         type="monotone"
