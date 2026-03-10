@@ -472,7 +472,7 @@ describe("generateMissingSlotPredictions", () => {
       weekStart.toLocaleString("en-US", {
         timeZone: "Europe/Tallinn",
         hour: "2-digit",
-        hour12: false,
+        hourCycle: "h23",
       }),
       10
     );

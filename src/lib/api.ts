@@ -328,7 +328,7 @@ export function buildWeekdayHourAverages(
       local.toLocaleString("en-US", {
         timeZone: "Europe/Tallinn",
         hour: "2-digit",
-        hour12: false,
+        hourCycle: "h23",
       }),
       10
     );
@@ -369,7 +369,7 @@ export function generateMissingSlotPredictions(
       local.toLocaleString("en-US", {
         timeZone: "Europe/Tallinn",
         hour: "2-digit",
-        hour12: false,
+        hourCycle: "h23",
       }),
       10
     );
@@ -454,7 +454,7 @@ export async function getHeatmapPricesWithPredictions(
         local.toLocaleString("en-US", {
           timeZone: "Europe/Tallinn",
           hour: "2-digit",
-          hour12: false,
+          hourCycle: "h23",
         }),
         10
       );
