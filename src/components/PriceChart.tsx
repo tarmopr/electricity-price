@@ -6,6 +6,7 @@ import {
     AreaChart,
     CartesianGrid,
     Line,
+    ReferenceDot,
     ReferenceLine,
     ReferenceArea,
     ResponsiveContainer,
@@ -270,6 +271,48 @@ export default function PriceChart({
         );
     };
 
+    // Custom inline label for min/max price annotations on the data line
+    const MinMaxLabel = ({ viewBox, value, type }: { viewBox?: { x: number; y: number }; value?: string; type: 'min' | 'max' }) => {
+        if (!viewBox || !value) return null;
+        const isMax = type === 'max';
+        const color = isMax ? '#f59e0b' : '#22d3ee';
+        const bgColor = isMax ? '#451a03' : '#083344';
+        const label = `${isMax ? '▲' : '▼'} ${value}`;
+        // Position above for max, below for min
+        const yOffset = isMax ? -20 : 18;
+        const x = viewBox.x;
+        const y = viewBox.y + yOffset;
+        const textWidth = label.length * 6 + 14;
+
+        const opacity = isHovering ? 0.2 : 1;
+
+        return (
+            <g style={{ transition: 'opacity 0.3s ease-in-out', opacity }}>
+                <rect
+                    x={x - textWidth / 2}
+                    y={y - 11}
+                    width={textWidth}
+                    height={18}
+                    fill={bgColor}
+                    fillOpacity={0.9}
+                    stroke={color}
+                    strokeOpacity={0.5}
+                    rx={9}
+                />
+                <text
+                    x={x}
+                    y={y + 3}
+                    fill={color}
+                    fontSize={10}
+                    fontWeight={700}
+                    textAnchor="middle"
+                >
+                    {label}
+                </text>
+            </g>
+        );
+    };
+
     // Custom Cursor for Tooltip (Glowing Band)
     const CustomCursor = (props: { points?: Array<{ x: number }>; height?: number }) => {
         const { points, height } = props;
@@ -298,6 +341,19 @@ export default function PriceChart({
     const calculatedMin = chartData.length > 0
         ? Math.min(...chartData.map(d => d.displayPrice))
         : 0;
+
+    // Find min and max price points for inline annotations.
+    // Only consider known (non-predicted) prices to avoid annotating speculative values.
+    // When multiple points share the same extreme value, pick the first occurrence.
+    const knownChartData = chartData.filter(d => d.knownPrice !== null);
+    const minPoint = knownChartData.length > 0
+        ? knownChartData.reduce((min, d) => d.displayPrice < min.displayPrice ? d : min, knownChartData[0])
+        : null;
+    const maxPoint = knownChartData.length > 0
+        ? knownChartData.reduce((max, d) => d.displayPrice > max.displayPrice ? d : max, knownChartData[0])
+        : null;
+    // Only show annotations when there is a meaningful price range
+    const showMinMax = minPoint && maxPoint && minPoint.displayPrice !== maxPoint.displayPrice;
 
     return (
         <div className="w-full h-[300px] sm:h-[400px] mt-4 relative overflow-hidden" aria-label="Electricity price chart" role="img" style={{ WebkitTapHighlightColor: 'transparent' }}>
@@ -456,6 +512,30 @@ export default function PriceChart({
                             isAnimationActive={true}
                             name="30-Day Avg"
                             connectNulls={false}
+                        />
+                    )}
+
+                    {/* Min/Max Price Annotations */}
+                    {showMinMax && minPoint && (
+                        <ReferenceDot
+                            x={minPoint.timestamp}
+                            y={minPoint.displayPrice}
+                            r={4}
+                            fill="#22d3ee"
+                            stroke="#083344"
+                            strokeWidth={2}
+                            label={<MinMaxLabel type="min" value={`${minPoint.displayPrice} ¢`} />}
+                        />
+                    )}
+                    {showMinMax && maxPoint && (
+                        <ReferenceDot
+                            x={maxPoint.timestamp}
+                            y={maxPoint.displayPrice}
+                            r={4}
+                            fill="#f59e0b"
+                            stroke="#451a03"
+                            strokeWidth={2}
+                            label={<MinMaxLabel type="max" value={`${maxPoint.displayPrice} ¢`} />}
                         />
                     )}
                 </AreaChart>
