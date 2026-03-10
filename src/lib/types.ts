@@ -5,8 +5,22 @@
  * for type-safe API contracts.
  */
 
+/**
+ * Raw price row returned directly by API route handlers.
+ * `timestamp` is a Unix seconds integer (number), as returned by the Elering API and stored in D1.
+ * This differs from `ElectricityPrice` in `@/lib/api`, where `timestamp` is an ISO string
+ * (the client-side model after transformation).
+ */
+export interface RawPriceRow {
+  /** Unix epoch seconds (not milliseconds) */
+  timestamp: number;
+  /** Raw price in EUR/MWh */
+  price: number;
+}
+
 // --- Hourly averages endpoint ---
 export interface HourlyAverageRow {
+  /** Unix epoch seconds — same convention as RawPriceRow */
   timestamp: number;
   avg_price: number;
   min_price: number;
