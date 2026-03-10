@@ -29,9 +29,6 @@ import { eurMwhToCentsKwh, applyVat, CHUNK_SIZE_MS } from "@/lib/price";
 // Re-export for backwards compatibility with existing consumers
 export { applyVat, eurMwhToCentsKwh };
 
-/** @deprecated Use `eurMwhToCentsKwh` from `@/lib/price` instead. */
-export const convertEurMwhToCentsKwh = eurMwhToCentsKwh;
-
 // Server-side API routes (proxy to Elering, no CORS issues)
 const PRICES_API = '/api/prices';
 const CURRENT_PRICE_API = '/api/prices/current';
@@ -214,24 +211,6 @@ export function aggregatePrices(prices: ElectricityPrice[], intervalHours: numbe
 }
 
 /**
- * Utility to fetch data for the last 24 hours and the next 24 (or available) hours,
- * and predict missing future hours up to the end of tomorrow.
- */
-export async function getDashboardPrices(): Promise<ElectricityPrice[]> {
-    const now = new Date();
-
-    const start = new Date(now);
-    start.setHours(start.getHours() - 24);
-    start.setMinutes(0, 0, 0);
-
-    const end = new Date(now);
-    end.setDate(end.getDate() + 2);
-    end.setHours(23, 59, 59, 999);
-
-    return getPricesWithPrediction(start, end);
-}
-
-/**
  * Generate predicted prices for missing hours up to the target end date.
  * Uses a blended average of the same hour yesterday and the same hour 7 days ago.
  */
@@ -328,6 +307,113 @@ export async function getCurrentPrice(): Promise<ElectricityPrice | null> {
 }
 
 /**
+ * Groups historical price data by (weekday, hour) in Europe/Tallinn timezone,
+ * accumulating sum and count for computing 4-week averages.
+ *
+ * @returns Map keyed by `"weekday-hour"` (e.g. `"1-8"` = Monday at 08:00 Tallinn)
+ */
+export function buildWeekdayHourAverages(
+  historicalData: ElectricityPrice[]
+): Map<string, { sum: number; count: number }> {
+  // weekday: 0=Sun..6=Sat (JS standard)
+  const weekdayHourAvg = new Map<string, { sum: number; count: number }>();
+
+  for (const p of historicalData) {
+    const local = new Date(p.date);
+    const tallinnDate = local.toLocaleDateString("en-CA", {
+      timeZone: "Europe/Tallinn",
+    });
+    const tallinnDay = new Date(tallinnDate + "T12:00:00").getDay();
+    const hour = parseInt(
+      local.toLocaleString("en-US", {
+        timeZone: "Europe/Tallinn",
+        hour: "2-digit",
+        hourCycle: "h23",
+      }),
+      10
+    );
+    const key = `${tallinnDay}-${hour}`;
+
+    if (!weekdayHourAvg.has(key)) {
+      weekdayHourAvg.set(key, { sum: 0, count: 0 });
+    }
+    const bucket = weekdayHourAvg.get(key)!;
+    bucket.sum += p.priceCentsKwh;
+    bucket.count += 1;
+  }
+
+  return weekdayHourAvg;
+}
+
+/**
+ * Generates predicted ElectricityPrice entries for every hour slot within
+ * [weekStart, weekEnd] that is absent from `existingKeys`.
+ * Predictions use the 4-week average from `weekdayHourAvg`.
+ */
+export function generateMissingSlotPredictions(
+  weekStart: Date,
+  weekEnd: Date,
+  existingKeys: Set<string>,
+  weekdayHourAvg: Map<string, { sum: number; count: number }>,
+  weekData: ElectricityPrice[]
+): ElectricityPrice[] {
+  const predictedPrices: ElectricityPrice[] = [];
+  const current = new Date(weekStart);
+
+  while (current <= weekEnd) {
+    const local = new Date(current);
+    const dateStr = local.toLocaleDateString("en-CA", {
+      timeZone: "Europe/Tallinn",
+    });
+    const hour = parseInt(
+      local.toLocaleString("en-US", {
+        timeZone: "Europe/Tallinn",
+        hour: "2-digit",
+        hourCycle: "h23",
+      }),
+      10
+    );
+
+    const slotKey = `${dateStr}-${hour}`;
+
+    if (!existingKeys.has(slotKey)) {
+      // Check if we already have a predicted value from getPricesWithPrediction
+      const existingPredicted = weekData.find(
+        (p) =>
+          p.isPredicted &&
+          p.date.getTime() === current.getTime()
+      );
+
+      if (!existingPredicted) {
+        // Generate 4-week average prediction
+        const tallinnDate = local.toLocaleDateString("en-CA", {
+          timeZone: "Europe/Tallinn",
+        });
+        const tallinnDay = new Date(tallinnDate + "T12:00:00").getDay();
+        const wdKey = `${tallinnDay}-${hour}`;
+        const avg = weekdayHourAvg.get(wdKey);
+
+        if (avg && avg.count > 0) {
+          const avgPrice = avg.sum / avg.count;
+          predictedPrices.push({
+            timestamp: current.toISOString(),
+            date: new Date(current),
+            priceEurMwh: avgPrice * 10, // convert back from cents/kWh to EUR/MWh
+            priceCentsKwh: avgPrice,
+            isPredicted: true,
+          });
+        }
+      }
+    }
+
+    // Move to next hour
+    current.setHours(current.getHours() + 1);
+  }
+
+  return predictedPrices;
+}
+
+/**
  * Fetch prices for a heatmap week view, including 4-week historical predictions
  * for any missing date-hour slots within the week range.
  *
@@ -368,7 +454,7 @@ export async function getHeatmapPricesWithPredictions(
         local.toLocaleString("en-US", {
           timeZone: "Europe/Tallinn",
           hour: "2-digit",
-          hour12: false,
+          hourCycle: "h23",
         }),
         10
       );
@@ -376,90 +462,14 @@ export async function getHeatmapPricesWithPredictions(
     }
   }
 
-  // Group historical data by (weekday, hour) for 4-week average predictions
-  // weekday: 0=Sun..6=Sat (JS standard)
-  const weekdayHourAvg = new Map<
-    string,
-    { sum: number; count: number }
-  >();
-
-  for (const p of historicalData) {
-    const local = new Date(p.date);
-    const tallinnDate = local.toLocaleDateString("en-CA", {
-      timeZone: "Europe/Tallinn",
-    });
-    const tallinnDay = new Date(tallinnDate + "T12:00:00").getDay();
-    const hour = parseInt(
-      local.toLocaleString("en-US", {
-        timeZone: "Europe/Tallinn",
-        hour: "2-digit",
-        hour12: false,
-      }),
-      10
-    );
-    const key = `${tallinnDay}-${hour}`;
-
-    if (!weekdayHourAvg.has(key)) {
-      weekdayHourAvg.set(key, { sum: 0, count: 0 });
-    }
-    const bucket = weekdayHourAvg.get(key)!;
-    bucket.sum += p.priceCentsKwh;
-    bucket.count += 1;
-  }
-
-  // Generate predicted prices for missing hour slots in the week
-  const predictedPrices: ElectricityPrice[] = [];
-  const current = new Date(weekStart);
-
-  while (current <= weekEnd) {
-    const local = new Date(current);
-    const dateStr = local.toLocaleDateString("en-CA", {
-      timeZone: "Europe/Tallinn",
-    });
-    const hour = parseInt(
-      local.toLocaleString("en-US", {
-        timeZone: "Europe/Tallinn",
-        hour: "2-digit",
-        hour12: false,
-      }),
-      10
-    );
-
-    const slotKey = `${dateStr}-${hour}`;
-
-    if (!existingKeys.has(slotKey)) {
-      // Check if we already have a predicted value from getPricesWithPrediction
-      const existingPredicted = weekData.find(
-        (p) =>
-          p.isPredicted &&
-          p.date.getTime() === current.getTime()
-      );
-
-      if (!existingPredicted) {
-        // Generate 4-week average prediction
-        const tallinnDate = local.toLocaleDateString("en-CA", {
-          timeZone: "Europe/Tallinn",
-        });
-        const tallinnDay = new Date(tallinnDate + "T12:00:00").getDay();
-        const wdKey = `${tallinnDay}-${hour}`;
-        const avg = weekdayHourAvg.get(wdKey);
-
-        if (avg && avg.count > 0) {
-          const avgPrice = avg.sum / avg.count;
-          predictedPrices.push({
-            timestamp: current.toISOString(),
-            date: new Date(current),
-            priceEurMwh: avgPrice * 10, // convert back from cents/kWh to EUR/MWh
-            priceCentsKwh: avgPrice,
-            isPredicted: true,
-          });
-        }
-      }
-    }
-
-    // Move to next hour
-    current.setHours(current.getHours() + 1);
-  }
+  const weekdayHourAvg = buildWeekdayHourAverages(historicalData);
+  const predictedPrices = generateMissingSlotPredictions(
+    weekStart,
+    weekEnd,
+    existingKeys,
+    weekdayHourAvg,
+    weekData
+  );
 
   // Combine week data + new predictions, sort by date
   const combined = [...weekData, ...predictedPrices];

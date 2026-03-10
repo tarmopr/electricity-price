@@ -93,7 +93,7 @@ export function buildCalendarHeatmap(
       local.toLocaleString("en-US", {
         timeZone: "Europe/Tallinn",
         hour: "2-digit",
-        hour12: false,
+        hourCycle: "h23",
       }),
       10
     );
@@ -225,7 +225,7 @@ export function buildPatternHeatmap(
       local.toLocaleString("en-US", {
         timeZone: "Europe/Tallinn",
         hour: "2-digit",
-        hour12: false,
+        hourCycle: "h23",
       }),
       10
     );

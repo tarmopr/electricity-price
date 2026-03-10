@@ -20,7 +20,6 @@ import { Period } from '@/lib/types';
 
 interface UseDashboardPricesResult {
     prices: ElectricityPrice[];
-    rawPrices: ElectricityPrice[];
     currentPrice: ElectricityPrice | null;
     previousPrice: ElectricityPrice | null;
     nextPrice: ElectricityPrice | null;
@@ -30,13 +29,107 @@ interface UseDashboardPricesResult {
     error: string | null;
 }
 
+/**
+ * Maps a period + optional custom date strings to concrete start/end Date objects.
+ * For 'custom', if start > end they are swapped.
+ */
+export function getDateRangeForPeriod(
+    period: Period,
+    customStart: string,
+    customEnd: string,
+): { start: Date; end: Date } {
+    switch (period) {
+        case 'yesterday':
+            return { start: startOfYesterday(), end: endOfYesterday() };
+        case 'today':
+            return { start: startOfToday(), end: endOfToday() };
+        case 'tomorrow':
+            return { start: startOfTomorrow(), end: endOfTomorrow() };
+        case 'this_week':
+            return {
+                start: startOfWeek(new Date(), { weekStartsOn: 1 }),
+                end: endOfWeek(new Date(), { weekStartsOn: 1 }),
+            };
+        case 'last_7_days':
+            return { start: subDays(startOfToday(), 7), end: endOfToday() };
+        case 'next_7_days':
+            return { start: startOfTomorrow(), end: addDays(endOfTomorrow(), 6) };
+        case 'last_30_days':
+            return { start: subMonths(startOfToday(), 1), end: endOfToday() };
+        case 'custom': {
+            let start = customStart ? new Date(customStart) : startOfToday();
+            let end = customEnd ? new Date(customEnd) : endOfToday();
+            start.setHours(0, 0, 0, 0);
+            end.setHours(23, 59, 59, 999);
+            if (start > end) {
+                [start, end] = [end, start];
+            }
+            return { start, end };
+        }
+        default: {
+            const _exhaustive: never = period;
+            throw new Error(`Unhandled period: ${_exhaustive}`);
+        }
+    }
+}
+
+/**
+ * Returns the aggregation interval in hours for a given period and date range.
+ * Returns 0 to indicate no aggregation (keep original resolution).
+ */
+export function getAggregationHours(period: Period, start: Date, end: Date): number {
+    if (period === 'last_7_days' || period === 'this_week' || period === 'next_7_days') {
+        return 1;
+    }
+    if (period === 'last_30_days') {
+        return 6;
+    }
+    if (period === 'custom') {
+        const daysDifference = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+        if (daysDifference > 90) return 24;
+        if (daysDifference > 30) return 12;
+        if (daysDifference > 7) return 6;
+        if (daysDifference > 3) return 1;
+    }
+    return 0;
+}
+
+/**
+ * Finds the previous and next price relative to the current price in the given data.
+ * If the current price isn't found in the chart data, fetches a ±2h context window.
+ */
+async function fetchCurrentPriceContext(
+    current: ElectricityPrice,
+    data: ElectricityPrice[],
+): Promise<{ previous: ElectricityPrice | null; next: ElectricityPrice | null }> {
+    const currentIdx = data.findIndex(p => p.timestamp === current.timestamp);
+    if (currentIdx > 0 && currentIdx < data.length - 1) {
+        return { previous: data[currentIdx - 1], next: data[currentIdx + 1] };
+    }
+
+    const now = new Date();
+    const ctxStart = new Date(now);
+    ctxStart.setHours(now.getHours() - 2);
+    const ctxEnd = new Date(now);
+    ctxEnd.setHours(now.getHours() + 2);
+
+    const contextData = await getPricesWithPrediction(ctxStart, ctxEnd);
+    const ctxIdx = contextData.findIndex(p => p.timestamp === current.timestamp);
+
+    return {
+        previous: ctxIdx > 0 ? contextData[ctxIdx - 1] : null,
+        next: ctxIdx !== -1 && ctxIdx < contextData.length - 1
+            ? contextData[ctxIdx + 1]
+            : null,
+    };
+}
+
 export function useDashboardPrices(
     period: Period,
     customStart: string,
     customEnd: string,
 ): UseDashboardPricesResult {
     const [prices, setPrices] = useState<ElectricityPrice[]>([]);
-    const [rawPrices, setRawPrices] = useState<ElectricityPrice[]>([]);
     const [currentPrice, setCurrentPrice] = useState<ElectricityPrice | null>(null);
     const [previousPrice, setPreviousPrice] = useState<ElectricityPrice | null>(null);
     const [nextPrice, setNextPrice] = useState<ElectricityPrice | null>(null);
@@ -51,56 +144,9 @@ export function useDashboardPrices(
                 setLoading(true);
                 setError(null);
 
-                let start: Date, end: Date;
-
-                switch (period) {
-                    case 'yesterday':
-                        start = startOfYesterday();
-                        end = endOfYesterday();
-                        break;
-                    case 'today':
-                        start = startOfToday();
-                        end = endOfToday();
-                        break;
-                    case 'tomorrow':
-                        start = startOfTomorrow();
-                        end = endOfTomorrow();
-                        break;
-                    case 'this_week':
-                        start = startOfWeek(new Date(), { weekStartsOn: 1 });
-                        end = endOfWeek(new Date(), { weekStartsOn: 1 });
-                        break;
-                    case 'last_7_days':
-                        start = subDays(startOfToday(), 7);
-                        end = endOfToday();
-                        break;
-                    case 'next_7_days':
-                        start = startOfTomorrow();
-                        end = addDays(endOfTomorrow(), 6);
-                        break;
-                    case 'last_30_days':
-                        start = subMonths(startOfToday(), 1);
-                        end = endOfToday();
-                        break;
-                    case 'custom':
-                        start = customStart ? new Date(customStart) : startOfToday();
-                        end = customEnd ? new Date(customEnd) : endOfToday();
-                        start.setHours(0, 0, 0, 0);
-                        end.setHours(23, 59, 59, 999);
-                        if (start > end) {
-                            const temp = start;
-                            start = end;
-                            end = temp;
-                        }
-                        break;
-                    default: {
-                        const _exhaustive: never = period;
-                        throw new Error(`Unhandled period: ${_exhaustive}`);
-                    }
-                }
+                const { start, end } = getDateRangeForPeriod(period, customStart, customEnd);
 
                 const rawData = await getPricesWithPrediction(start, end);
-                setRawPrices(rawData);
 
                 // Heatmap week data
                 const weekRange = getHeatmapWeekRange(period, start, end);
@@ -117,23 +163,8 @@ export function useDashboardPrices(
                 }
 
                 // Data aggregation
-                let data = rawData;
-                if (period === 'last_7_days' || period === 'this_week' || period === 'next_7_days') {
-                    data = aggregatePrices(rawData, 1);
-                } else if (period === 'last_30_days') {
-                    data = aggregatePrices(rawData, 6);
-                } else if (period === 'custom') {
-                    const daysDifference = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
-                    if (daysDifference > 90) {
-                        data = aggregatePrices(rawData, 24);
-                    } else if (daysDifference > 30) {
-                        data = aggregatePrices(rawData, 12);
-                    } else if (daysDifference > 7) {
-                        data = aggregatePrices(rawData, 6);
-                    } else if (daysDifference > 3) {
-                        data = aggregatePrices(rawData, 1);
-                    }
-                }
+                const aggHours = getAggregationHours(period, start, end);
+                const data = aggHours > 0 ? aggregatePrices(rawData, aggHours) : rawData;
 
                 setPrices(data);
 
@@ -142,27 +173,9 @@ export function useDashboardPrices(
                 setCurrentPrice(current);
 
                 if (current) {
-                    const currentIdx = data.findIndex(p => p.timestamp === current.timestamp);
-                    if (currentIdx > 0 && currentIdx < data.length - 1) {
-                        setPreviousPrice(data[currentIdx - 1]);
-                        setNextPrice(data[currentIdx + 1]);
-                    } else {
-                        const now = new Date();
-                        const ctxStart = new Date(now);
-                        ctxStart.setHours(now.getHours() - 2);
-                        const ctxEnd = new Date(now);
-                        ctxEnd.setHours(now.getHours() + 2);
-
-                        const contextData = await getPricesWithPrediction(ctxStart, ctxEnd);
-                        const ctxIdx = contextData.findIndex(p => p.timestamp === current.timestamp);
-
-                        setPreviousPrice(ctxIdx > 0 ? contextData[ctxIdx - 1] : null);
-                        setNextPrice(
-                            ctxIdx !== -1 && ctxIdx < contextData.length - 1
-                                ? contextData[ctxIdx + 1]
-                                : null
-                        );
-                    }
+                    const { previous, next } = await fetchCurrentPriceContext(current, data);
+                    setPreviousPrice(previous);
+                    setNextPrice(next);
                 }
             } catch (err: unknown) {
                 if (err instanceof Error) {
@@ -184,7 +197,6 @@ export function useDashboardPrices(
 
     return {
         prices,
-        rawPrices,
         currentPrice,
         previousPrice,
         nextPrice,

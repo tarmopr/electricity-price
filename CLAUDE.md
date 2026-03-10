@@ -2,9 +2,10 @@
 
 ## Validation (required after every code change)
 
-1. `npm run build` — must pass.
-2. `npm test` — must pass. All new code needs tests.
-3. Run **review** agent on changed files. Max 3 iterations:
+1. `npm run lint` — must pass.
+2. `npm run build` — must pass.
+3. `npm test` — must pass. All new code needs tests.
+4. Run **review** agent on changed files. Max 3 iterations:
    - **Iter 1:** Fix all issues (critical, major, minor) → re-validate.
    - **Iter 2:** Only if iter 1 changed logic. Fix critical/major only → re-validate.
    - **Iter 3:** Hard stop. Report remaining issues with file paths, line numbers, severity. Let user decide.

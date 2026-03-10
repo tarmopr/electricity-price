@@ -1,56 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
-  convertEurMwhToCentsKwh,
-  applyVat,
+  eurMwhToCentsKwh,
   aggregatePrices,
   calculateStatistics,
   getPricesForDateRange,
   getCurrentPrice,
   getHourlyAveragePattern,
+  buildWeekdayHourAverages,
+  generateMissingSlotPredictions,
   ElectricityPrice,
 } from "@/lib/api";
-
-// ─── Pure function tests ────────────────────────────────────────────────────
-
-describe("convertEurMwhToCentsKwh", () => {
-  it("converts 100 EUR/MWh to 10 cents/kWh", () => {
-    expect(convertEurMwhToCentsKwh(100)).toBe(10);
-  });
-
-  it("converts 0 EUR/MWh to 0 cents/kWh", () => {
-    expect(convertEurMwhToCentsKwh(0)).toBe(0);
-  });
-
-  it("handles negative prices", () => {
-    expect(convertEurMwhToCentsKwh(-50)).toBe(-5);
-  });
-
-  it("handles decimal values", () => {
-    expect(convertEurMwhToCentsKwh(123.45)).toBeCloseTo(12.345);
-  });
-});
-
-describe("applyVat", () => {
-  it("applies default 22% VAT", () => {
-    expect(applyVat(100)).toBeCloseTo(122);
-  });
-
-  it("applies custom VAT rate", () => {
-    expect(applyVat(100, 0.1)).toBeCloseTo(110);
-  });
-
-  it("handles zero price", () => {
-    expect(applyVat(0)).toBe(0);
-  });
-
-  it("handles negative price", () => {
-    expect(applyVat(-10)).toBeCloseTo(-12.2);
-  });
-
-  it("handles zero VAT rate", () => {
-    expect(applyVat(100, 0)).toBe(100);
-  });
-});
 
 // ─── aggregatePrices tests ──────────────────────────────────────────────────
 
@@ -66,7 +25,7 @@ describe("aggregatePrices", () => {
       timestamp: date.toISOString(),
       date,
       priceEurMwh: eurMwh,
-      priceCentsKwh: convertEurMwhToCentsKwh(eurMwh),
+      priceCentsKwh: eurMwhToCentsKwh(eurMwh),
       isPredicted,
     };
   }
@@ -135,7 +94,7 @@ describe("calculateStatistics", () => {
       timestamp: "2025-01-01T00:00:00Z",
       date: new Date("2025-01-01T00:00:00Z"),
       priceEurMwh: eurMwh,
-      priceCentsKwh: convertEurMwhToCentsKwh(eurMwh),
+      priceCentsKwh: eurMwhToCentsKwh(eurMwh),
       isPredicted,
     };
   }
@@ -427,5 +386,155 @@ describe("getHourlyAveragePattern", () => {
 
     const pattern = await getHourlyAveragePattern(7);
     expect(pattern.size).toBe(0);
+  });
+});
+
+// ─── buildWeekdayHourAverages ───────────────────────────────────────────────
+
+describe("buildWeekdayHourAverages", () => {
+  function makePrice(tsIso: string, centsKwh: number): ElectricityPrice {
+    const date = new Date(tsIso);
+    return {
+      timestamp: tsIso,
+      date,
+      priceEurMwh: centsKwh * 10,
+      priceCentsKwh: centsKwh,
+    };
+  }
+
+  it("returns an empty map for empty input", () => {
+    const result = buildWeekdayHourAverages([]);
+    expect(result.size).toBe(0);
+  });
+
+  it("accumulates a single price into the correct key", () => {
+    // 2024-01-01 07:00 UTC = 09:00 Tallinn (UTC+2 in winter) → Monday hour 9
+    // Jan 1 2024 is a Monday → getDay() = 1
+    const prices = [makePrice("2024-01-01T07:00:00.000Z", 5)];
+    const result = buildWeekdayHourAverages(prices);
+
+    // Key: "1-9" (weekday 1 = Monday, hour 9 local Tallinn)
+    const bucket = result.get("1-9");
+    expect(bucket).toBeDefined();
+    expect(bucket!.sum).toBe(5);
+    expect(bucket!.count).toBe(1);
+  });
+
+  it("accumulates multiple prices for the same weekday+hour", () => {
+    // Both times are Monday 07:00 UTC (= 09:00 Tallinn) but on different weeks
+    const prices = [
+      makePrice("2024-01-01T07:00:00.000Z", 4),
+      makePrice("2024-01-08T07:00:00.000Z", 6),
+    ];
+    const result = buildWeekdayHourAverages(prices);
+    const bucket = result.get("1-9");
+    expect(bucket!.sum).toBeCloseTo(10);
+    expect(bucket!.count).toBe(2);
+  });
+
+  it("creates separate keys for different weekday+hour combinations", () => {
+    // Monday 07:00 UTC and Tuesday 07:00 UTC
+    const prices = [
+      makePrice("2024-01-01T07:00:00.000Z", 5), // Mon 09:00 Tallinn
+      makePrice("2024-01-02T07:00:00.000Z", 8), // Tue 09:00 Tallinn
+    ];
+    const result = buildWeekdayHourAverages(prices);
+    expect(result.size).toBe(2);
+    expect(result.has("1-9")).toBe(true); // Monday
+    expect(result.has("2-9")).toBe(true); // Tuesday
+  });
+});
+
+// ─── generateMissingSlotPredictions ─────────────────────────────────────────
+
+describe("generateMissingSlotPredictions", () => {
+  it("returns empty array when weekdayHourAvg is empty (no historical data)", () => {
+    const weekStart = new Date("2024-01-15T22:00:00.000Z"); // Mon 00:00 Tallinn
+    const weekEnd = new Date("2024-01-15T23:00:00.000Z");
+    const result = generateMissingSlotPredictions(
+      weekStart, weekEnd,
+      new Set(),
+      new Map(),
+      []
+    );
+    expect(result).toHaveLength(0);
+  });
+
+  it("skips a slot that is already in existingKeys", () => {
+    // 2024-01-14T22:00:00.000Z = Mon Jan 15 00:00 Tallinn (UTC+2 EET); weekday 1 (Monday), hour 0
+    const weekStart = new Date("2024-01-14T22:00:00.000Z");
+    const weekEnd = new Date("2024-01-14T23:00:00.000Z");
+
+    // The slot key: date in en-CA format + hour (mirrors how the function builds slotKey)
+    const dateStr = weekStart
+      .toLocaleDateString("en-CA", { timeZone: "Europe/Tallinn" });
+    const hour = parseInt(
+      weekStart.toLocaleString("en-US", {
+        timeZone: "Europe/Tallinn",
+        hour: "2-digit",
+        hourCycle: "h23",
+      }),
+      10
+    );
+    const slotKey = `${dateStr}-${hour}`;
+
+    // Key "1-0" = Monday hour 0, matching the actual weekday of Jan 15 in Tallinn
+    const weekdayHourAvg = new Map([["1-0", { sum: 10, count: 1 }]]);
+
+    const result = generateMissingSlotPredictions(
+      weekStart, weekEnd,
+      new Set([slotKey]),
+      weekdayHourAvg,
+      []
+    );
+    expect(result).toHaveLength(0);
+  });
+
+  it("generates a predicted price with correct units when slot is missing", () => {
+    // 2024-01-07T22:00:00.000Z = Monday 00:00 Tallinn (2024-01-08T00:00)
+    const weekStart = new Date("2024-01-07T22:00:00.000Z");
+    const weekEnd = new Date("2024-01-07T22:00:00.000Z"); // same hour
+
+    // weekday for Jan 8 (Monday) in Tallinn = 1, hour 0
+    const weekdayHourAvg = new Map([["1-0", { sum: 8, count: 2 }]]); // avg = 4 cents/kWh
+
+    const result = generateMissingSlotPredictions(
+      weekStart, weekEnd,
+      new Set(), // nothing pre-existing
+      weekdayHourAvg,
+      []
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0].isPredicted).toBe(true);
+    expect(result[0].priceCentsKwh).toBeCloseTo(4); // 8 / 2
+    // EUR/MWh = cents/kWh * 10
+    expect(result[0].priceEurMwh).toBeCloseTo(40);
+  });
+
+  it("does not duplicate a slot already present as isPredicted in weekData", () => {
+    // 2024-01-07T22:00:00.000Z = Monday 00:00 Tallinn (2024-01-08T00:00)
+    const weekStart = new Date("2024-01-07T22:00:00.000Z");
+    const weekEnd = new Date("2024-01-07T22:00:00.000Z");
+
+    const weekdayHourAvg = new Map([["1-0", { sum: 8, count: 2 }]]);
+
+    const existingPredicted: ElectricityPrice = {
+      timestamp: weekStart.toISOString(),
+      date: new Date(weekStart),
+      priceEurMwh: 30,
+      priceCentsKwh: 3,
+      isPredicted: true,
+    };
+
+    const result = generateMissingSlotPredictions(
+      weekStart, weekEnd,
+      new Set(),
+      weekdayHourAvg,
+      [existingPredicted]
+    );
+
+    // The slot is not in existingKeys but has an existing predicted entry — should be skipped
+    expect(result).toHaveLength(0);
   });
 });
