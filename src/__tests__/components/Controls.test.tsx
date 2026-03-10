@@ -61,10 +61,9 @@ describe("Controls", () => {
         render(<Controls {...defaultProps} />);
         // Find the VAT toggle button
         const vatButton = screen.getByText(/vat/i).closest("button");
-        if (vatButton) {
-            fireEvent.click(vatButton);
-            expect(defaultProps.setIncludeVat).toHaveBeenCalled();
-        }
+        expect(vatButton).toBeTruthy();
+        fireEvent.click(vatButton!);
+        expect(defaultProps.setIncludeVat).toHaveBeenCalled();
     });
 
     it("highlights the active period pill", () => {

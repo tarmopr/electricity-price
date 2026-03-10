@@ -341,4 +341,28 @@ describe("useDashboardPrices", () => {
         // Should load without throwing (dates are swapped internally)
         expect(result.current.error).toBeNull();
     });
+
+    it("returns null previousPrice when current is first in chart data (boundary case)", async () => {
+        // currentPrice is index 0 → fetchCurrentPriceContext falls back to a context window fetch
+        const contextPrices = [
+            makePrice("2024-06-15T10:00:00.000Z", 100), // index 0 = current
+            makePrice("2024-06-15T11:00:00.000Z", 110),
+            makePrice("2024-06-15T12:00:00.000Z", 120),
+        ];
+        // First call: main data load; second call: context window fetch inside fetchCurrentPriceContext
+        getPricesWithPrediction.mockResolvedValueOnce(contextPrices);
+        getPricesWithPrediction.mockResolvedValueOnce(contextPrices);
+        getCurrentPrice.mockResolvedValue(makePrice("2024-06-15T10:00:00.000Z", 100));
+
+        const { result } = renderHook(() =>
+            useDashboardPrices("today", "", "")
+        );
+
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        // Current is first in the context window too, so no previous exists
+        expect(result.current.previousPrice).toBeNull();
+        // Next price comes from the context window fetch (index 1)
+        expect(result.current.nextPrice?.priceEurMwh).toBe(110);
+    });
 });

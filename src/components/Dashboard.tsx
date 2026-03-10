@@ -15,7 +15,7 @@ import {
     startOfTomorrow,
     format,
 } from 'date-fns';
-import { PILL_BASE, pillClass } from '@/lib/styles';
+import { PILL_BASE, pillClass, PILL_INACTIVE } from '@/lib/styles';
 import PriceChart from './PriceChart';
 import CurrentPriceCard from './CurrentPriceCard';
 import Controls from './Controls';
@@ -237,7 +237,7 @@ export default function Dashboard() {
                         <button
                             onClick={() => setViewMode('heatmap')}
                             aria-pressed={viewMode === 'heatmap'}
-                            className={`flex items-center gap-1.5 ${PILL_BASE} ${pillClass(viewMode === 'heatmap')}`}
+                            className={`flex items-center gap-1.5 ${PILL_BASE} ${viewMode === 'heatmap' ? 'bg-indigo-400/20 text-indigo-300 border-indigo-400/50' : PILL_INACTIVE}`}
                         >
                             <Grid3X3 className="w-3.5 h-3.5" />
                             Heatmap

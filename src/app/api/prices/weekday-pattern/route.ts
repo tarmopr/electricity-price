@@ -12,15 +12,15 @@ export async function GET(request: NextRequest) {
   }
 
   const yearNum = parseInt(year, 10);
-  if (isNaN(yearNum)) {
+  if (isNaN(yearNum) || yearNum < 2000 || yearNum > 2100) {
     return errorResponse("Invalid year parameter", 400);
   }
 
   let monthNum: number | null = null;
   if (month) {
     monthNum = parseInt(month, 10);
-    if (isNaN(monthNum)) {
-      return errorResponse("Invalid month parameter", 400);
+    if (isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
+      return errorResponse("month must be between 1 and 12", 400);
     }
   }
 

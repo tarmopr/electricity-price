@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   }
 
   const yearNum = parseInt(year, 10);
-  if (isNaN(yearNum)) {
+  if (isNaN(yearNum) || yearNum < 2000 || yearNum > 2100) {
     return errorResponse("Invalid year parameter", 400);
   }
 
