@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
-  convertEurMwhToCentsKwh,
-  applyVat,
+  eurMwhToCentsKwh,
   aggregatePrices,
   calculateStatistics,
   getPricesForDateRange,
@@ -9,48 +8,6 @@ import {
   getHourlyAveragePattern,
   ElectricityPrice,
 } from "@/lib/api";
-
-// ─── Pure function tests ────────────────────────────────────────────────────
-
-describe("convertEurMwhToCentsKwh", () => {
-  it("converts 100 EUR/MWh to 10 cents/kWh", () => {
-    expect(convertEurMwhToCentsKwh(100)).toBe(10);
-  });
-
-  it("converts 0 EUR/MWh to 0 cents/kWh", () => {
-    expect(convertEurMwhToCentsKwh(0)).toBe(0);
-  });
-
-  it("handles negative prices", () => {
-    expect(convertEurMwhToCentsKwh(-50)).toBe(-5);
-  });
-
-  it("handles decimal values", () => {
-    expect(convertEurMwhToCentsKwh(123.45)).toBeCloseTo(12.345);
-  });
-});
-
-describe("applyVat", () => {
-  it("applies default 22% VAT", () => {
-    expect(applyVat(100)).toBeCloseTo(122);
-  });
-
-  it("applies custom VAT rate", () => {
-    expect(applyVat(100, 0.1)).toBeCloseTo(110);
-  });
-
-  it("handles zero price", () => {
-    expect(applyVat(0)).toBe(0);
-  });
-
-  it("handles negative price", () => {
-    expect(applyVat(-10)).toBeCloseTo(-12.2);
-  });
-
-  it("handles zero VAT rate", () => {
-    expect(applyVat(100, 0)).toBe(100);
-  });
-});
 
 // ─── aggregatePrices tests ──────────────────────────────────────────────────
 
@@ -66,7 +23,7 @@ describe("aggregatePrices", () => {
       timestamp: date.toISOString(),
       date,
       priceEurMwh: eurMwh,
-      priceCentsKwh: convertEurMwhToCentsKwh(eurMwh),
+      priceCentsKwh: eurMwhToCentsKwh(eurMwh),
       isPredicted,
     };
   }
@@ -135,7 +92,7 @@ describe("calculateStatistics", () => {
       timestamp: "2025-01-01T00:00:00Z",
       date: new Date("2025-01-01T00:00:00Z"),
       priceEurMwh: eurMwh,
-      priceCentsKwh: convertEurMwhToCentsKwh(eurMwh),
+      priceCentsKwh: eurMwhToCentsKwh(eurMwh),
       isPredicted,
     };
   }

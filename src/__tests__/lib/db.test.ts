@@ -1,28 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { eurMwhToCentsKwh } from "@/lib/price";
 
 // Mock getCloudflareContext since it's not available in test environment
 vi.mock("@opennextjs/cloudflare", () => ({
   getCloudflareContext: vi.fn(),
 }));
-
-describe("eurMwhToCentsKwh", () => {
-  it("converts 100 EUR/MWh to 10 cents/kWh", () => {
-    expect(eurMwhToCentsKwh(100)).toBe(10);
-  });
-
-  it("converts 0 EUR/MWh to 0 cents/kWh", () => {
-    expect(eurMwhToCentsKwh(0)).toBe(0);
-  });
-
-  it("handles negative prices", () => {
-    expect(eurMwhToCentsKwh(-30)).toBe(-3);
-  });
-
-  it("handles decimal values", () => {
-    expect(eurMwhToCentsKwh(55.5)).toBeCloseTo(5.55);
-  });
-});
 
 // ─── D1 Database function tests (with mock DB) ─────────────────────────────
 

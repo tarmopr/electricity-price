@@ -29,9 +29,6 @@ import { eurMwhToCentsKwh, applyVat, CHUNK_SIZE_MS } from "@/lib/price";
 // Re-export for backwards compatibility with existing consumers
 export { applyVat, eurMwhToCentsKwh };
 
-/** @deprecated Use `eurMwhToCentsKwh` from `@/lib/price` instead. */
-export const convertEurMwhToCentsKwh = eurMwhToCentsKwh;
-
 // Server-side API routes (proxy to Elering, no CORS issues)
 const PRICES_API = '/api/prices';
 const CURRENT_PRICE_API = '/api/prices/current';
@@ -214,24 +211,6 @@ export function aggregatePrices(prices: ElectricityPrice[], intervalHours: numbe
 }
 
 /**
- * Utility to fetch data for the last 24 hours and the next 24 (or available) hours,
- * and predict missing future hours up to the end of tomorrow.
- */
-export async function getDashboardPrices(): Promise<ElectricityPrice[]> {
-    const now = new Date();
-
-    const start = new Date(now);
-    start.setHours(start.getHours() - 24);
-    start.setMinutes(0, 0, 0);
-
-    const end = new Date(now);
-    end.setDate(end.getDate() + 2);
-    end.setHours(23, 59, 59, 999);
-
-    return getPricesWithPrediction(start, end);
-}
-
-/**
  * Generate predicted prices for missing hours up to the target end date.
  * Uses a blended average of the same hour yesterday and the same hour 7 days ago.
  */
@@ -328,60 +307,16 @@ export async function getCurrentPrice(): Promise<ElectricityPrice | null> {
 }
 
 /**
- * Fetch prices for a heatmap week view, including 4-week historical predictions
- * for any missing date-hour slots within the week range.
+ * Groups historical price data by (weekday, hour) in Europe/Tallinn timezone,
+ * accumulating sum and count for computing 4-week averages.
  *
- * This fetches the week range + 28 days of history, then fills in missing slots
- * with averaged prices from the same weekday+hour over the previous 4 weeks.
+ * @returns Map keyed by `"weekday-hour"` (e.g. `"1-8"` = Monday at 08:00 Tallinn)
  */
-export async function getHeatmapPricesWithPredictions(
-  weekStart: Date,
-  weekEnd: Date
-): Promise<ElectricityPrice[]> {
-  // Fetch 28 days before weekStart for prediction context + the week itself
-  const historyStart = new Date(weekStart);
-  historyStart.setDate(historyStart.getDate() - 28);
-
-  const allData = await getPricesWithPrediction(historyStart, weekEnd);
-
-  // Separate historical (before week) and week data
-  const weekStartMs = weekStart.getTime();
-  const weekEndMs = weekEnd.getTime();
-
-  const historicalData = allData.filter(
-    (p) => p.date.getTime() < weekStartMs && !p.isPredicted
-  );
-  const weekData = allData.filter(
-    (p) => p.date.getTime() >= weekStartMs && p.date.getTime() <= weekEndMs
-  );
-
-  // Build a set of existing (date-hour) keys within the week (non-predicted only)
-  const existingKeys = new Set<string>();
-  for (const p of weekData) {
-    if (!p.isPredicted) {
-      // Use Europe/Tallinn timezone for consistent date-hour keys
-      const local = new Date(p.date);
-      const dateStr = local.toLocaleDateString("en-CA", {
-        timeZone: "Europe/Tallinn",
-      });
-      const hour = parseInt(
-        local.toLocaleString("en-US", {
-          timeZone: "Europe/Tallinn",
-          hour: "2-digit",
-          hour12: false,
-        }),
-        10
-      );
-      existingKeys.add(`${dateStr}-${hour}`);
-    }
-  }
-
-  // Group historical data by (weekday, hour) for 4-week average predictions
+export function buildWeekdayHourAverages(
+  historicalData: ElectricityPrice[]
+): Map<string, { sum: number; count: number }> {
   // weekday: 0=Sun..6=Sat (JS standard)
-  const weekdayHourAvg = new Map<
-    string,
-    { sum: number; count: number }
-  >();
+  const weekdayHourAvg = new Map<string, { sum: number; count: number }>();
 
   for (const p of historicalData) {
     const local = new Date(p.date);
@@ -407,7 +342,21 @@ export async function getHeatmapPricesWithPredictions(
     bucket.count += 1;
   }
 
-  // Generate predicted prices for missing hour slots in the week
+  return weekdayHourAvg;
+}
+
+/**
+ * Generates predicted ElectricityPrice entries for every hour slot within
+ * [weekStart, weekEnd] that is absent from `existingKeys`.
+ * Predictions use the 4-week average from `weekdayHourAvg`.
+ */
+export function generateMissingSlotPredictions(
+  weekStart: Date,
+  weekEnd: Date,
+  existingKeys: Set<string>,
+  weekdayHourAvg: Map<string, { sum: number; count: number }>,
+  weekData: ElectricityPrice[]
+): ElectricityPrice[] {
   const predictedPrices: ElectricityPrice[] = [];
   const current = new Date(weekStart);
 
@@ -460,6 +409,67 @@ export async function getHeatmapPricesWithPredictions(
     // Move to next hour
     current.setHours(current.getHours() + 1);
   }
+
+  return predictedPrices;
+}
+
+/**
+ * Fetch prices for a heatmap week view, including 4-week historical predictions
+ * for any missing date-hour slots within the week range.
+ *
+ * This fetches the week range + 28 days of history, then fills in missing slots
+ * with averaged prices from the same weekday+hour over the previous 4 weeks.
+ */
+export async function getHeatmapPricesWithPredictions(
+  weekStart: Date,
+  weekEnd: Date
+): Promise<ElectricityPrice[]> {
+  // Fetch 28 days before weekStart for prediction context + the week itself
+  const historyStart = new Date(weekStart);
+  historyStart.setDate(historyStart.getDate() - 28);
+
+  const allData = await getPricesWithPrediction(historyStart, weekEnd);
+
+  // Separate historical (before week) and week data
+  const weekStartMs = weekStart.getTime();
+  const weekEndMs = weekEnd.getTime();
+
+  const historicalData = allData.filter(
+    (p) => p.date.getTime() < weekStartMs && !p.isPredicted
+  );
+  const weekData = allData.filter(
+    (p) => p.date.getTime() >= weekStartMs && p.date.getTime() <= weekEndMs
+  );
+
+  // Build a set of existing (date-hour) keys within the week (non-predicted only)
+  const existingKeys = new Set<string>();
+  for (const p of weekData) {
+    if (!p.isPredicted) {
+      // Use Europe/Tallinn timezone for consistent date-hour keys
+      const local = new Date(p.date);
+      const dateStr = local.toLocaleDateString("en-CA", {
+        timeZone: "Europe/Tallinn",
+      });
+      const hour = parseInt(
+        local.toLocaleString("en-US", {
+          timeZone: "Europe/Tallinn",
+          hour: "2-digit",
+          hour12: false,
+        }),
+        10
+      );
+      existingKeys.add(`${dateStr}-${hour}`);
+    }
+  }
+
+  const weekdayHourAvg = buildWeekdayHourAverages(historicalData);
+  const predictedPrices = generateMissingSlotPredictions(
+    weekStart,
+    weekEnd,
+    existingKeys,
+    weekdayHourAvg,
+    weekData
+  );
 
   // Combine week data + new predictions, sort by date
   const combined = [...weekData, ...predictedPrices];
