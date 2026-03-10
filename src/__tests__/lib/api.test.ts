@@ -461,11 +461,11 @@ describe("generateMissingSlotPredictions", () => {
   });
 
   it("skips a slot that is already in existingKeys", () => {
-    // weekStart is Mon 22:00 UTC = Mon 00:00 Tallinn (so date = 2024-01-15, hour = 0 local)
-    const weekStart = new Date("2024-01-14T22:00:00.000Z"); // Sun 00:00 Tallinn = Jan 15 Mon
+    // 2024-01-14T22:00:00.000Z = Mon Jan 15 00:00 Tallinn (UTC+2 EET); weekday 1 (Monday), hour 0
+    const weekStart = new Date("2024-01-14T22:00:00.000Z");
     const weekEnd = new Date("2024-01-14T23:00:00.000Z");
 
-    // The slot key: date in en-CA format + hour
+    // The slot key: date in en-CA format + hour (mirrors how the function builds slotKey)
     const dateStr = weekStart
       .toLocaleDateString("en-CA", { timeZone: "Europe/Tallinn" });
     const hour = parseInt(
@@ -478,7 +478,8 @@ describe("generateMissingSlotPredictions", () => {
     );
     const slotKey = `${dateStr}-${hour}`;
 
-    const weekdayHourAvg = new Map([["0-0", { sum: 10, count: 1 }]]); // dummy
+    // Key "1-0" = Monday hour 0, matching the actual weekday of Jan 15 in Tallinn
+    const weekdayHourAvg = new Map([["1-0", { sum: 10, count: 1 }]]);
 
     const result = generateMissingSlotPredictions(
       weekStart, weekEnd,

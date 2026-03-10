@@ -63,7 +63,8 @@ describe("Controls", () => {
         const vatButton = screen.getByText(/vat/i).closest("button");
         expect(vatButton).toBeTruthy();
         fireEvent.click(vatButton!);
-        expect(defaultProps.setIncludeVat).toHaveBeenCalled();
+        // includeVat starts false → clicking toggles to true
+        expect(defaultProps.setIncludeVat).toHaveBeenCalledWith(true);
     });
 
     it("highlights the active period pill", () => {
