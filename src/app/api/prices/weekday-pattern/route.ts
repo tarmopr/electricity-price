@@ -11,13 +11,26 @@ export async function GET(request: NextRequest) {
     return errorResponse("Missing required query parameter: year", 400);
   }
 
+  const yearNum = parseInt(year, 10);
+  if (isNaN(yearNum)) {
+    return errorResponse("Invalid year parameter", 400);
+  }
+
+  let monthNum: number | null = null;
+  if (month) {
+    monthNum = parseInt(month, 10);
+    if (isNaN(monthNum)) {
+      return errorResponse("Invalid month parameter", 400);
+    }
+  }
+
   try {
     const db = await getDB();
 
     // If month is provided, query for that specific month.
     // If not, return all months for the year (can be aggregated client-side for quarter/season).
     let results;
-    if (month) {
+    if (monthNum !== null) {
       results = await db
         .prepare(
           `SELECT year, month, weekday, hour, avg_price, sample_count
@@ -25,7 +38,7 @@ export async function GET(request: NextRequest) {
            WHERE year = ? AND month = ?
            ORDER BY weekday ASC, hour ASC`
         )
-        .bind(parseInt(year, 10), parseInt(month, 10))
+        .bind(yearNum, monthNum)
         .all();
     } else {
       results = await db
@@ -35,7 +48,7 @@ export async function GET(request: NextRequest) {
            WHERE year = ?
            ORDER BY month ASC, weekday ASC, hour ASC`
         )
-        .bind(parseInt(year, 10))
+        .bind(yearNum)
         .all();
     }
 

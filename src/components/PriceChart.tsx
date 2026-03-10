@@ -93,7 +93,7 @@ export default function PriceChart({
     }, [cheapestWindow, data]);
 
     if (!mounted) {
-        return <div className="w-full h-[400px] mt-4 relative bg-zinc-900/10 animate-pulse rounded-xl flex items-center justify-center text-zinc-600 border border-zinc-800/50">Loading chart...</div>;
+        return <div className="w-full h-[300px] sm:h-[400px] mt-4 relative bg-zinc-900/10 animate-pulse rounded-xl flex items-center justify-center text-zinc-600 border border-zinc-800/50">Loading chart...</div>;
     }
 
     if (!data || data.length === 0) return <div className="h-64 flex items-center justify-center text-zinc-500">No data available</div>;
@@ -174,8 +174,16 @@ export default function PriceChart({
         }
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; payload: any }>; label?: string | number }) => {
+    interface TooltipPayloadItem {
+        value: number;
+        payload: {
+            displayPrice: number;
+            isPredicted?: boolean;
+            timestamp: string;
+        };
+    }
+
+    const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: TooltipPayloadItem[]; label?: string | number }) => {
         if (active && payload && payload.length) {
             const date = new Date(label as string | number);
             const d = payload[0].payload;
@@ -263,8 +271,7 @@ export default function PriceChart({
     };
 
     // Custom Cursor for Tooltip (Glowing Band)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const CustomCursor = (props: any) => {
+    const CustomCursor = (props: { points?: Array<{ x: number }>; height?: number }) => {
         const { points, height } = props;
         if (!points || !points.length) return null;
 
@@ -293,7 +300,7 @@ export default function PriceChart({
         : 0;
 
     return (
-        <div className="w-full h-[400px] mt-4 relative overflow-hidden" aria-label="Electricity price chart" role="img" style={{ WebkitTapHighlightColor: 'transparent' }}>
+        <div className="w-full h-[300px] sm:h-[400px] mt-4 relative overflow-hidden" aria-label="Electricity price chart" role="img" style={{ WebkitTapHighlightColor: 'transparent' }}>
             <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} style={{ outline: 'none' }}>
                 <AreaChart
                     data={chartData}

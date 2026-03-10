@@ -10,6 +10,11 @@ export async function GET(request: NextRequest) {
     return errorResponse("Missing required query parameter: year", 400);
   }
 
+  const yearNum = parseInt(year, 10);
+  if (isNaN(yearNum)) {
+    return errorResponse("Invalid year parameter", 400);
+  }
+
   try {
     const db = await getDB();
     const results = await db
@@ -19,7 +24,7 @@ export async function GET(request: NextRequest) {
          WHERE year = ?
          ORDER BY week ASC`
       )
-      .bind(parseInt(year, 10))
+      .bind(yearNum)
       .all();
 
     return successResponse(results.results);
