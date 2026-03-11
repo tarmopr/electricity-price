@@ -73,7 +73,8 @@ vi.mock("framer-motion", () => {
                         : children)
             ),
         },
-        useMotionValue: () => ({ get: () => 0, set: vi.fn(), on: vi.fn() }),
+        useMotionValue: () => ({ get: () => 0, set: vi.fn(), jump: vi.fn(), on: vi.fn() }),
+        useMotionValueEvent: vi.fn(),
         useTransform: (_mv: unknown, fn: (v: number) => string) => ({ get: () => fn(0) }),
         animate: vi.fn(() => ({ stop: vi.fn() })),
     };
