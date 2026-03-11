@@ -114,7 +114,7 @@ describe("Dashboard", () => {
         expect(container.firstChild).toBeTruthy();
     });
 
-    it("renders loading spinner when loading and prices empty", () => {
+    it("renders skeleton loading state when loading and prices empty", () => {
         useDashboardPrices.mockReturnValueOnce({
             prices: [],
             currentPrice: null,
@@ -127,7 +127,7 @@ describe("Dashboard", () => {
         });
 
         render(<Dashboard />);
-        expect(screen.getByText(/loading market data/i)).toBeInTheDocument();
+        expect(screen.getByLabelText(/loading market data/i)).toBeInTheDocument();
     });
 
     it("renders error message when error is set", () => {
