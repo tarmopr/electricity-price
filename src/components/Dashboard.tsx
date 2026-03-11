@@ -19,13 +19,14 @@ import { PILL_BASE, pillClass, PILL_INACTIVE } from '@/lib/styles';
 import PriceChart from './PriceChart';
 import CurrentPriceCard from './CurrentPriceCard';
 import Controls from './Controls';
+import DashboardSkeleton from './DashboardSkeleton';
 import PriceAlertBanner from './PriceAlertBanner';
 import CostCalculator from './CostCalculator';
 import PriceHeatmap from './PriceHeatmap';
 import ShareButton from './ShareButton';
 import { decodeParamsToState } from '@/lib/shareState';
 import { findCheapestWindow, computeWindowAverage } from '@/lib/cheapestWindow';
-import { RefreshCw, BarChart3, Grid3X3, Info } from 'lucide-react';
+import { BarChart3, Grid3X3, Info } from 'lucide-react';
 import type { Period, ViewMode } from '@/lib/types';
 
 export default function Dashboard() {
@@ -134,13 +135,10 @@ export default function Dashboard() {
         return period === 'tomorrow' && prices.length > 0 && prices.every(p => p.isPredicted);
     }, [period, prices]);
 
+    // Show skeleton only on the very first load (prices.length === 0 guard prevents
+    // the skeleton from flashing back when switching periods with stale data still visible)
     if (loading && prices.length === 0) {
-        return (
-            <div className="flex flex-col items-center justify-center h-[60vh] text-zinc-400 space-y-4">
-                <RefreshCw className="w-8 h-8 animate-spin text-green-500" />
-                <p className="animate-pulse tracking-wide uppercase text-sm font-semibold">Loading Market Data...</p>
-            </div>
-        );
+        return <DashboardSkeleton />;
     }
 
     if (error) {
