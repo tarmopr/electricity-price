@@ -115,8 +115,10 @@ export default function PriceChart({
             bandInitialized.current = true;
             return;
         }
-        // Period change: delay to let the chart start rendering, then spring slowly
-        const springOpts = { type: 'spring', stiffness: 55, damping: 18, delay: 0.35 } as const;
+        // Period change: spring immediately so bands animate in sync with the Y-axis rescale.
+        // A delay would freeze bands at old values while the axis has already rescaled, making
+        // them appear to jump outside the visible range before animating back in.
+        const springOpts = { type: 'spring', stiffness: 55, damping: 18 } as const;
         const c1 = animate(motionMedian, stats.median, springOpts);
         const c2 = animate(motionP75, stats.p75, springOpts);
         return () => { c1.stop(); c2.stop(); };
@@ -387,9 +389,10 @@ export default function PriceChart({
     // Price zone background bands: compute boundaries
     const bandX1 = chartData.length > 0 ? chartData[0].timestamp : '';
     const bandX2 = chartData.length > 0 ? chartData[chartData.length - 1].timestamp : '';
-    const displayMax = chartData.length > 0 ? Math.max(...chartData.map(d => d.displayPrice)) : 0;
-    // Extend red band above the highest data point so it fills to the top of the chart
-    const bandTop = displayMax + Math.abs(displayMax - calculatedMin) * 0.5;
+    // A constant large enough to always sit above the chart top regardless of data values.
+    // Recharts clips it via ifOverflow="visible" + the container's CSS overflow-hidden.
+    // Using a constant avoids bandTop jumping when displayMax changes on period switch.
+    const bandTop = calculatedMin + 100;
 
     return (
         <div className="w-full h-[300px] sm:h-[400px] mt-4 relative overflow-hidden" aria-label="Electricity price chart" role="img" style={{ WebkitTapHighlightColor: 'transparent' }}>
