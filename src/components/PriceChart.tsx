@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useMotionValue, useSpring, useMotionValueEvent } from 'framer-motion';
 import {
     Area,
     AreaChart,
@@ -92,6 +93,21 @@ export default function PriceChart({
 
         return x1 && x2 ? { x1, x2 } : null;
     }, [cheapestWindow, data]);
+
+    // Spring-animate band boundary values for smooth transitions between periods.
+    // Hooks must be before early returns (Rules of Hooks).
+    const motionMedian = useMotionValue(stats?.median ?? 0);
+    const motionP75 = useMotionValue(stats?.p75 ?? 0);
+    const springMedian = useSpring(motionMedian, { stiffness: 120, damping: 20 });
+    const springP75 = useSpring(motionP75, { stiffness: 120, damping: 20 });
+    const [animatedMedian, setAnimatedMedian] = useState(stats?.median ?? 0);
+    const [animatedP75, setAnimatedP75] = useState(stats?.p75 ?? 0);
+    useMotionValueEvent(springMedian, 'change', setAnimatedMedian);
+    useMotionValueEvent(springP75, 'change', setAnimatedP75);
+    useEffect(() => {
+        motionMedian.set(stats?.median ?? 0);
+        motionP75.set(stats?.p75 ?? 0);
+    }, [stats?.median, stats?.p75, motionMedian, motionP75]);
 
     if (!mounted) {
         return <div className="w-full h-[300px] sm:h-[400px] mt-4 relative bg-zinc-900/10 animate-pulse rounded-xl flex items-center justify-center text-zinc-600 border border-zinc-800/50">Loading chart...</div>;
@@ -434,9 +450,9 @@ export default function PriceChart({
                     {/* Price Zone Background Bands: green (below median), yellow (median–P75), red (above P75) */}
                     {stats && (
                         <>
-                            <ReferenceArea x1={bandX1} x2={bandX2} y1={calculatedMin} y2={stats.median} fill="#22c55e" fillOpacity={0.07} strokeOpacity={0} ifOverflow="visible" />
-                            <ReferenceArea x1={bandX1} x2={bandX2} y1={stats.median} y2={stats.p75} fill="#eab308" fillOpacity={0.07} strokeOpacity={0} ifOverflow="visible" />
-                            <ReferenceArea x1={bandX1} x2={bandX2} y1={stats.p75} y2={bandTop} fill="#ef4444" fillOpacity={0.07} strokeOpacity={0} ifOverflow="visible" />
+                            <ReferenceArea x1={bandX1} x2={bandX2} y1={calculatedMin} y2={animatedMedian} fill="#22c55e" fillOpacity={0.07} strokeOpacity={0} ifOverflow="visible" />
+                            <ReferenceArea x1={bandX1} x2={bandX2} y1={animatedMedian} y2={animatedP75} fill="#eab308" fillOpacity={0.07} strokeOpacity={0} ifOverflow="visible" />
+                            <ReferenceArea x1={bandX1} x2={bandX2} y1={animatedP75} y2={bandTop} fill="#ef4444" fillOpacity={0.07} strokeOpacity={0} ifOverflow="visible" />
                         </>
                     )}
 

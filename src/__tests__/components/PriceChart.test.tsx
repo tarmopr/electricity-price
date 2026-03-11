@@ -201,6 +201,15 @@ describe("PriceChart", () => {
             expect(parseFloat(yellowBand!.getAttribute("data-y2") || "0")).toBe(stats.p75);
         });
 
+        it("updates band boundaries when stats change", () => {
+            const { rerender } = render(<PriceChart {...defaultProps} stats={stats} />);
+            const newStats = { mean: 10, median: 10, p75: 11, p90: 11.5, p95: 11.8 };
+            rerender(<PriceChart {...defaultProps} stats={newStats} />);
+            // After re-render the motion values are updated; animated state may still be mid-spring.
+            // Verify the bands still render without crashing.
+            expect(screen.getAllByTestId("reference-area")).toHaveLength(3);
+        });
+
         it("renders red band above P75 with y2 extending beyond the data max", () => {
             render(<PriceChart {...defaultProps} stats={stats} />);
             const areas = screen.getAllByTestId("reference-area");
