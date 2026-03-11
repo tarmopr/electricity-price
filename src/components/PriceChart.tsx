@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { useMotionValue, useSpring, useMotionValueEvent } from 'framer-motion';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useMotionValue, useMotionValueEvent, animate } from 'framer-motion';
 import {
     Area,
     AreaChart,
@@ -94,19 +94,32 @@ export default function PriceChart({
         return x1 && x2 ? { x1, x2 } : null;
     }, [cheapestWindow, data]);
 
-    // Spring-animate band boundary values for smooth transitions between periods.
+    // Animate band boundary values for smooth transitions between periods.
     // Hooks must be before early returns (Rules of Hooks).
+    //
+    // On first stats load: jump() directly to the correct value — no animation from 0.
+    // On subsequent period changes: delay then spring, matching the chart's own animation timing.
     const motionMedian = useMotionValue(stats?.median ?? 0);
     const motionP75 = useMotionValue(stats?.p75 ?? 0);
-    const springMedian = useSpring(motionMedian, { stiffness: 120, damping: 20 });
-    const springP75 = useSpring(motionP75, { stiffness: 120, damping: 20 });
     const [animatedMedian, setAnimatedMedian] = useState(stats?.median ?? 0);
     const [animatedP75, setAnimatedP75] = useState(stats?.p75 ?? 0);
-    useMotionValueEvent(springMedian, 'change', setAnimatedMedian);
-    useMotionValueEvent(springP75, 'change', setAnimatedP75);
+    const bandInitialized = useRef(false);
+    useMotionValueEvent(motionMedian, 'change', setAnimatedMedian);
+    useMotionValueEvent(motionP75, 'change', setAnimatedP75);
     useEffect(() => {
-        motionMedian.set(stats?.median ?? 0);
-        motionP75.set(stats?.p75 ?? 0);
+        if (!stats) return;
+        if (!bandInitialized.current) {
+            // First load: position bands immediately without any animation
+            motionMedian.jump(stats.median);
+            motionP75.jump(stats.p75);
+            bandInitialized.current = true;
+            return;
+        }
+        // Period change: delay to let the chart start rendering, then spring slowly
+        const springOpts = { type: 'spring', stiffness: 55, damping: 18, delay: 0.35 } as const;
+        const c1 = animate(motionMedian, stats.median, springOpts);
+        const c2 = animate(motionP75, stats.p75, springOpts);
+        return () => { c1.stop(); c2.stop(); };
     }, [stats?.median, stats?.p75, motionMedian, motionP75]);
 
     if (!mounted) {
