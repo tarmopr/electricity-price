@@ -6,9 +6,11 @@
  * and client-side (api.ts, components) code.
  */
 
-/** Convert EUR/MWh to cents/kWh: (EUR × 100) / 1000 = EUR / 10 */
+/** Convert EUR/MWh to cents/kWh: (EUR × 100) / 1000 = EUR / 10, rounded to 3 decimal places */
 export function eurMwhToCentsKwh(price: number): number {
-  return price / 10;
+  // Round to 3 decimal places to avoid IEEE 754 floating point errors
+  // e.g. 12.43 / 10 = 1.2429999999999999 without rounding
+  return Math.round((price / 10) * 1000) / 1000;
 }
 
 /** Apply VAT to a price. Default Estonian VAT rate is 22%. */
