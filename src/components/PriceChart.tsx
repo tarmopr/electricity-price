@@ -434,9 +434,9 @@ export default function PriceChart({
                     {/* Price Zone Background Bands: green (below median), yellow (median–P75), red (above P75) */}
                     {stats && (
                         <>
-                            <ReferenceArea x1={bandX1} x2={bandX2} y1={calculatedMin} y2={stats.median} fill="#22c55e" fillOpacity={0.07} strokeOpacity={0} />
-                            <ReferenceArea x1={bandX1} x2={bandX2} y1={stats.median} y2={stats.p75} fill="#eab308" fillOpacity={0.07} strokeOpacity={0} />
-                            <ReferenceArea x1={bandX1} x2={bandX2} y1={stats.p75} y2={bandTop} fill="#ef4444" fillOpacity={0.07} strokeOpacity={0} />
+                            <ReferenceArea x1={bandX1} x2={bandX2} y1={calculatedMin} y2={stats.median} fill="#22c55e" fillOpacity={0.07} strokeOpacity={0} ifOverflow="visible" />
+                            <ReferenceArea x1={bandX1} x2={bandX2} y1={stats.median} y2={stats.p75} fill="#eab308" fillOpacity={0.07} strokeOpacity={0} ifOverflow="visible" />
+                            <ReferenceArea x1={bandX1} x2={bandX2} y1={stats.p75} y2={bandTop} fill="#ef4444" fillOpacity={0.07} strokeOpacity={0} ifOverflow="visible" />
                         </>
                     )}
 

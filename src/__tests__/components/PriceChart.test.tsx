@@ -19,6 +19,7 @@ vi.mock("recharts", () => ({
             data-fill={props.fill as string}
             data-y1={props.y1 as number}
             data-y2={props.y2 as number}
+            data-overflow={props.ifOverflow as string}
         />
     ),
     Line: () => null,
@@ -200,12 +201,24 @@ describe("PriceChart", () => {
             expect(parseFloat(yellowBand!.getAttribute("data-y2") || "0")).toBe(stats.p75);
         });
 
-        it("renders red band above P75", () => {
+        it("renders red band above P75 with y2 extending beyond the data max", () => {
             render(<PriceChart {...defaultProps} stats={stats} />);
             const areas = screen.getAllByTestId("reference-area");
             const redBand = areas.find(a => a.getAttribute("data-fill") === "#ef4444");
             expect(redBand).toBeTruthy();
             expect(parseFloat(redBand!.getAttribute("data-y1") || "0")).toBe(stats.p75);
+            // bandTop must exceed the highest data price so the band fills to the chart top
+            expect(parseFloat(redBand!.getAttribute("data-y2") || "0")).toBeGreaterThan(
+                Math.max(...sampleData.map(d => d.priceCentsKwh))
+            );
+        });
+
+        it("uses ifOverflow=visible so bands are not discarded when boundaries exceed domain", () => {
+            render(<PriceChart {...defaultProps} stats={stats} />);
+            const areas = screen.getAllByTestId("reference-area");
+            areas.forEach(band => {
+                expect(band.getAttribute("data-overflow")).toBe("visible");
+            });
         });
     });
 });
