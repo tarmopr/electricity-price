@@ -15,7 +15,11 @@ describe("eurMwhToCentsKwh", () => {
   });
 
   it("handles decimal values", () => {
-    expect(eurMwhToCentsKwh(123.45)).toBeCloseTo(12.345);
+    expect(eurMwhToCentsKwh(123.45)).toBe(12.345);
+  });
+
+  it("returns exact 3-decimal result for values that cause floating point errors", () => {
+    expect(eurMwhToCentsKwh(12.43)).toBe(1.243);
   });
 });
 
