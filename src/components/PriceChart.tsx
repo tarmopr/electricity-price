@@ -355,6 +355,13 @@ export default function PriceChart({
     // Only show annotations when there is a meaningful price range
     const showMinMax = minPoint && maxPoint && minPoint.displayPrice !== maxPoint.displayPrice;
 
+    // Price zone background bands: compute boundaries
+    const bandX1 = chartData.length > 0 ? chartData[0].timestamp : '';
+    const bandX2 = chartData.length > 0 ? chartData[chartData.length - 1].timestamp : '';
+    const displayMax = chartData.length > 0 ? Math.max(...chartData.map(d => d.displayPrice)) : 0;
+    // Extend red band above the highest data point so it fills to the top of the chart
+    const bandTop = displayMax + Math.abs(displayMax - calculatedMin) * 0.5;
+
     return (
         <div className="w-full h-[300px] sm:h-[400px] mt-4 relative overflow-hidden" aria-label="Electricity price chart" role="img" style={{ WebkitTapHighlightColor: 'transparent' }}>
             <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} style={{ outline: 'none' }}>
@@ -423,6 +430,15 @@ export default function PriceChart({
                         isAnimationActive={true}
                         animationDuration={200}
                     />
+
+                    {/* Price Zone Background Bands: green (below median), yellow (median–P75), red (above P75) */}
+                    {stats && (
+                        <>
+                            <ReferenceArea x1={bandX1} x2={bandX2} y1={calculatedMin} y2={stats.median} fill="#22c55e" fillOpacity={0.07} strokeOpacity={0} />
+                            <ReferenceArea x1={bandX1} x2={bandX2} y1={stats.median} y2={stats.p75} fill="#eab308" fillOpacity={0.07} strokeOpacity={0} />
+                            <ReferenceArea x1={bandX1} x2={bandX2} y1={stats.p75} y2={bandTop} fill="#ef4444" fillOpacity={0.07} strokeOpacity={0} />
+                        </>
+                    )}
 
                     {/* Cheapest Window Reference Area */}
                     {cheapestWindow && cheapestRef && (

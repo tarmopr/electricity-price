@@ -13,7 +13,14 @@ vi.mock("recharts", () => ({
     Tooltip: () => null,
     ReferenceDot: (props: Record<string, unknown>) => <circle data-testid="reference-dot" data-x={props.x} data-y={props.y} />,
     ReferenceLine: () => null,
-    ReferenceArea: () => null,
+    ReferenceArea: (props: Record<string, unknown>) => (
+        <rect
+            data-testid="reference-area"
+            data-fill={props.fill as string}
+            data-y1={props.y1 as number}
+            data-y2={props.y2 as number}
+        />
+    ),
     Line: () => null,
     ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -159,6 +166,46 @@ describe("PriceChart", () => {
             const yValues = dots.map(d => parseFloat(d.getAttribute("data-y") || "0"));
             expect(yValues).toContain(-2); // -20 EUR/MWh = -2 cents/kWh
             expect(yValues).toContain(10); // 100 EUR/MWh = 10 cents/kWh
+        });
+    });
+
+    describe("price zone bands", () => {
+        const stats = { min: 8, max: 10, mean: 9, median: 9, p75: 9.5, p90: 9.8, p95: 9.9 };
+
+        it("renders three zone bands when stats are provided", () => {
+            render(<PriceChart {...defaultProps} stats={stats} />);
+            const areas = screen.getAllByTestId("reference-area");
+            expect(areas.length).toBeGreaterThanOrEqual(3);
+        });
+
+        it("does not render zone bands when stats are null", () => {
+            render(<PriceChart {...defaultProps} stats={null} />);
+            expect(screen.queryAllByTestId("reference-area")).toHaveLength(0);
+        });
+
+        it("renders green band below median", () => {
+            render(<PriceChart {...defaultProps} stats={stats} />);
+            const areas = screen.getAllByTestId("reference-area");
+            const greenBand = areas.find(a => a.getAttribute("data-fill") === "#22c55e");
+            expect(greenBand).toBeTruthy();
+            expect(parseFloat(greenBand!.getAttribute("data-y2") || "0")).toBe(stats.median);
+        });
+
+        it("renders yellow band between median and P75", () => {
+            render(<PriceChart {...defaultProps} stats={stats} />);
+            const areas = screen.getAllByTestId("reference-area");
+            const yellowBand = areas.find(a => a.getAttribute("data-fill") === "#eab308");
+            expect(yellowBand).toBeTruthy();
+            expect(parseFloat(yellowBand!.getAttribute("data-y1") || "0")).toBe(stats.median);
+            expect(parseFloat(yellowBand!.getAttribute("data-y2") || "0")).toBe(stats.p75);
+        });
+
+        it("renders red band above P75", () => {
+            render(<PriceChart {...defaultProps} stats={stats} />);
+            const areas = screen.getAllByTestId("reference-area");
+            const redBand = areas.find(a => a.getAttribute("data-fill") === "#ef4444");
+            expect(redBand).toBeTruthy();
+            expect(parseFloat(redBand!.getAttribute("data-y1") || "0")).toBe(stats.p75);
         });
     });
 });
