@@ -8,14 +8,11 @@ describe("DashboardSkeleton", () => {
         expect(container.firstChild).toBeTruthy();
     });
 
-    it("has aria-busy=true for screen readers", () => {
+    it("has aria-busy=true and accessible loading label for screen readers", () => {
         render(<DashboardSkeleton />);
-        expect(screen.getByRole("generic", { busy: true })).toBeInTheDocument();
-    });
-
-    it("has accessible loading label", () => {
-        render(<DashboardSkeleton />);
-        expect(screen.getByLabelText(/loading market data/i)).toBeInTheDocument();
+        const root = screen.getByLabelText(/loading market data/i);
+        expect(root).toBeInTheDocument();
+        expect(root).toHaveAttribute("aria-busy", "true");
     });
 
     it("applies animate-pulse class for shimmer effect", () => {
@@ -25,29 +22,37 @@ describe("DashboardSkeleton", () => {
 
     it("renders price card placeholder with glassmorphism styling", () => {
         const { container } = render(<DashboardSkeleton />);
-        // Price card area: rounded-2xl with backdrop-blur
+        // Price card area: rounded-2xl with backdrop-blur-sm (distinct from controls)
         const priceCard = container.querySelector(".backdrop-blur-sm");
         expect(priceCard).toBeTruthy();
     });
 
-    it("renders controls placeholder area", () => {
+    it("renders controls placeholder inside the lg:col-span-2 column", () => {
         const { container } = render(<DashboardSkeleton />);
-        // Controls area has backdrop-blur-2xl
-        const controlsArea = container.querySelector(".backdrop-blur-2xl");
-        expect(controlsArea).toBeTruthy();
+        // Controls are in the lg:col-span-2 column
+        const controlsCol = container.querySelector(".lg\\:col-span-2");
+        expect(controlsCol).toBeTruthy();
+        // The inner panel has backdrop-blur-2xl
+        expect(controlsCol!.querySelector(".backdrop-blur-2xl")).toBeTruthy();
     });
 
     it("renders chart area placeholder with faux bars", () => {
         const { container } = render(<DashboardSkeleton />);
-        // Chart placeholder has h-[300px] or h-[360px]
+        // Chart placeholder has h-[300px]
         const chartArea = container.querySelector(".h-\\[300px\\]");
         expect(chartArea).toBeTruthy();
     });
 
     it("renders the top grid layout (price card + controls)", () => {
         const { container } = render(<DashboardSkeleton />);
-        // top row grid
         const grid = container.querySelector(".grid.grid-cols-1.lg\\:grid-cols-3");
         expect(grid).toBeTruthy();
+    });
+
+    it("renders period and stat overlay pill placeholders", () => {
+        const { container } = render(<DashboardSkeleton />);
+        // At least 5 period pills + 4 stat pills + 2 VAT/alert pills = 11+ pill divs
+        const pills = container.querySelectorAll(".rounded-full.bg-zinc-800");
+        expect(pills.length).toBeGreaterThanOrEqual(11);
     });
 });

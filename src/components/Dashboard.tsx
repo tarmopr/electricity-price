@@ -135,6 +135,8 @@ export default function Dashboard() {
         return period === 'tomorrow' && prices.length > 0 && prices.every(p => p.isPredicted);
     }, [period, prices]);
 
+    // Show skeleton only on the very first load (prices.length === 0 guard prevents
+    // the skeleton from flashing back when switching periods with stale data still visible)
     if (loading && prices.length === 0) {
         return <DashboardSkeleton />;
     }
