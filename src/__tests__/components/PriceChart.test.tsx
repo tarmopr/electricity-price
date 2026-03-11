@@ -170,12 +170,12 @@ describe("PriceChart", () => {
     });
 
     describe("price zone bands", () => {
-        const stats = { min: 8, max: 10, mean: 9, median: 9, p75: 9.5, p90: 9.8, p95: 9.9 };
+        const stats = { mean: 9, median: 9, p75: 9.5, p90: 9.8, p95: 9.9 };
 
         it("renders three zone bands when stats are provided", () => {
             render(<PriceChart {...defaultProps} stats={stats} />);
             const areas = screen.getAllByTestId("reference-area");
-            expect(areas.length).toBeGreaterThanOrEqual(3);
+            expect(areas).toHaveLength(3);
         });
 
         it("does not render zone bands when stats are null", () => {
