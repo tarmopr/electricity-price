@@ -168,7 +168,7 @@ export async function recomputeWeekdayHourAverages(
            ELSE CAST(strftime('%w', timestamp, 'unixepoch') AS INTEGER) - 1
          END as weekday,
          CAST(strftime('%H', timestamp, 'unixepoch') AS INTEGER) as hour,
-         avg_price as avg_price,
+         AVG(avg_price) as avg_price,
          COUNT(*) as sample_count
        FROM hourly_averages
        WHERE timestamp >= ? AND timestamp < ?
