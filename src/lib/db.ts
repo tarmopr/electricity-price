@@ -66,6 +66,13 @@ export async function recomputeHourlyAverages(
  * Recompute daily averages for affected dates.
  * Uses hourly_averages as source to ensure equal hour weighting regardless
  * of whether raw data is 15-min or 1-hour granularity.
+ *
+ * The '+2 hours' offset converts UTC timestamps to EET (UTC+2) before
+ * extracting the calendar date, so prices near midnight are attributed to
+ * the correct Estonian local date. During EEST (UTC+3, roughly late March–
+ * late October) prices in the 21:00–21:59 UTC window are still one hour
+ * off; a dynamic DST offset would require application-level pre-processing
+ * since SQLite has no timezone support.
  */
 export async function recomputeDailyAverages(
   db: D1Database,
@@ -76,7 +83,7 @@ export async function recomputeDailyAverages(
     .prepare(
       `INSERT OR REPLACE INTO daily_averages (date, avg_price, min_price, max_price, data_points)
        SELECT
-         strftime('%Y-%m-%d', timestamp, 'unixepoch') as date_str,
+         strftime('%Y-%m-%d', timestamp, 'unixepoch', '+2 hours') as date_str,
          AVG(avg_price) as avg_price,
          MIN(min_price) as min_price,
          MAX(max_price) as max_price,
@@ -93,6 +100,7 @@ export async function recomputeDailyAverages(
  * Recompute weekly averages for affected weeks.
  * Uses hourly_averages as source to ensure equal hour weighting regardless
  * of whether raw data is 15-min or 1-hour granularity.
+ * See recomputeDailyAverages for the '+2 hours' EET offset rationale.
  */
 export async function recomputeWeeklyAverages(
   db: D1Database,
@@ -103,8 +111,8 @@ export async function recomputeWeeklyAverages(
     .prepare(
       `INSERT OR REPLACE INTO weekly_averages (year, week, avg_price, min_price, max_price, data_points)
        SELECT
-         CAST(strftime('%Y', timestamp, 'unixepoch') AS INTEGER) as year,
-         CAST(strftime('%W', timestamp, 'unixepoch') AS INTEGER) as week,
+         CAST(strftime('%Y', timestamp, 'unixepoch', '+2 hours') AS INTEGER) as year,
+         CAST(strftime('%W', timestamp, 'unixepoch', '+2 hours') AS INTEGER) as week,
          AVG(avg_price) as avg_price,
          MIN(min_price) as min_price,
          MAX(max_price) as max_price,
@@ -121,6 +129,7 @@ export async function recomputeWeeklyAverages(
  * Recompute monthly averages for affected months.
  * Uses hourly_averages as source to ensure equal hour weighting regardless
  * of whether raw data is 15-min or 1-hour granularity.
+ * See recomputeDailyAverages for the '+2 hours' EET offset rationale.
  */
 export async function recomputeMonthlyAverages(
   db: D1Database,
@@ -131,8 +140,8 @@ export async function recomputeMonthlyAverages(
     .prepare(
       `INSERT OR REPLACE INTO monthly_averages (year, month, avg_price, min_price, max_price, data_points)
        SELECT
-         CAST(strftime('%Y', timestamp, 'unixepoch') AS INTEGER) as year,
-         CAST(strftime('%m', timestamp, 'unixepoch') AS INTEGER) as month,
+         CAST(strftime('%Y', timestamp, 'unixepoch', '+2 hours') AS INTEGER) as year,
+         CAST(strftime('%m', timestamp, 'unixepoch', '+2 hours') AS INTEGER) as month,
          AVG(avg_price) as avg_price,
          MIN(min_price) as min_price,
          MAX(max_price) as max_price,
@@ -150,6 +159,7 @@ export async function recomputeMonthlyAverages(
  * Uses hourly_averages as source to ensure equal hour weighting regardless
  * of whether raw data is 15-min or 1-hour granularity.
  * Uses strftime('%w') which returns 0=Sunday, so we convert to ISO: 0=Monday.
+ * See recomputeDailyAverages for the '+2 hours' EET offset rationale.
  */
 export async function recomputeWeekdayHourAverages(
   db: D1Database,
@@ -160,14 +170,14 @@ export async function recomputeWeekdayHourAverages(
     .prepare(
       `INSERT OR REPLACE INTO weekday_hour_averages (year, month, weekday, hour, avg_price, sample_count)
        SELECT
-         CAST(strftime('%Y', timestamp, 'unixepoch') AS INTEGER) as year,
-         CAST(strftime('%m', timestamp, 'unixepoch') AS INTEGER) as month,
+         CAST(strftime('%Y', timestamp, 'unixepoch', '+2 hours') AS INTEGER) as year,
+         CAST(strftime('%m', timestamp, 'unixepoch', '+2 hours') AS INTEGER) as month,
          -- Convert from SQLite %w (0=Sunday) to ISO (0=Monday)
-         CASE CAST(strftime('%w', timestamp, 'unixepoch') AS INTEGER)
+         CASE CAST(strftime('%w', timestamp, 'unixepoch', '+2 hours') AS INTEGER)
            WHEN 0 THEN 6  -- Sunday -> 6
-           ELSE CAST(strftime('%w', timestamp, 'unixepoch') AS INTEGER) - 1
+           ELSE CAST(strftime('%w', timestamp, 'unixepoch', '+2 hours') AS INTEGER) - 1
          END as weekday,
-         CAST(strftime('%H', timestamp, 'unixepoch') AS INTEGER) as hour,
+         CAST(strftime('%H', timestamp, 'unixepoch', '+2 hours') AS INTEGER) as hour,
          AVG(avg_price) as avg_price,
          COUNT(*) as sample_count
        FROM hourly_averages
