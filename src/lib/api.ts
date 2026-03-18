@@ -25,6 +25,7 @@ export interface CurrentPriceResponse {
 }
 
 import { eurMwhToCentsKwh, applyVat, CHUNK_SIZE_MS } from "@/lib/price";
+import { getTallinnHour, getTallinnDateStr, getTallinnWeekday } from "@/lib/timezone";
 
 // Re-export for backwards compatibility with existing consumers
 export { applyVat, eurMwhToCentsKwh };
@@ -319,19 +320,8 @@ export function buildWeekdayHourAverages(
   const weekdayHourAvg = new Map<string, { sum: number; count: number }>();
 
   for (const p of historicalData) {
-    const local = new Date(p.date);
-    const tallinnDate = local.toLocaleDateString("en-CA", {
-      timeZone: "Europe/Tallinn",
-    });
-    const tallinnDay = new Date(tallinnDate + "T12:00:00").getDay();
-    const hour = parseInt(
-      local.toLocaleString("en-US", {
-        timeZone: "Europe/Tallinn",
-        hour: "2-digit",
-        hourCycle: "h23",
-      }),
-      10
-    );
+    const tallinnDay = getTallinnWeekday(p.date);
+    const hour = getTallinnHour(p.date);
     const key = `${tallinnDay}-${hour}`;
 
     if (!weekdayHourAvg.has(key)) {
@@ -361,19 +351,8 @@ export function generateMissingSlotPredictions(
   const current = new Date(weekStart);
 
   while (current <= weekEnd) {
-    const local = new Date(current);
-    const dateStr = local.toLocaleDateString("en-CA", {
-      timeZone: "Europe/Tallinn",
-    });
-    const hour = parseInt(
-      local.toLocaleString("en-US", {
-        timeZone: "Europe/Tallinn",
-        hour: "2-digit",
-        hourCycle: "h23",
-      }),
-      10
-    );
-
+    const dateStr = getTallinnDateStr(current);
+    const hour = getTallinnHour(current);
     const slotKey = `${dateStr}-${hour}`;
 
     if (!existingKeys.has(slotKey)) {
@@ -386,10 +365,7 @@ export function generateMissingSlotPredictions(
 
       if (!existingPredicted) {
         // Generate 4-week average prediction
-        const tallinnDate = local.toLocaleDateString("en-CA", {
-          timeZone: "Europe/Tallinn",
-        });
-        const tallinnDay = new Date(tallinnDate + "T12:00:00").getDay();
+        const tallinnDay = getTallinnWeekday(current);
         const wdKey = `${tallinnDay}-${hour}`;
         const avg = weekdayHourAvg.get(wdKey);
 
@@ -446,18 +422,8 @@ export async function getHeatmapPricesWithPredictions(
   for (const p of weekData) {
     if (!p.isPredicted) {
       // Use Europe/Tallinn timezone for consistent date-hour keys
-      const local = new Date(p.date);
-      const dateStr = local.toLocaleDateString("en-CA", {
-        timeZone: "Europe/Tallinn",
-      });
-      const hour = parseInt(
-        local.toLocaleString("en-US", {
-          timeZone: "Europe/Tallinn",
-          hour: "2-digit",
-          hourCycle: "h23",
-        }),
-        10
-      );
+      const dateStr = getTallinnDateStr(p.date);
+      const hour = getTallinnHour(p.date);
       existingKeys.add(`${dateStr}-${hour}`);
     }
   }
@@ -571,7 +537,7 @@ export async function getHourlyAveragePattern(days: number): Promise<HourlyAvera
 
     for (const p of hourlyPrices) {
         if (p.isPredicted) continue; // only use actual data
-        const hour = p.date.getHours();
+        const hour = getTallinnHour(p.date); // always group by Europe/Tallinn hour
         sums.set(hour, (sums.get(hour) ?? 0) + p.priceCentsKwh);
         counts.set(hour, (counts.get(hour) ?? 0) + 1);
     }

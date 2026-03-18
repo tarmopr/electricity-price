@@ -305,22 +305,25 @@ describe("getHourlyAveragePattern", () => {
   });
 
   it("returns a map with correct hourly averages for 2 days of data", async () => {
-    // Generate 2 days of hourly data using LOCAL timestamps so that
-    // date.getHours() returns the expected hour regardless of timezone.
+    // Generate 2 days of hourly data using UTC timestamps anchored to
+    // Europe/Tallinn midnight (EET = UTC+2 in January) so that
+    // getTallinnHour() returns the expected Tallinn hour regardless of
+    // the test runner's local timezone.
     const data: { timestamp: number; price: number }[] = [];
 
-    // Day 1 (Jan 8 local): hour 0 = 10 EUR/MWh, hour 1 = 20, etc.
-    const day1Base = new Date(2024, 0, 8); // midnight Jan 8 local
+    // Jan 8 Tallinn (EET): midnight Tallinn = 22:00 UTC Jan 7
+    // hour h (Tallinn) = "2024-01-07T22:00:00Z" + h * 3600s
+    const day1BaseUtcMs = new Date("2024-01-07T22:00:00Z").getTime();
     for (let h = 0; h < 24; h++) {
-      const ts = (day1Base.getTime() + h * 3600_000) / 1000;
-      data.push({ timestamp: ts, price: (h + 1) * 10 }); // 10, 20, 30, ... 240
+      const ts = (day1BaseUtcMs + h * 3600_000) / 1000;
+      data.push({ timestamp: ts, price: (h + 1) * 10 }); // Tallinn hour h: 10, 20, ... 240 EUR/MWh
     }
 
-    // Day 2 (Jan 9 local): hour 0 = 30 EUR/MWh, hour 1 = 40, etc.
-    const day2Base = new Date(2024, 0, 9); // midnight Jan 9 local
+    // Jan 9 Tallinn (EET): midnight Tallinn = 22:00 UTC Jan 8
+    const day2BaseUtcMs = new Date("2024-01-08T22:00:00Z").getTime();
     for (let h = 0; h < 24; h++) {
-      const ts = (day2Base.getTime() + h * 3600_000) / 1000;
-      data.push({ timestamp: ts, price: (h + 1) * 10 + 20 }); // 30, 40, 50, ... 260
+      const ts = (day2BaseUtcMs + h * 3600_000) / 1000;
+      data.push({ timestamp: ts, price: (h + 1) * 10 + 20 }); // Tallinn hour h: 30, 40, ... 260 EUR/MWh
     }
 
     const mockResponse = {
@@ -340,13 +343,13 @@ describe("getHourlyAveragePattern", () => {
 
     expect(pattern.size).toBe(24);
 
-    // Hour 0: day1 = 10 EUR/MWh (1 ¢/kWh), day2 = 30 EUR/MWh (3 ¢/kWh) → avg = 2 ¢/kWh
+    // Hour 0 (Tallinn): day1 = 10 EUR/MWh (1 ¢/kWh), day2 = 30 EUR/MWh (3 ¢/kWh) → avg = 2 ¢/kWh
     expect(pattern.get(0)).toBeCloseTo(2);
 
-    // Hour 1: day1 = 20 EUR/MWh (2 ¢/kWh), day2 = 40 EUR/MWh (4 ¢/kWh) → avg = 3 ¢/kWh
+    // Hour 1 (Tallinn): day1 = 20 EUR/MWh (2 ¢/kWh), day2 = 40 EUR/MWh (4 ¢/kWh) → avg = 3 ¢/kWh
     expect(pattern.get(1)).toBeCloseTo(3);
 
-    // Hour 23: day1 = 240 EUR/MWh (24 ¢/kWh), day2 = 260 EUR/MWh (26 ¢/kWh) → avg = 25 ¢/kWh
+    // Hour 23 (Tallinn): day1 = 240 EUR/MWh (24 ¢/kWh), day2 = 260 EUR/MWh (26 ¢/kWh) → avg = 25 ¢/kWh
     expect(pattern.get(23)).toBeCloseTo(25);
   });
 
