@@ -221,19 +221,18 @@ function generatePredictedPrices(historicalData: ElectricityPrice[], targetEndDa
     const lastActualDataPoint = historicalData[historicalData.length - 1];
     const predictedPrices: ElectricityPrice[] = [];
 
-    // Start predicting from the hour after the last actual data point
-    const currentPredictionDate = new Date(lastActualDataPoint.date);
-    currentPredictionDate.setHours(currentPredictionDate.getHours() + 1);
+    // Start predicting from the hour after the last actual data point.
+    // Use UTC millisecond arithmetic to avoid DST-related hour skips/duplicates.
+    const currentPredictionDate = new Date(lastActualDataPoint.date.getTime() + 3_600_000);
 
     while (currentPredictionDate < targetEndDate) {
-        // Find same hour yesterday
-        const yesterdayDate = new Date(currentPredictionDate);
-        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+        // Find same hour yesterday — subtract exactly 24 UTC hours so that
+        // the lookup matches the hourly-aligned UTC timestamps in historicalData.
+        const yesterdayDate = new Date(currentPredictionDate.getTime() - 86_400_000);
         const yesterdayData = historicalData.find(d => d.date.getTime() === yesterdayDate.getTime());
 
         // Find same hour 7 days ago
-        const lastWeekDate = new Date(currentPredictionDate);
-        lastWeekDate.setDate(lastWeekDate.getDate() - 7);
+        const lastWeekDate = new Date(currentPredictionDate.getTime() - 7 * 86_400_000);
         const lastWeekData = historicalData.find(d => d.date.getTime() === lastWeekDate.getTime());
 
         // Calculate predicted price (average of yesterday and last week, if available)
@@ -266,8 +265,8 @@ function generatePredictedPrices(historicalData: ElectricityPrice[], targetEndDa
             isPredicted: true
         });
 
-        // Move to next hour
-        currentPredictionDate.setHours(currentPredictionDate.getHours() + 1);
+        // Move to next hour using UTC arithmetic to avoid DST skips/duplicates
+        currentPredictionDate.setTime(currentPredictionDate.getTime() + 3_600_000);
     }
 
     return predictedPrices;
@@ -382,8 +381,8 @@ export function generateMissingSlotPredictions(
       }
     }
 
-    // Move to next hour
-    current.setHours(current.getHours() + 1);
+    // Move to next hour using UTC arithmetic to avoid DST skips/duplicates
+    current.setTime(current.getTime() + 3_600_000);
   }
 
   return predictedPrices;
