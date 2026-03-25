@@ -1,5 +1,19 @@
 {
   "enabledPlugins": {
     "typescript-lsp@claude-plugins-official": true
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // \"\"' | grep -qE '\\.(ts|tsx)$' && npx tsc --noEmit --pretty 2>&1 | head -20 || true",
+            "statusMessage": "Type-checking..."
+          }
+        ]
+      }
+    ]
   }
 }
