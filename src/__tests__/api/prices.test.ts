@@ -15,7 +15,7 @@ describe("GET /api/prices", () => {
     const request = new Request("http://localhost/api/prices?end=2024-01-02");
     const response = await GET(request as never);
     expect(response.status).toBe(400);
-    const body = await response.json();
+    const body = await response.json() as { error: string };
     expect(body.error).toContain("Missing required query parameters");
   });
 
@@ -24,7 +24,7 @@ describe("GET /api/prices", () => {
     const request = new Request("http://localhost/api/prices?start=2024-01-01");
     const response = await GET(request as never);
     expect(response.status).toBe(400);
-    const body = await response.json();
+    const body = await response.json() as { error: string };
     expect(body.error).toContain("Missing required query parameters");
   });
 
@@ -91,7 +91,7 @@ describe("GET /api/prices/daily", () => {
     const request = new Request("http://localhost/api/prices/daily");
     const response = await GET(request as never);
     expect(response.status).toBe(400);
-    const body = await response.json();
+    const body = await response.json() as { error: string };
     expect(body.error).toContain("Missing required query parameters");
   });
 });
@@ -107,7 +107,7 @@ describe("GET /api/prices/hourly", () => {
     const request = new Request("http://localhost/api/prices/hourly");
     const response = await GET(request as never);
     expect(response.status).toBe(400);
-    const body = await response.json();
+    const body = await response.json() as { error: string };
     expect(body.error).toContain("Missing required query parameters");
   });
 });
@@ -123,7 +123,7 @@ describe("GET /api/prices/weekly", () => {
     const request = new Request("http://localhost/api/prices/weekly");
     const response = await GET(request as never);
     expect(response.status).toBe(400);
-    const body = await response.json();
+    const body = await response.json() as { error: string };
     expect(body.error).toContain("Missing required query parameter: year");
   });
 });
@@ -139,7 +139,7 @@ describe("GET /api/prices/monthly", () => {
     const request = new Request("http://localhost/api/prices/monthly");
     const response = await GET(request as never);
     expect(response.status).toBe(400);
-    const body = await response.json();
+    const body = await response.json() as { error: string };
     expect(body.error).toContain("Missing required query parameter: year");
   });
 });
@@ -155,7 +155,7 @@ describe("GET /api/prices/weekday-pattern", () => {
     const request = new Request("http://localhost/api/prices/weekday-pattern");
     const response = await GET(request as never);
     expect(response.status).toBe(400);
-    const body = await response.json();
+    const body = await response.json() as { error: string };
     expect(body.error).toContain("Missing required query parameter: year");
   });
 });

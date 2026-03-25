@@ -67,9 +67,11 @@ describe("PriceHeatmap", () => {
         const cheapestWindow = {
             startTimestamp: "2024-01-01T08:00:00.000Z",
             endTimestamp: "2024-01-01T10:00:00.000Z",
+            startHour: 8,
             hours: 2,
             averagePrice: 5.5,
-            totalCost: 11,
+            startIndex: 8,
+            endIndex: 9,
         };
         const { container } = render(
             <PriceHeatmap data={sampleData} includeVat={false} cheapestWindow={cheapestWindow} />
