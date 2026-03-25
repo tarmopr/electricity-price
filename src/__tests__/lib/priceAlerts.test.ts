@@ -159,7 +159,7 @@ describe("priceAlerts", () => {
 
     it("creates a notification with correct body and tag for cheap alert", () => {
       const NotificationMock = vi.fn();
-      NotificationMock.permission = "granted";
+      (NotificationMock as unknown as { permission: NotificationPermission }).permission = "granted";
       vi.stubGlobal("Notification", NotificationMock);
 
       const alert: AlertState = { triggered: true, message: "Price is low", type: "cheap" };
@@ -176,7 +176,7 @@ describe("priceAlerts", () => {
 
     it("creates a notification with correct title for expensive alert", () => {
       const NotificationMock = vi.fn();
-      NotificationMock.permission = "granted";
+      (NotificationMock as unknown as { permission: NotificationPermission }).permission = "granted";
       vi.stubGlobal("Notification", NotificationMock);
 
       const alert: AlertState = { triggered: true, message: "Price is high", type: "expensive" };

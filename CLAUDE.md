@@ -1,5 +1,17 @@
 # Claude Code Instructions
 
+## Pull Requests
+
+Always run tests and verify CI passes before approving or merging any PR. Never approve a PR without confirming all checks are green.
+
+## UI/Animation Guidelines
+
+When implementing animations or visual transitions, memoize data inputs to prevent re-renders, initialize spring/transition values from current state (not defaults), and test with the actual chart re-render cycle before marking complete.
+
+## Code Style
+
+Avoid dynamic Tailwind CSS class construction (e.g., `bg-${color}-500`). Always use complete static class strings so they survive PurgeCSS in production.
+
 ## Validation (required after every code change)
 
 1. `npm run lint` — must pass.

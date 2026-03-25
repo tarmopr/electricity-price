@@ -18,7 +18,7 @@ describe("POST /api/sync", () => {
     );
     const response = await POST(request as never);
     expect(response.status).toBe(400);
-    const body = await response.json();
+    const body = await response.json() as { error: string };
     expect(body.error).toBe("Start date must be before end date");
   });
 
@@ -29,7 +29,7 @@ describe("POST /api/sync", () => {
     );
     const response = await POST(request as never);
     expect(response.status).toBe(400);
-    const body = await response.json();
+    const body = await response.json() as { error: string };
     expect(body.error).toBe("Start date must be before end date");
   });
 
@@ -40,7 +40,7 @@ describe("POST /api/sync", () => {
     );
     const response = await POST(request as never);
     expect(response.status).toBe(400);
-    const body = await response.json();
+    const body = await response.json() as { error: string };
     expect(body.error).toBe("Date range exceeds maximum of 2 years");
   });
 
@@ -51,7 +51,7 @@ describe("POST /api/sync", () => {
     );
     const response = await POST(request as never);
     expect(response.status).toBe(400);
-    const body = await response.json();
+    const body = await response.json() as { error: string };
     expect(body.error).toContain("Invalid start date format");
   });
 
@@ -62,7 +62,7 @@ describe("POST /api/sync", () => {
     );
     const response = await POST(request as never);
     expect(response.status).toBe(400);
-    const body = await response.json();
+    const body = await response.json() as { error: string };
     expect(body.error).toContain("Invalid end date format");
   });
 
@@ -103,7 +103,7 @@ describe("POST /api/sync", () => {
     );
     const response = await POST(request as never);
     expect(response.status).toBe(200);
-    const body = await response.json();
+    const body = await response.json() as { success: boolean };
     expect(body.success).toBe(true);
   });
 });
@@ -136,7 +136,7 @@ describe("GET /api/sync", () => {
     const { GET } = await import("@/app/api/sync/route");
     const response = await GET();
     expect(response.status).toBe(200);
-    const body = await response.json();
+    const body = await response.json() as { success: boolean; data: { totalPricePoints: number } };
     expect(body.success).toBe(true);
     expect(body.data.totalPricePoints).toBe(96);
   });

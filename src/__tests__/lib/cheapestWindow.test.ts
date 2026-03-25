@@ -92,7 +92,7 @@ describe("cheapestWindow", () => {
       // 24 hours of data, 00:00 to 23:00
       // Make hour 2-4 very cheap, but scanFrom is hour 5 → should skip them
       const start = new Date("2024-06-15T00:00:00Z");
-      const pricesArr = Array.from({ length: 24 }, (_, i) =>
+      const pricesArr: number[] = Array.from({ length: 24 }, (_, i) =>
         i >= 2 && i <= 4 ? 1 : 10
       );
       // Also make hours 10-12 cheap but not as cheap
@@ -132,7 +132,7 @@ describe("cheapestWindow", () => {
     it("respects untilHour constraint", () => {
       // Hours 00-23 with prices, cheapest at end of day
       const start = new Date("2024-06-15T00:00:00Z");
-      const pricesArr = Array.from({ length: 24 }, (_, i) =>
+      const pricesArr: number[] = Array.from({ length: 24 }, (_, i) =>
         i >= 20 ? 1 : 10
       );
       // Hours 20-23 are cheap, but untilHour=20 means window must end by 20:00

@@ -16,14 +16,14 @@ describe("errorResponse", () => {
   it("returns JSON response with error message and status", async () => {
     const response = errorResponse("Not found", 404);
     expect(response.status).toBe(404);
-    const body = await response.json();
+    const body = await response.json() as { error: string; details?: string };
     expect(body.error).toBe("Not found");
     expect(body.details).toBeUndefined();
   });
 
   it("includes details when provided", async () => {
     const response = errorResponse("Bad request", 400, "Missing field: name");
-    const body = await response.json();
+    const body = await response.json() as { error: string; details?: string };
     expect(body.error).toBe("Bad request");
     expect(body.details).toBe("Missing field: name");
   });
@@ -40,20 +40,20 @@ describe("successResponse", () => {
     const data = { prices: [1, 2, 3] };
     const response = successResponse(data);
     expect(response.status).toBe(200);
-    const body = await response.json();
+    const body = await response.json() as { success: boolean; data: unknown };
     expect(body.success).toBe(true);
     expect(body.data).toEqual(data);
   });
 
   it("handles array data", async () => {
     const response = successResponse([1, 2, 3]);
-    const body = await response.json();
+    const body = await response.json() as { data: unknown };
     expect(body.data).toEqual([1, 2, 3]);
   });
 
   it("handles null data", async () => {
     const response = successResponse(null);
-    const body = await response.json();
+    const body = await response.json() as { data: unknown };
     expect(body.data).toBeNull();
   });
 });

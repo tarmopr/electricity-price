@@ -73,7 +73,7 @@ describe("AnimatedPrice", () => {
     it("returns a cleanup function that stops animation", async () => {
         const stopFn = vi.fn();
         const { animate } = await import("framer-motion");
-        vi.mocked(animate).mockReturnValueOnce({ stop: stopFn } as ReturnType<typeof animate>);
+        vi.mocked(animate).mockReturnValueOnce({ stop: stopFn } as unknown as ReturnType<typeof animate>);
 
         const { unmount } = render(<AnimatedPrice value={5.23} />);
         unmount();

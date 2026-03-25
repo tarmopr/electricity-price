@@ -1,114 +1,97 @@
 ---
 name: implement
-description: >
-  Full development lifecycle: code, test, lint, build, validate, commit, and review in an automated loop.
-  Use this skill whenever the user asks to implement a feature, fix a bug, add functionality, or make code changes
-  that should be validated and committed. Also trigger when the user says "implement", "build this",
-  "add feature", "fix this bug", or any request that implies writing code and shipping it.
-  Do NOT trigger for questions, explanations, or research that doesn't involve writing code.
+description: Use when the user asks to implement a feature, fix a bug, add functionality, or make code changes. Triggers on "implement", "build this", "add feature", "fix this bug", or any request implying writing and shipping code. Do NOT trigger for questions, explanations, or research without code changes.
 ---
 
-# Implement Skill
+# Implement
 
-You are executing a structured development workflow. Follow each phase in order. Do not skip phases or mark work as done until validation passes.
+## Overview
 
-## Phase 1: Code
+Orchestrate implementation through specialized subagents. The orchestrator (you) manages phase sequencing and commit decisions. Coding and review are delegated to purpose-built agents that keep their contexts focused.
 
-Write or modify the code for the requested feature or fix.
+## Phase 1 — Implement (code agent subagent)
 
-Before writing any code, understand the existing codebase:
-- Read relevant source files to understand current patterns
-- Check related components, utilities, and types
+Dispatch the **code agent** as a subagent (`subagent_type: general-purpose`, prompt includes `.claude/agents/code.md` context).
 
-Follow project conventions while coding:
-- Server Components by default. Only add `'use client'` for interactive elements (charts, toggles, forms)
-- Tailwind CSS with the existing glassmorphism aesthetic. No default/basic styling
-- `@/` path aliases for all imports
-- Price units: Elering API returns EUR/MWh, display as cents/kWh. Respect VAT (22%) toggle
-- Timezones: UTC to Europe/Tallinn using `date-fns` or `Intl`
-- DB aggregation above hourly level: compute from `hourly_averages`, not raw prices
+Provide in the prompt:
+- Full feature/fix description
+- Any relevant file paths, patterns, or prior decisions
+- Explicit instruction to run all three validation checks: `npm run lint`, `npm run build`, `npm test`
 
-Keep changes minimal — only change what's needed for the task.
+The code agent handles: understanding existing code via Serena, implementing the feature, writing/updating tests following `.claude/agents/test.md` patterns, and running all validation.
 
-## Phase 2: Tests
+The code agent must return:
+- List of changed files
+- Summary of changes made
+- Validation status (all three checks green or specific failures)
 
-Write or update tests for all new/changed code using Vitest.
+**Do not advance to Phase 2 if the code agent reports validation failures.** Re-dispatch with the failure details for the agent to fix.
 
-- Tests go in `src/__tests__/` mirroring the source structure
-- Follow patterns in `.claude/agents/test.md` (mock patterns, helper factories, etc.)
-- Cover: happy path, error cases, edge cases (empty input, null, negative prices, timezone boundaries)
-- Any test importing from `@/lib/db` must mock `@opennextjs/cloudflare`
+## Phase 2 — Integrity Check (orchestrator)
 
-## Phase 3: Validate
+Run a Serena integrity check directly in the orchestrator session:
 
-Run all three checks in sequence. If any fails, fix the issue and re-run that check. Do not proceed to the next check until the current one passes.
+- `mcp__serena__find_symbol` — confirm all new/modified exports exist and are named correctly
+- `mcp__serena__search_for_pattern` — scan for import paths referencing any renamed, moved, or deleted symbols; confirm no dangling references
 
-### 3a: Lint
-```bash
-npm run lint
+If broken references are found: re-dispatch the code agent with specific findings. Re-run integrity check after.
+
+## Phase 3 — Review (review agent subagent)
+
+Dispatch the **review agent** as a subagent (`subagent_type: general-purpose`, prompt includes `.claude/agents/review.md` context).
+
+Provide in the prompt:
+- Full git diff of all changes (`git diff HEAD` or diff since branch diverged from main)
+- List of changed files from Phase 1
+
+The review agent returns structured findings with severity ratings (critical/major/minor) and a verdict: **Approve**, **Request Changes**, or **Needs Discussion**.
+
+## Phase 4 — Decision (orchestrator)
+
 ```
-If errors → fix them → re-run. Repeat until clean.
+Verdict = Approve OR only Minor issues?
+  → Proceed to Phase 5 (commit)
 
-### 3b: Build
-```bash
-npm run build
+Verdict = Request Changes (Critical or Major issues present)?
+  → Increment iteration counter
+  → iteration ≤ 3: Re-dispatch code agent with all findings → back to Phase 1
+  → iteration > 3: Hard stop — report remaining issues to user
 ```
-If errors → fix them → re-run lint (in case the fix introduced lint issues) → re-run build. Repeat until clean.
 
-### 3c: Test
-```bash
-npm test
-```
-If failures → fix them → re-run lint → re-run build → re-run tests. Repeat until all pass.
+**Never commit before reaching this decision point.**
 
-If you've been looping on the same error for 3+ attempts, stop and report the issue to the user instead of continuing to guess.
+## Phase 5 — Commit
 
-## Phase 4: Commit
+Stage specific files only — never `git add .` or `git add -A`.
 
-Stage and commit the changes using Conventional Commits format.
-
-- Format: `type(scope): description` in imperative mood
+Commit format (Conventional Commits, imperative mood):
+- `type(scope): description`
 - Types: `feat`, `fix`, `chore`, `refactor`, `test`, `docs`, `ci`, `style`, `perf`
-- Stage specific files (avoid `git add .` or `git add -A`)
-- Write a concise message that explains the **why**, not just the **what**
+- Message explains the **why**, not just the **what**
 
-## Phase 5: Review
+## Fix Loop Summary
 
-Run a code review on the changed files using the review agent (`.claude/agents/review.md`).
+| Iteration | Fix scope | On next verdict |
+|-----------|-----------|-----------------|
+| 1 | All issues (critical + major + minor) | Re-review |
+| 2 | Critical + major only | Re-review |
+| 3 | Hard stop | Report to user |
 
-Review the diff of the commit you just made. Check for:
-- Bugs and correctness issues
-- Security vulnerabilities
-- Performance problems
-- Missed edge cases
-- Missing or inadequate tests
-- Convention violations
+**Skip re-review** for trivial fixes (formatting, import order, variable naming) — just validate and commit directly.
 
-## Phase 6: Fix Loop
+## Hard Stop Conditions
 
-Based on review findings, iterate up to **3 times**:
+Stop and report to user immediately when:
+- Code agent loops on the same validation failure for 3+ attempts
+- Iteration 3 reached with remaining critical/major issues
+- Integrity check finds unresolvable broken references
 
-### Iteration 1
-Fix **all** issues found (critical, major, and minor). Then re-run Phase 3 (validate) and Phase 4 (commit) and Phase 5 (review).
+Report: file path, line number, severity, what was attempted.
 
-### Iteration 2
-Only triggers if iteration 1 changed logic (not just formatting/naming). Fix **critical and major** issues only. Then re-validate, commit, and re-review.
+## Completion Report
 
-### Iteration 3
-**Hard stop.** Do not attempt further fixes. Report any remaining issues to the user with:
-- File path and line number
-- Issue severity (critical/major/minor)
-- Description of the problem
-
-Let the user decide how to proceed.
-
-**Skip re-review** for trivial fixes (formatting, import order, variable naming) — just validate and commit.
-
-## Completion
-
-When all phases are done and review passes (or iteration limit is reached), report:
-
-1. **What was done** — summary of changes made
-2. **Files changed** — list of modified/created files
-3. **Test coverage** — what the new tests cover
-4. **Remaining issues** — any unresolved items from review (if applicable)
+When all phases complete, report:
+1. **Changes** — summary of what was implemented
+2. **Files** — list of modified/created files
+3. **Tests** — what the new tests cover
+4. **Remaining issues** — any unresolved review findings (if iteration limit reached)
