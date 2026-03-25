@@ -14,7 +14,7 @@ const STORAGE_PREFIX = "eprice_";
 export function usePersistedState<T>(
   key: string,
   defaultValue: T
-): [T, (value: T | ((prev: T) => T)) => void] {
+): [T, (value: T | ((prev: T) => T)) => void, boolean] {
   const storageKey = `${STORAGE_PREFIX}${key}`;
 
   // Initialize with default value (SSR-safe), then hydrate from localStorage
@@ -52,5 +52,5 @@ export function usePersistedState<T>(
     []
   );
 
-  return [value, setValue];
+  return [value, setValue, hydrated];
 }

@@ -11,10 +11,13 @@ export async function GET(request: NextRequest) {
     return errorResponse("Missing required query parameters: start, end", 400);
   }
 
-  try {
-    const startTs = Math.floor(new Date(start).getTime() / 1000);
-    const endTs = Math.floor(new Date(end).getTime() / 1000);
+  const startTs = Math.floor(new Date(start).getTime() / 1000);
+  const endTs = Math.floor(new Date(end).getTime() / 1000);
+  if (isNaN(startTs) || isNaN(endTs)) {
+    return errorResponse("Invalid start or end date format", 400);
+  }
 
+  try {
     const db = await getDB();
     const results = await db
       .prepare(

@@ -24,7 +24,7 @@ export interface CurrentPriceResponse {
     }[];
 }
 
-import { eurMwhToCentsKwh, applyVat, CHUNK_SIZE_MS } from "@/lib/price";
+import { eurMwhToCentsKwh, applyVat } from "@/lib/price";
 import { getTallinnHour, getTallinnDateStr, getTallinnWeekday } from "@/lib/timezone";
 
 // Re-export for backwards compatibility with existing consumers
@@ -35,77 +35,39 @@ const PRICES_API = '/api/prices';
 const CURRENT_PRICE_API = '/api/prices/current';
 
 /**
- * Formats a given date to the API's required ISO string format (UTC)
- */
-function formatDateForApi(date: Date, isEnd: boolean = false): string {
-    const isoString = date.toISOString();
-    if (isEnd) {
-        return isoString.replace('.000Z', '.999Z');
-    }
-    return isoString;
-}
-
-/**
- * Fetch prices between a start and end date, automatically chunking requests
- * into 3-month intervals to bypass the API's 1-year max limit.
+ * Fetch prices between a start and end date.
+ * Chunking is handled server-side by /api/prices.
  */
 export async function getPricesForDateRange(start: Date, end: Date): Promise<ElectricityPrice[]> {
-    let currentStart = new Date(start);
-    let allPrices: ElectricityPrice[] = [];
+    const startStr = start.toISOString();
+    const endStr = end.toISOString().replace(/\.\d{3}Z$/, '.999Z');
 
-    try {
-        while (currentStart < end) {
-            let currentEnd = new Date(currentStart.getTime() + CHUNK_SIZE_MS);
-            if (currentEnd > end) {
-                currentEnd = end;
-            }
+    const url = `${PRICES_API}?start=${encodeURIComponent(startStr)}&end=${encodeURIComponent(endStr)}`;
 
-            const startStr = formatDateForApi(currentStart, false);
-            // Only use .999Z for the absolute final end date of the user's requested range
-            const isAbsoluteEnd = currentEnd.getTime() === end.getTime();
-            const endStr = formatDateForApi(currentEnd, isAbsoluteEnd);
+    const res = await fetch(url, { cache: 'no-store' });
 
-            const url = `${PRICES_API}?start=${encodeURIComponent(startStr)}&end=${encodeURIComponent(endStr)}`;
-
-            const res = await fetch(url, {
-                cache: 'no-store'
-            });
-
-            if (!res.ok) {
-                const errText = await res.text();
-                throw new Error(`Failed to fetch chunk ${startStr} to ${endStr}: ${res.status} ${res.statusText} - ${errText}`);
-            }
-
-            const json: PriceDataResponse = await res.json();
-
-            if (!json.success || !json.data || !json.data.ee) {
-                throw new Error('Invalid API response format');
-            }
-
-            const chunkPrices = json.data.ee.map(item => {
-                const date = new Date(item.timestamp * 1000);
-                return {
-                    timestamp: date.toISOString(),
-                    date,
-                    priceEurMwh: item.price,
-                    priceCentsKwh: eurMwhToCentsKwh(item.price)
-                };
-            });
-
-            allPrices = [...allPrices, ...chunkPrices];
-
-            // Advance the start pointer. Add 1 millisecond so we don't overlap boundaries identically
-            currentStart = new Date(currentEnd.getTime() + 1);
-        }
-
-        // Remove any exact duplicates that might occur on chunk boundaries and sort
-        const uniquePrices = Array.from(new Map(allPrices.map(item => [item.timestamp, item])).values());
-        return uniquePrices.sort((a, b) => a.date.getTime() - b.date.getTime());
-
-    } catch (error) {
-        console.error('Error fetching electricity prices:', error);
-        return [];
+    if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Failed to fetch prices: ${res.status} ${res.statusText} - ${errText}`);
     }
+
+    const json: PriceDataResponse = await res.json();
+
+    if (!json.success || !json.data || !json.data.ee) {
+        throw new Error('Invalid API response format');
+    }
+
+    const prices = json.data.ee.map(item => {
+        const date = new Date(item.timestamp * 1000);
+        return {
+            timestamp: date.toISOString(),
+            date,
+            priceEurMwh: item.price,
+            priceCentsKwh: eurMwhToCentsKwh(item.price)
+        };
+    });
+
+    return prices.sort((a, b) => a.date.getTime() - b.date.getTime());
 }
 
 /**

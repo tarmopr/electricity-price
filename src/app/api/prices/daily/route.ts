@@ -14,6 +14,11 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  if (!DATE_RE.test(start) || !DATE_RE.test(end)) {
+    return errorResponse("start and end must be in YYYY-MM-DD format", 400);
+  }
+
   try {
     const db = await getDB();
     const results = await db
