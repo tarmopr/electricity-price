@@ -4,7 +4,7 @@
 > Branch: `main`
 > Reviewer: Claude Code (Opus 4.6)
 > Overall health: **Needs Work**
-> Last updated: 2026-03-25 — C1, C2, C3, C4, M6 resolved on branch `fix/critical-review-findings`
+> Last updated: 2026-03-25 — C1, C2, C3, C4, M6 resolved on branch `fix/critical-review-findings`; M1, M2, M3, M4, M5, M7, m5, m7 resolved in `8d8d0dd`
 
 ## How to use this document
 
@@ -58,43 +58,48 @@ npm run lint && npm run build && npm test
 
 ## Major
 
-### M1 — Unauthenticated sync endpoint
+### M1 — Unauthenticated sync endpoint ✅ Fixed
 - **File**: `src/app/api/sync/route.ts:30–128`
 - **Category**: Security
 - **Issue**: `POST /api/sync` has no authentication. Anyone can trigger Elering API calls and database writes with arbitrary `start`/`end` date ranges. Potential DoS vector and DB flooding.
 - **Fix**: Add authentication (shared secret header, Cloudflare Access, or API key check). Add rate limiting at minimum.
+- **Resolved**: `8d8d0dd` — bearer-token auth via `SYNC_SECRET` env var
 
 ---
 
-### M2 — No input validation on date query params
+### M2 — No input validation on date query params ✅ Fixed
 - **File**: `src/app/api/prices/daily/route.ts:17–27` (and hourly route)
 - **Category**: Security / Input Validation
 - **Issue**: `start` and `end` query params are passed to SQL without format validation. Malformed input silently returns empty results instead of a 400 error.
 - **Fix**: Validate that `start`/`end` match `YYYY-MM-DD` format (regex or `Date.parse` check) before querying. Return 400 with a descriptive message on invalid input.
+- **Resolved**: `8d8d0dd` — YYYY-MM-DD regex in daily route, isNaN guard in hourly route
 
 ---
 
-### M3 — Errors swallowed in `getPricesForDateRange`
+### M3 — Errors swallowed in `getPricesForDateRange` ✅ Fixed
 - **File**: `src/lib/api.ts:51–108`
 - **Category**: Code Quality / Error Handling
 - **Issue**: All errors are caught and an empty array `[]` is returned. Callers (including `useDashboardPrices`) cannot distinguish between "no data" and "network/server failure." The chart shows empty with no error message shown to the user.
 - **Fix**: Remove the catch block and let errors propagate, or return a discriminated union `{ data: ElectricityPrice[] } | { error: string }`. Surface errors in the UI.
+- **Resolved**: `8d8d0dd` — try/catch removed; errors propagate to `useDashboardPrices` which surfaces them
 
 ---
 
-### M4 — `PriceChart.tsx` oversized with inner components redefined on every render
+### M4 — `PriceChart.tsx` oversized with inner components redefined on every render ✅ Fixed
 - **File**: `src/components/PriceChart.tsx` (545 lines)
 - **Category**: Code Quality / Performance
 - **Issue**: `CustomTooltip`, `ChartReferenceLabel`, `MinMaxLabel`, and `CustomCursor` are defined inside the component body and recreated on every render. Data transformation logic is also inline.
 - **Fix**: Move inner component definitions outside `PriceChart` (or to separate files). Extract data transformation into a `usePriceChartData` hook.
+- **Resolved**: `8d8d0dd` — all four inner components moved outside; `isHovering`/`stats` passed as props
 
 ---
 
-### M5 — URL param restoration race with `usePersistedState` hydration
+### M5 — URL param restoration race with `usePersistedState` hydration ✅ Fixed
 - **File**: `src/components/Dashboard.tsx:100`
 - **Category**: Code Quality
 - **Issue**: The `useEffect` that restores state from URL params has an empty dependency array `[]` and runs on mount. `usePersistedState` hydration from localStorage may run after, overwriting the URL params.
 - **Fix**: Track hydration completion with a `useRef(false)` flag. Apply URL params only after all `usePersistedState` hooks have hydrated, or give URL params explicit priority over localStorage.
+- **Resolved**: `8d8d0dd` — `hydrated` exposed from `usePersistedState`; two-effect split with `urlParamsApplied` ref guard
 
 ---
 
@@ -107,11 +112,12 @@ npm run lint && npm run build && npm test
 
 ---
 
-### M7 — Elering chunking logic duplicated between client and server
+### M7 — Elering chunking logic duplicated between client and server ✅ Fixed
 - **File**: `src/lib/api.ts`, `src/lib/elering.ts:56–101`
 - **Category**: Architecture & Structure
 - **Issue**: `CHUNK_SIZE_MS` date-range chunking and the `.999Z` end-date boundary hack are implemented independently in both client-side `api.ts` and server-side `elering.ts`.
 - **Fix**: Since the client already proxies through `/api/prices`, move all chunking responsibility to the server-side proxy. The client should make a single request with the full date range.
+- **Resolved**: `8d8d0dd` — `/api/prices/route.ts` now delegates to `fetchFromElering`; client `getPricesForDateRange` makes a single fetch
 
 ---
 
@@ -149,11 +155,12 @@ npm run lint && npm run build && npm test
 
 ---
 
-### m5 — `getHours()` in chart data mapping uses browser timezone
+### m5 — `getHours()` in chart data mapping uses browser timezone ✅ Fixed
 - **File**: `src/components/PriceChart.tsx:110`
 - **Category**: Domain Correctness
 - **Issue**: `const hour = item.date.getHours()` uses browser-local timezone when mapping prices to avg overlay data points. Non-EET users see misaligned overlay lines.
 - **Fix**: Use Tallinn-based hour extraction (same fix as C3 / M6 `getTallinnDateParts`).
+- **Resolved**: `8d8d0dd` — `getTallinnHour(item.date)` replaces `item.date.getHours()`
 
 ---
 
@@ -165,11 +172,12 @@ npm run lint && npm run build && npm test
 
 ---
 
-### m7 — `cheapestWindow` "until" limit uses browser timezone
+### m7 — `cheapestWindow` "until" limit uses browser timezone ✅ Fixed
 - **File**: `src/lib/cheapestWindow.ts:74–83`
 - **Category**: Domain Correctness
 - **Issue**: `setHours(untilHour)` uses browser-local timezone for the upper time bound. Non-EET users get a different effective cutoff than intended.
 - **Fix**: Convert `untilHour` to a UTC timestamp using Europe/Tallinn as the reference timezone.
+- **Resolved**: `8d8d0dd` — UTC arithmetic via `getTallinnHour` replaces `setHours`; `startHour` uses `getTallinnHour`
 
 ---
 
@@ -226,9 +234,9 @@ npm run lint && npm run build && npm test
 | Severity | Total | Open | Fixed |
 |----------|-------|------|-------|
 | Critical | 4     | 0    | 4     |
-| Major    | 7     | 6    | 1     |
-| Minor    | 13    | 13   | 0     |
-| **Total**| **24**| **19**| **5** |
+| Major    | 7     | 0    | 7     |
+| Minor    | 13    | 11   | 2     |
+| **Total**| **24**| **11**| **13** |
 
 ## Implementation order
 
