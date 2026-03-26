@@ -170,14 +170,14 @@ describe("cheapestWindow", () => {
     });
 
     it("handles untilHour that rolls over to next day", () => {
-      // Use local-time constructor since setHours in the algorithm works in local time.
-      // Data starts at 22:00 local, untilHour=2 means limit is 02:00 next day local.
-      const start = new Date(2024, 5, 15, 22, 0, 0); // June 15, 22:00 local
-      const prices = makePrices(start, [10, 5, 3, 2, 8]); // 22, 23, 00, 01, 02
+      // Data starts at 20:00 UTC = 22:00 Tallinn (EET, UTC+2, January).
+      // untilHour=2 means 02:00 Tallinn = 00:00 UTC next day (4 Tallinn-hours away).
+      const start = new Date("2024-01-15T20:00:00Z"); // 22:00 Tallinn
+      const prices = makePrices(start, [10, 5, 3, 2, 8]); // Tallinn: 22, 23, 00, 01, 02
 
       const result = findCheapestWindow(prices, 2, 2, start);
       expect(result).not.toBeNull();
-      // Window 23:00-00:00 (sum=8) vs 00:00-01:00 (sum=5) → cheapest at indices 2,3
+      // Window 00:00-01:00 Tallinn (sum=5) is cheapest; 01:00-02:00 is excluded (ends after limit)
       expect(result!.startIndex).toBe(2);
       expect(result!.endIndex).toBe(3);
     });
