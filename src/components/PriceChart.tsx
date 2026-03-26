@@ -382,7 +382,16 @@ export default function PriceChart({
     const showMinMax = minPoint && maxPoint && minPoint.displayPrice !== maxPoint.displayPrice;
 
     return (
-        <div className="w-full h-[300px] sm:h-[400px] mt-4 relative overflow-hidden" aria-label="Electricity price chart" role="img" style={{ WebkitTapHighlightColor: 'transparent' }}>
+        <div
+            className="w-full h-[300px] sm:h-[400px] mt-4 relative overflow-hidden"
+            aria-label={
+                minPoint && maxPoint
+                    ? `Electricity price chart: prices range from ${minPoint.displayPrice} to ${maxPoint.displayPrice} cents per kWh`
+                    : 'Electricity price chart'
+            }
+            role="img"
+            style={{ WebkitTapHighlightColor: 'transparent' }}
+        >
             <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} style={{ outline: 'none' }}>
                 <AreaChart
                     data={chartData}

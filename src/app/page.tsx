@@ -29,7 +29,7 @@ export default function Home() {
 
       {/* Footer Note */}
       <div className="max-w-6xl mx-auto mt-12 text-center text-sm text-zinc-600">
-        Data provided by the official Elering API. Prices are shown in UTC converted to your local time.
+        Prices shown in Estonian time (EET/EEST). Data provided by the official Elering API.
       </div>
     </main>
   );

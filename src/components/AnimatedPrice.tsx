@@ -1,7 +1,13 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { animate, motion, useMotionValue, useTransform } from 'framer-motion';
+import dynamic from 'next/dynamic';
+import { animate, useMotionValue, useTransform } from 'framer-motion';
+
+const MotionSpan = dynamic(
+  () => import('framer-motion').then((mod) => mod.motion.span),
+  { ssr: false, loading: () => <span>{/* placeholder */}</span> }
+);
 
 interface AnimatedPriceProps {
     value: number;
@@ -21,7 +27,7 @@ function AnimatedPrice({ value, decimals = 2, className }: AnimatedPriceProps) {
         return () => controls.stop();
     }, [value, motionValue]);
 
-    return <motion.span className={className}>{displayed}</motion.span>;
+    return <MotionSpan className={className}>{displayed}</MotionSpan>;
 }
 
 export default React.memo(AnimatedPrice);

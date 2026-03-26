@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import Dashboard from "@/components/Dashboard";
 import type { ElectricityPrice } from "@/lib/api";
 
@@ -46,6 +46,25 @@ vi.mock("@/lib/api", () => ({
 
 vi.mock("@/lib/shareState", () => ({
     decodeParamsToState: vi.fn(() => null),
+}));
+
+vi.mock("@/lib/useCostCalculator", () => ({
+    useCostCalculator: vi.fn(() => ({
+        costConsumptionKwh: 40,
+        setCostConsumptionKwh: vi.fn(),
+        costDurationHours: 8,
+        setCostDurationHours: vi.fn(),
+        costUntilHour: 22,
+        setCostUntilHour: vi.fn(),
+        costActivePreset: 'EV Charge',
+        setCostActivePreset: vi.fn(),
+        costCalcOpen: false,
+        setCostCalcOpen: vi.fn(),
+        costChartData: [],
+        costScanFrom: new Date(),
+        cheapestWindow: null,
+        currentWindowAvgPrice: null,
+    })),
 }));
 
 vi.mock("recharts", () => ({
@@ -161,5 +180,35 @@ describe("Dashboard", () => {
     it("renders period selection controls", () => {
         render(<Dashboard />);
         expect(screen.getByRole("button", { name: /today/i })).toBeInTheDocument();
+    });
+
+    it("clicking VAT toggle changes the VAT button aria-pressed state", () => {
+        render(<Dashboard />);
+        // Find the VAT toggle button by its text content
+        const vatButton = screen.getByRole("button", { name: /incl\. vat|excl\. vat|vat/i });
+        const initialPressed = vatButton.getAttribute("aria-pressed");
+        fireEvent.click(vatButton);
+        // After click, the aria-pressed state should change
+        expect(vatButton.getAttribute("aria-pressed")).not.toBe(initialPressed);
+    });
+
+    it("clicking Yesterday period button triggers period change", () => {
+        render(<Dashboard />);
+        const yesterdayButton = screen.getByRole("button", { name: /yesterday/i });
+        expect(yesterdayButton).toBeInTheDocument();
+        fireEvent.click(yesterdayButton);
+        // After clicking yesterday, the button should reflect active state
+        expect(yesterdayButton.getAttribute("aria-pressed")).toBe("true");
+    });
+
+    it("clicking Heatmap button switches to heatmap view", () => {
+        render(<Dashboard />);
+        const heatmapButton = screen.getByRole("button", { name: /^heatmap$/i });
+        fireEvent.click(heatmapButton);
+        // After switching to heatmap, the heatmap button should be active
+        expect(heatmapButton.getAttribute("aria-pressed")).toBe("true");
+        // Chart button should no longer be active
+        const chartButton = screen.getByRole("button", { name: /^chart$/i });
+        expect(chartButton.getAttribute("aria-pressed")).toBe("false");
     });
 });

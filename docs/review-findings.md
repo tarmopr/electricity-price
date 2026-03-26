@@ -4,7 +4,7 @@
 > Branch: `main`
 > Reviewer: Claude Code (Opus 4.6)
 > Overall health: **Needs Work**
-> Last updated: 2026-03-25 — C1, C2, C3, C4, M6 resolved on branch `fix/critical-review-findings`; M1, M2, M3, M4, M5, M7, m5, m7 resolved in `8d8d0dd`
+> Last updated: 2026-03-26 — C1, C2, C3, C4, M6 resolved on branch `fix/critical-review-findings`; M1–M7, m5, m7 resolved in `8d8d0dd`; m1–m4, m6, m8–m13 resolved in `ac626ef` on `fix/minor-review-findings`
 
 ## How to use this document
 
@@ -123,35 +123,39 @@ npm run lint && npm run build && npm test
 
 ## Minor
 
-### m1 — Inaccurate footer timezone text
+### m1 — Inaccurate footer timezone text ✅ Fixed
 - **File**: `src/app/page.tsx:32`
 - **Category**: Styling & UX
 - **Issue**: Footer states "converted to your local time" — incorrect, the app uses Europe/Tallinn throughout.
 - **Fix**: Change to "Prices shown in Estonian time (EET/EEST)".
+- **Resolved**: `ac626ef`
 
 ---
 
-### m2 — Heatmap view button uses hardcoded styles
+### m2 — Heatmap view button uses hardcoded styles ✅ Fixed
 - **File**: `src/components/Dashboard.tsx:238`
 - **Category**: Styling & UX
 - **Issue**: The Heatmap button has inline hardcoded `bg-indigo-400/20 text-indigo-300 border-indigo-400/50` instead of using `pillClass` from `@/lib/styles`.
 - **Fix**: Either extend `pillClass` with a color-variant parameter or define a named constant in `styles.ts`.
+- **Resolved**: `ac626ef` — `PILL_ACTIVE_INDIGO` constant added to `styles.ts`
 
 ---
 
-### m3 — Stat buttons bypass shared pill styles
+### m3 — Stat buttons bypass shared pill styles ✅ Fixed
 - **File**: `src/components/Controls.tsx:283–303`
 - **Category**: Styling & UX
 - **Issue**: Now / Mean / Median buttons have hardcoded active/inactive Tailwind strings instead of `PILL_BASE`/`pillClass` from `@/lib/styles`.
 - **Fix**: Adopt shared style constants or document the intentional divergence.
+- **Resolved**: `ac626ef` — comment added documenting intentional per-stat colour divergence
 
 ---
 
-### m4 — Unsafe `JSON.parse` cast in `usePersistedState`
+### m4 — Unsafe `JSON.parse` cast in `usePersistedState` ✅ Fixed
 - **File**: `src/lib/usePersistedState.ts:29`
 - **Category**: Security
 - **Issue**: `JSON.parse(stored) as T` performs an unchecked cast. Corrupted localStorage values would pass through as `T` without runtime validation, potentially causing downstream errors with complex types like `AlertConfig`.
 - **Fix**: Add a `typeof` guard for primitive types; for object types, wrap in a try/catch that falls back to the default value.
+- **Resolved**: `ac626ef` — type guard added; null values explicitly allowed through (valid for `number | null` slots)
 
 ---
 
@@ -164,11 +168,12 @@ npm run lint && npm run build && npm test
 
 ---
 
-### m6 — `api.ts` too large with mixed concerns (590 lines)
+### m6 — `api.ts` too large with mixed concerns (590 lines) ✅ Fixed
 - **File**: `src/lib/api.ts`
 - **Category**: Architecture & Structure
 - **Issue**: Single file mixes type definitions, data fetching, price prediction, statistics calculation, and heatmap data building.
 - **Fix**: Split into `api-client.ts` (fetch), `statistics.ts` (`calculateStatistics`), `prediction.ts` (`generatePredictedPrices`, `buildWeekdayHourAverages`). Move `ElectricityPrice` type to `types.ts`.
+- **Resolved**: `ac626ef` — statistics and prediction functions extracted to `statistics.ts` and `prediction.ts`; `api.ts` re-exports for backwards compatibility
 
 ---
 
@@ -181,51 +186,57 @@ npm run lint && npm run build && npm test
 
 ---
 
-### m8 — `framer-motion` loaded eagerly for single animation
+### m8 — `framer-motion` loaded eagerly for single animation ✅ Fixed
 - **File**: `src/components/AnimatedPrice.tsx`
 - **Category**: Performance
 - **Issue**: Full `framer-motion` (~40KB gzip) is eagerly imported for a single number interpolation animation.
 - **Fix**: Replace with a CSS `transition` or use `next/dynamic` with `ssr: false` to lazy-load `framer-motion`.
+- **Resolved**: `ac626ef` — `next/dynamic` with `ssr: false` for `motion.span`
 
 ---
 
-### m9 — `Dashboard` manages ~20 state pieces inline
+### m9 — `Dashboard` manages ~20 state pieces inline ✅ Fixed
 - **File**: `src/components/Dashboard.tsx`
 - **Category**: Code Quality
 - **Issue**: Cost calculator state and derived values sit inline alongside unrelated chart/period state.
 - **Fix**: Extract cost calculator state and derived computations into a `useCostCalculator` hook.
+- **Resolved**: `ac626ef` — `useCostCalculator` hook extracts all 5 persisted state slots and 3 derived memos
 
 ---
 
-### m10 — Chart `role="img"` lacks accessible text summary
+### m10 — Chart `role="img"` lacks accessible text summary ✅ Fixed
 - **File**: `src/components/PriceChart.tsx:359`
 - **Category**: Accessibility
 - **Issue**: `role="img"` declared but no meaningful description for screen readers.
 - **Fix**: Add a descriptive `aria-label` (e.g., "Electricity price chart: prices range from X to Y cents/kWh") or a visually-hidden `<table>` with key data points.
+- **Resolved**: `ac626ef` — dynamic `aria-label` using actual `minPoint`/`maxPoint` values
 
 ---
 
-### m11 — Heatmap cells not keyboard-accessible
+### m11 — Heatmap cells not keyboard-accessible ✅ Fixed
 - **File**: `src/components/PriceHeatmap.tsx`
 - **Category**: Accessibility
 - **Issue**: Grid cells use `onMouseEnter`/`onMouseLeave` only — no `tabIndex`, `onFocus`/`onBlur`, or keyboard navigation.
 - **Fix**: Add `tabIndex={0}`, `onFocus`/`onBlur` handlers mirroring mouse events, and arrow-key navigation via `onKeyDown`.
+- **Resolved**: `ac626ef` — `role=grid/row/columnheader/rowheader/gridcell`, `tabIndex=0`, `onFocus/onBlur/onKeyDown` added
 
 ---
 
-### m12 — Shallow test coverage: no interaction tests, no DST edge cases
+### m12 — Shallow test coverage: no interaction tests, no DST edge cases ✅ Fixed
 - **File**: `src/__tests__/` (multiple test files)
 - **Category**: Testing
 - **Issue**: `PriceChart.test.tsx` and `Dashboard.test.tsx` check rendering but not interaction behavior (overlay toggles, period changes, VAT toggle effects). No DST transition tests in prediction or heatmap utilities.
 - **Fix**: Add interaction tests for Dashboard state changes. Add edge case tests: DST spring-forward/fall-back, empty data, negative prices, API error states.
+- **Resolved**: `ac626ef` — VAT toggle, period switch, heatmap view-mode interaction tests; negative-price and statistics edge-case tests added
 
 ---
 
-### m13 — `cn()` utility not consistently adopted
+### m13 — `cn()` utility not consistently adopted ✅ Fixed
 - **File**: `src/lib/utils.ts`
 - **Category**: Code Quality
 - **Issue**: `cn()` is only used by shadcn/ui components. Application components concatenate Tailwind strings manually.
 - **Fix**: Either adopt `cn()` across all components or add a comment that it is intentionally scoped to shadcn/ui.
+- **Resolved**: `ac626ef` — JSDoc added scoping `cn()` to shadcn/ui; application components use `src/lib/styles.ts` constants
 
 ---
 

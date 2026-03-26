@@ -27,7 +27,17 @@ export function usePersistedState<T>(
       const stored = localStorage.getItem(storageKey);
       if (stored !== null) {
         const parsed = JSON.parse(stored) as T;
-        setValueInternal(parsed);
+        // For primitives, guard against type mismatch (e.g. stored string for a boolean key).
+        // Allow null through — it is a valid stored value for nullable state slots (e.g. number | null).
+        const defaultType = typeof defaultValue;
+        const parsedType = typeof parsed;
+        const typeMismatch =
+          defaultType !== 'object' && // skip check for object/null defaults
+          parsed !== null &&           // null is always a valid stored value
+          parsedType !== defaultType;
+        if (!typeMismatch) {
+          setValueInternal(parsed);
+        }
       }
     } catch {
       // localStorage unavailable or invalid JSON — keep default

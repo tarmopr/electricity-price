@@ -153,6 +153,31 @@ describe("calculateStatistics", () => {
     expect(stats!.p90).toBe(5);
     expect(stats!.p95).toBe(5);
   });
+
+  it("handles negative prices (e.g. during overproduction periods)", () => {
+    const prices = [
+      makePrice(-200), // -20 cents/kWh (negative spot price)
+      makePrice(100),  // 10 cents/kWh
+    ];
+    const stats = calculateStatistics(prices);
+    expect(stats).not.toBeNull();
+    expect(stats!.min).toBe(-20);
+    expect(stats!.max).toBe(10);
+    expect(stats!.mean).toBeCloseTo(-5); // (-20 + 10) / 2
+  });
+
+  it("handles dataset where all prices are negative", () => {
+    const prices = [makePrice(-300), makePrice(-100)]; // -30 and -10 cents/kWh
+    const stats = calculateStatistics(prices);
+    expect(stats).not.toBeNull();
+    expect(stats!.min).toBe(-30);
+    expect(stats!.max).toBe(-10);
+    expect(stats!.mean).toBeCloseTo(-20);
+  });
+
+  it("returns null for empty array (edge case repeated for completeness)", () => {
+    expect(calculateStatistics([])).toBeNull();
+  });
 });
 
 // ─── getPricesForDateRange tests (with fetch mocking) ───────────────────────
