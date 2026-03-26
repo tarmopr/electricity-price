@@ -29,6 +29,16 @@ import {
  */
 export async function POST(request: NextRequest) {
   try {
+    // When SYNC_SECRET is not set (e.g. local dev), the endpoint is unauthenticated.
+    // In production, always set SYNC_SECRET in wrangler.toml or Cloudflare dashboard.
+    const syncSecret = process.env.SYNC_SECRET;
+    if (syncSecret) {
+      const authHeader = request.headers.get('Authorization');
+      if (authHeader !== `Bearer ${syncSecret}`) {
+        return errorResponse('Unauthorized', 401);
+      }
+    }
+
     const { searchParams } = new URL(request.url);
     const manualStart = searchParams.get("start");
     const manualEnd = searchParams.get("end");

@@ -147,6 +147,81 @@ describe("fetchFromElering", () => {
     ).rejects.toThrow("Invalid Elering API response format");
   });
 
+  it("makes a single fetch call for a range within CHUNK_SIZE_MS", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          success: true,
+          data: { ee: [{ timestamp: 1704067200, price: 50.0 }] },
+        }),
+    });
+
+    vi.stubGlobal("fetch", mockFetch);
+
+    // 30-day range is well within the ~90-day chunk size
+    await fetchFromElering(
+      new Date("2024-01-01T00:00:00Z"),
+      new Date("2024-01-31T00:00:00Z")
+    );
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("makes exactly two fetch calls for a range spanning two chunks", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          success: true,
+          data: { ee: [] },
+        }),
+    });
+
+    vi.stubGlobal("fetch", mockFetch);
+
+    // ~100-day range exceeds the 90-day CHUNK_SIZE_MS, requiring exactly two chunks
+    await fetchFromElering(
+      new Date("2024-01-01T00:00:00Z"),
+      new Date("2024-04-10T00:00:00Z")
+    );
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("deduplicates prices that appear in both chunks at a boundary", async () => {
+    // Simulate two chunks that each return the same timestamp at the boundary
+    const sharedTimestamp = 1704067200;
+    let callCount = 0;
+    const mockFetch = vi.fn().mockImplementation(() => {
+      callCount++;
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            success: true,
+            data: {
+              ee: [{ timestamp: sharedTimestamp, price: callCount === 1 ? 50.0 : 60.0 }],
+            },
+          }),
+      });
+    });
+
+    vi.stubGlobal("fetch", mockFetch);
+
+    // ~100-day range to get two chunks
+    const result = await fetchFromElering(
+      new Date("2024-01-01T00:00:00Z"),
+      new Date("2024-04-10T00:00:00Z")
+    );
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    // The shared timestamp should appear only once (first-seen wins)
+    const matching = result.filter((p) => p.timestamp === sharedTimestamp);
+    expect(matching).toHaveLength(1);
+    expect(matching[0].priceEurMwh).toBe(50.0);
+  });
+
   it("chunks requests for large date ranges", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,

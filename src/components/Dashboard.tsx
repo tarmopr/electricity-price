@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
     calculateStatistics,
     aggregatePrices,
@@ -31,7 +31,7 @@ import type { Period, ViewMode } from '@/lib/types';
 
 export default function Dashboard() {
     // User Settings (persisted to localStorage across sessions)
-    const [includeVat, setIncludeVat] = usePersistedState<boolean>('includeVat', true);
+    const [includeVat, setIncludeVat, vatHydrated] = usePersistedState<boolean>('includeVat', true);
     const [showNow, setShowNow] = usePersistedState<boolean>('showNow', true);
     const [showMean, setShowMean] = usePersistedState<boolean>('showMean', false);
     const [showMedian, setShowMedian] = usePersistedState<boolean>('showMedian', false);
@@ -40,12 +40,12 @@ export default function Dashboard() {
     const [showP95, setShowP95] = usePersistedState<boolean>('showP95', false);
 
     // Period Settings (persisted, except custom dates which reset daily)
-    const [period, setPeriod] = usePersistedState<Period>('period', 'today');
+    const [period, setPeriod, periodHydrated] = usePersistedState<Period>('period', 'today');
     const [customStart, setCustomStart] = useState<string>(format(startOfToday(), 'yyyy-MM-dd'));
     const [customEnd, setCustomEnd] = useState<string>(format(endOfToday(), 'yyyy-MM-dd'));
 
     // View Mode (persisted)
-    const [viewMode, setViewMode] = usePersistedState<ViewMode>('viewMode', 'chart');
+    const [viewMode, setViewMode, viewModeHydrated] = usePersistedState<ViewMode>('viewMode', 'chart');
 
     // Cost Calculator Settings (persisted)
     const [costConsumptionKwh, setCostConsumptionKwh] = usePersistedState<number>('costKwh', 40);
@@ -83,21 +83,32 @@ export default function Dashboard() {
         avg30dPattern,
     } = usePatternOverlays();
 
-    // Restore state from URL params on mount (for shared links)
+    // Store URL params in a ref so the effect can re-run after hydration
+    const urlParamsRef = useRef<ReturnType<typeof decodeParamsToState>>(null);
+    const urlParamsApplied = useRef(false);
+
+    // Read URL params once on mount
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
-        const shared = decodeParamsToState(params);
-        if (!shared) return;
+        urlParamsRef.current = decodeParamsToState(params);
+        if (urlParamsRef.current) {
+            window.history.replaceState({}, '', window.location.pathname);
+        }
+    }, []);
 
+    // Apply URL params after all relevant persisted states have hydrated
+    useEffect(() => {
+        if (!vatHydrated || !periodHydrated || !viewModeHydrated) return;
+        if (urlParamsApplied.current || !urlParamsRef.current) return;
+        urlParamsApplied.current = true;
+
+        const shared = urlParamsRef.current;
         if (shared.period) setPeriod(shared.period);
         if (shared.includeVat !== undefined) setIncludeVat(shared.includeVat);
         if (shared.viewMode) setViewMode(shared.viewMode);
         if (shared.customStart) setCustomStart(shared.customStart);
         if (shared.customEnd) setCustomEnd(shared.customEnd);
-
-        // Clean the URL params after restoring (don't pollute browser history)
-        window.history.replaceState({}, '', window.location.pathname);
-    }, []);
+    }, [vatHydrated, periodHydrated, viewModeHydrated, setPeriod, setIncludeVat, setViewMode, setCustomStart, setCustomEnd]);
 
     // Calculate statistics only once when prices or VAT settings change
     const stats = calculateStatistics(prices, includeVat);

@@ -67,7 +67,7 @@ export async function fetchFromElering(
     const startStr = currentStart.toISOString();
     const isAbsoluteEnd = currentEnd.getTime() === end.getTime();
     const endStr = isAbsoluteEnd
-      ? currentEnd.toISOString().replace(".000Z", ".999Z")
+      ? currentEnd.toISOString().replace(/\.\d{3}Z$/, ".999Z")
       : currentEnd.toISOString();
 
     const url = `${ELERING_API}?start=${encodeURIComponent(startStr)}&end=${encodeURIComponent(endStr)}`;

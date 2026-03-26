@@ -6,6 +6,8 @@
  * "until" hour constraint.
  */
 
+import { getTallinnHour } from '@/lib/timezone';
+
 export interface CheapestWindow {
   /** ISO timestamp of the first hour in the window */
   startTimestamp: string;
@@ -68,18 +70,14 @@ export function findCheapestWindow(
   // Compute the absolute end limit timestamp from untilHour
   let endLimitMs: number | null = null;
   if (untilHour !== null) {
-    // For each candidate window, we compute the limit relative to
-    // the window's first item. But as an optimization we can compute
-    // a base limit from the first analyzed item.
+    // Compute the limit using UTC arithmetic relative to the current Tallinn hour,
+    // to avoid browser local timezone affecting setHours().
     const baseTime = new Date(prices[startIndex].timestamp);
-    const limitDate = new Date(baseTime);
-    limitDate.setHours(untilHour, 0, 0, 0);
-
-    // If the limit time is at or before the scan start, roll to next day
-    if (limitDate.getTime() <= baseTime.getTime()) {
-      limitDate.setDate(limitDate.getDate() + 1);
-    }
-
+    const tallinnHourNow = getTallinnHour(baseTime);
+    // Hours until untilHour in Tallinn time (rolls over to next occurrence if already past)
+    let hoursUntilLimit = (untilHour - tallinnHourNow + 24) % 24;
+    if (hoursUntilLimit === 0) hoursUntilLimit = 24; // roll to next day's occurrence
+    const limitDate = new Date(baseTime.getTime() + hoursUntilLimit * 3_600_000);
     endLimitMs = limitDate.getTime();
   }
 
@@ -121,12 +119,10 @@ export function findCheapestWindow(
           new Date(prices[endIndex].timestamp).getTime() + 60 * 60 * 1000
         ).toISOString();
 
-  const startDate = new Date(prices[minIndex].timestamp);
-
   return {
     startTimestamp: prices[minIndex].timestamp,
     endTimestamp,
-    startHour: startDate.getHours(),
+    startHour: getTallinnHour(new Date(prices[minIndex].timestamp)),
     hours,
     averagePrice: minSum / hours,
     startIndex: minIndex,

@@ -192,7 +192,7 @@ describe("getPricesForDateRange", () => {
     expect(result[1].priceCentsKwh).toBe(6);
   });
 
-  it("returns empty array on API error", async () => {
+  it("throws on API error", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -203,18 +203,20 @@ describe("getPricesForDateRange", () => {
       })
     );
 
-    const result = await getPricesForDateRange(
-      new Date("2024-01-01"),
-      new Date("2024-01-02")
-    );
-    expect(result).toEqual([]);
+    await expect(
+      getPricesForDateRange(new Date("2024-01-01"), new Date("2024-01-02"))
+    ).rejects.toThrow("Failed to fetch prices");
   });
 
-  it("deduplicates prices on chunk boundaries", async () => {
+  it("sorts returned prices by date ascending", async () => {
+    // Server returns prices out of order — client must sort them
     const mockResponse = {
       success: true,
       data: {
-        ee: [{ timestamp: 1704067200, price: 50.0 }],
+        ee: [
+          { timestamp: 1704070800, price: 60.0 }, // later timestamp first
+          { timestamp: 1704067200, price: 50.0 }, // earlier timestamp second
+        ],
       },
     };
 
@@ -226,13 +228,29 @@ describe("getPricesForDateRange", () => {
       })
     );
 
-    // Range larger than 90 days to trigger chunking
-    const start = new Date("2024-01-01");
-    const end = new Date("2024-05-01");
+    const start = new Date("2024-01-01T00:00:00Z");
+    const end = new Date("2024-01-01T02:00:00Z");
     const result = await getPricesForDateRange(start, end);
 
-    // Even though both chunks return the same timestamp, it should be deduplicated
-    expect(result).toHaveLength(1);
+    expect(result).toHaveLength(2);
+    // Result must be sorted ascending by date
+    expect(result[0].priceEurMwh).toBe(50);
+    expect(result[1].priceEurMwh).toBe(60);
+    expect(result[0].date.getTime()).toBeLessThan(result[1].date.getTime());
+  });
+
+  it("throws on invalid API response format", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: false }),
+      })
+    );
+
+    await expect(
+      getPricesForDateRange(new Date("2024-01-01"), new Date("2024-01-02"))
+    ).rejects.toThrow("Invalid API response format");
   });
 });
 
@@ -353,7 +371,7 @@ describe("getHourlyAveragePattern", () => {
     expect(pattern.get(23)).toBeCloseTo(25);
   });
 
-  it("returns empty map when fetch fails", async () => {
+  it("throws when fetch fails", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -364,8 +382,9 @@ describe("getHourlyAveragePattern", () => {
       })
     );
 
-    const pattern = await getHourlyAveragePattern(7);
-    expect(pattern.size).toBe(0);
+    await expect(getHourlyAveragePattern(7)).rejects.toThrow(
+      "Failed to fetch prices"
+    );
   });
 
   it("excludes predicted prices from the pattern", async () => {

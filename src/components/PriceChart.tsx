@@ -18,6 +18,186 @@ import { format, isSameHour } from 'date-fns';
 import { ElectricityPrice, HourlyAveragePattern } from '@/lib/api';
 import { applyVat } from '@/lib/price';
 import { CheapestWindow } from '@/lib/cheapestWindow';
+import { getTallinnHour } from '@/lib/timezone';
+
+// ─── Sub-component interfaces ────────────────────────────────────────────────
+
+interface TooltipPayloadItem {
+    value: number;
+    payload: {
+        displayPrice: number;
+        isPredicted?: boolean;
+        timestamp: string;
+    };
+}
+
+interface ReferenceLabelProps {
+    viewBox?: { x: number; y: number };
+    value?: string;
+    fill?: string;
+    orientation?: 'horizontal' | 'vertical';
+    isHovering?: boolean;
+}
+
+interface MinMaxLabelProps {
+    viewBox?: { x: number; y: number };
+    value?: string;
+    type: 'min' | 'max';
+    isHovering?: boolean;
+}
+
+interface CustomTooltipProps {
+    active?: boolean;
+    payload?: readonly TooltipPayloadItem[];
+    label?: string | number;
+    stats: { mean: number; median: number; p75: number; p90: number; p95: number } | null;
+}
+
+// ─── Sub-components (defined outside PriceChart to prevent recreation on render) ─
+
+const CustomTooltip = ({ active, payload, label, stats }: CustomTooltipProps) => {
+    if (active && payload && payload.length) {
+        const date = new Date(label as string | number);
+        const d = payload[0].payload;
+        const isPredicted = d.isPredicted;
+
+        // Compute median comparison badge
+        let medianBadge: React.ReactNode = null;
+        if (stats && stats.median > 0 && d.displayPrice != null) {
+            const pctDiff = ((d.displayPrice - stats.median) / stats.median) * 100;
+            const absPct = Math.abs(pctDiff).toFixed(0);
+            if (pctDiff < 0) {
+                medianBadge = (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-400/20 text-emerald-300">
+                        {absPct}% below median
+                    </span>
+                );
+            } else if (pctDiff > 0) {
+                medianBadge = (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300">
+                        {absPct}% above median
+                    </span>
+                );
+            }
+        }
+
+        return (
+            <div className={`bg-zinc-900/90 border ${isPredicted ? 'border-indigo-500/50 shadow-[0_0_20px_rgba(99,102,241,0.3)]' : 'border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.3)]'} p-3 rounded-xl backdrop-blur-xl transition-all duration-200`}>
+                <p className="text-zinc-400 text-sm mb-1">
+                    {format(date, 'MMM d, HH:mm')}
+                    {isPredicted && <span className="ml-2 text-indigo-400 italic">(Predicted)</span>}
+                </p>
+                <p className={`font-bold text-lg ${isPredicted ? 'text-indigo-400' : 'text-emerald-400'}`}>
+                    {d.displayPrice} <span className="text-xs font-normal text-zinc-500">¢/kWh</span>
+                </p>
+                {medianBadge && <div className="mt-1">{medianBadge}</div>}
+            </div>
+        );
+    }
+    return null;
+};
+
+// Custom pill-shaped label for reference lines (horizontal and vertical)
+const ChartReferenceLabel = ({ viewBox, value, fill, orientation = 'horizontal', isHovering = false }: ReferenceLabelProps) => {
+    if (!viewBox || !value || !fill) return null;
+
+    const x = viewBox.x + (orientation === 'horizontal' ? 10 : 8);
+    const y = orientation === 'horizontal'
+        ? viewBox.y - 12  // slightly above the line
+        : viewBox.y + 25; // below the line (avoids top edge cutoff)
+
+    const opacity = isHovering ? 0.3 : 1;
+
+    return (
+        <g style={{ transition: 'opacity 0.3s ease-in-out', opacity }}>
+            <rect
+                x={x - 6}
+                y={y - 14}
+                width={value.length * 6.5 + 10}
+                height={20}
+                fill="#18181b"
+                fillOpacity={0.8}
+                stroke={fill}
+                strokeOpacity={0.4}
+                rx={10}
+            />
+            <text
+                x={x}
+                y={y}
+                fill={fill}
+                fontSize={10}
+                fontWeight={600}
+                opacity={0.9}
+            >
+                {value}
+            </text>
+        </g>
+    );
+};
+
+// Custom inline label for min/max price annotations on the data line
+const MinMaxLabel = ({ viewBox, value, type, isHovering = false }: MinMaxLabelProps) => {
+    if (!viewBox || !value) return null;
+    const isMax = type === 'max';
+    const color = isMax ? '#f59e0b' : '#22d3ee';
+    const bgColor = isMax ? '#451a03' : '#083344';
+    const label = `${isMax ? '▲' : '▼'} ${value}`;
+    // Position above for max, below for min
+    const yOffset = isMax ? -20 : 18;
+    const x = viewBox.x;
+    const y = viewBox.y + yOffset;
+    const textWidth = label.length * 6 + 14;
+
+    const opacity = isHovering ? 0.2 : 1;
+
+    return (
+        <g style={{ transition: 'opacity 0.3s ease-in-out', opacity }}>
+            <rect
+                x={x - textWidth / 2}
+                y={y - 11}
+                width={textWidth}
+                height={18}
+                fill={bgColor}
+                fillOpacity={0.9}
+                stroke={color}
+                strokeOpacity={0.5}
+                rx={9}
+            />
+            <text
+                x={x}
+                y={y + 3}
+                fill={color}
+                fontSize={10}
+                fontWeight={700}
+                textAnchor="middle"
+            >
+                {label}
+            </text>
+        </g>
+    );
+};
+
+// Custom Cursor for Tooltip (Glowing Band)
+const CustomCursor = (props: { points?: Array<{ x: number }>; height?: number }) => {
+    const { points, height } = props;
+    if (!points || !points.length) return null;
+
+    const { x } = points[0];
+    const bandWidth = 40;
+
+    return (
+        <rect
+            x={x - bandWidth / 2}
+            y={0}
+            width={bandWidth}
+            height={height || 400}
+            fill="url(#cursorGradient)"
+            opacity={0.5}
+        />
+    );
+};
+
+// ─── Main component ──────────────────────────────────────────────────────────
 
 interface PriceChartProps {
     data: ElectricityPrice[];
@@ -107,7 +287,7 @@ export default function PriceChart({
     // Process data for the chart, including color coding for past vs future
     const chartData = data.map(item => {
         const price = includeVat ? applyVat(item.priceCentsKwh) : item.priceCentsKwh;
-        const hour = item.date.getHours();
+        const hour = getTallinnHour(item.date);
 
         // Look up hourly average patterns for overlay lines
         const raw7d = showAvg7d && avg7dPattern ? avg7dPattern.get(hour) ?? null : null;
@@ -174,164 +354,6 @@ export default function PriceChart({
             }
         }
     }
-
-    interface TooltipPayloadItem {
-        value: number;
-        payload: {
-            displayPrice: number;
-            isPredicted?: boolean;
-            timestamp: string;
-        };
-    }
-
-    const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: TooltipPayloadItem[]; label?: string | number }) => {
-        if (active && payload && payload.length) {
-            const date = new Date(label as string | number);
-            const d = payload[0].payload;
-            const isPredicted = d.isPredicted;
-
-            // Compute median comparison badge
-            let medianBadge: React.ReactNode = null;
-            if (stats && stats.median > 0 && d.displayPrice != null) {
-                const pctDiff = ((d.displayPrice - stats.median) / stats.median) * 100;
-                const absPct = Math.abs(pctDiff).toFixed(0);
-                if (pctDiff < 0) {
-                    medianBadge = (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-400/20 text-emerald-300">
-                            {absPct}% below median
-                        </span>
-                    );
-                } else if (pctDiff > 0) {
-                    medianBadge = (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300">
-                            {absPct}% above median
-                        </span>
-                    );
-                }
-            }
-
-            return (
-                <div className={`bg-zinc-900/90 border ${isPredicted ? 'border-indigo-500/50 shadow-[0_0_20px_rgba(99,102,241,0.3)]' : 'border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.3)]'} p-3 rounded-xl backdrop-blur-xl transition-all duration-200`}>
-                    <p className="text-zinc-400 text-sm mb-1">
-                        {format(date, 'MMM d, HH:mm')}
-                        {isPredicted && <span className="ml-2 text-indigo-400 italic">(Predicted)</span>}
-                    </p>
-                    <p className={`font-bold text-lg ${isPredicted ? 'text-indigo-400' : 'text-emerald-400'}`}>
-                        {d.displayPrice} <span className="text-xs font-normal text-zinc-500">¢/kWh</span>
-                    </p>
-                    {medianBadge && <div className="mt-1">{medianBadge}</div>}
-                </div>
-            );
-        }
-        return null;
-    };
-
-    // Custom pill-shaped label for reference lines (horizontal and vertical)
-    interface ReferenceLabelProps {
-        viewBox?: { x: number; y: number };
-        value?: string;
-        fill?: string;
-        orientation?: 'horizontal' | 'vertical';
-    }
-
-    const ChartReferenceLabel = ({ viewBox, value, fill, orientation = 'horizontal' }: ReferenceLabelProps) => {
-        if (!viewBox || !value || !fill) return null;
-
-        const x = viewBox.x + (orientation === 'horizontal' ? 10 : 8);
-        const y = orientation === 'horizontal'
-            ? viewBox.y - 12  // slightly above the line
-            : viewBox.y + 25; // below the line (avoids top edge cutoff)
-
-        const opacity = isHovering ? 0.3 : 1;
-
-        return (
-            <g style={{ transition: 'opacity 0.3s ease-in-out', opacity }}>
-                <rect
-                    x={x - 6}
-                    y={y - 14}
-                    width={value.length * 6.5 + 10}
-                    height={20}
-                    fill="#18181b"
-                    fillOpacity={0.8}
-                    stroke={fill}
-                    strokeOpacity={0.4}
-                    rx={10}
-                />
-                <text
-                    x={x}
-                    y={y}
-                    fill={fill}
-                    fontSize={10}
-                    fontWeight={600}
-                    opacity={0.9}
-                >
-                    {value}
-                </text>
-            </g>
-        );
-    };
-
-    // Custom inline label for min/max price annotations on the data line
-    const MinMaxLabel = ({ viewBox, value, type }: { viewBox?: { x: number; y: number }; value?: string; type: 'min' | 'max' }) => {
-        if (!viewBox || !value) return null;
-        const isMax = type === 'max';
-        const color = isMax ? '#f59e0b' : '#22d3ee';
-        const bgColor = isMax ? '#451a03' : '#083344';
-        const label = `${isMax ? '▲' : '▼'} ${value}`;
-        // Position above for max, below for min
-        const yOffset = isMax ? -20 : 18;
-        const x = viewBox.x;
-        const y = viewBox.y + yOffset;
-        const textWidth = label.length * 6 + 14;
-
-        const opacity = isHovering ? 0.2 : 1;
-
-        return (
-            <g style={{ transition: 'opacity 0.3s ease-in-out', opacity }}>
-                <rect
-                    x={x - textWidth / 2}
-                    y={y - 11}
-                    width={textWidth}
-                    height={18}
-                    fill={bgColor}
-                    fillOpacity={0.9}
-                    stroke={color}
-                    strokeOpacity={0.5}
-                    rx={9}
-                />
-                <text
-                    x={x}
-                    y={y + 3}
-                    fill={color}
-                    fontSize={10}
-                    fontWeight={700}
-                    textAnchor="middle"
-                >
-                    {label}
-                </text>
-            </g>
-        );
-    };
-
-    // Custom Cursor for Tooltip (Glowing Band)
-    const CustomCursor = (props: { points?: Array<{ x: number }>; height?: number }) => {
-        const { points, height } = props;
-        if (!points || !points.length) return null;
-
-        const { x } = points[0];
-        const bandWidth = 40;
-
-        return (
-            <rect
-                x={x - bandWidth / 2}
-                y={0}
-                width={bandWidth}
-                height={height || 400}
-                fill="url(#cursorGradient)"
-                opacity={0.5}
-            />
-        );
-    };
 
     const gridOpacity = isHovering ? 0.1 : 0.4;
     const lineOpacity = isHovering ? 0.3 : 0.5;
@@ -418,7 +440,7 @@ export default function PriceChart({
                         style={{ opacity: isHovering ? 0.6 : 1, transition: 'opacity 0.3s' }}
                     />
                     <Tooltip
-                        content={<CustomTooltip />}
+                        content={(props) => <CustomTooltip {...props} stats={stats} />}
                         cursor={<CustomCursor />}
                         isAnimationActive={true}
                         animationDuration={200}
@@ -450,16 +472,16 @@ export default function PriceChart({
                             strokeDasharray="3 3"
                             strokeOpacity={lineOpacity}
                             style={{ transition: 'opacity 0.3s' }}
-                            label={<ChartReferenceLabel orientation="vertical" value={`Now ${format(now, 'HH:mm')}`} fill="#38bdf8" />}
+                            label={<ChartReferenceLabel orientation="vertical" value={`Now ${format(now, 'HH:mm')}`} fill="#38bdf8" isHovering={isHovering} />}
                         />
                     )}
 
                     {/* Statistical Reference Lines */}
-                    {stats && showMean && <ReferenceLine y={stats.mean} stroke="#fde047" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`Mean ${stats.mean.toFixed(2)} ¢`} fill="#fde047" />} />}
-                    {stats && showMedian && <ReferenceLine y={stats.median} stroke="#f43f5e" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`Median ${stats.median.toFixed(2)} ¢`} fill="#f43f5e" />} />}
-                    {stats && showP75 && <ReferenceLine y={stats.p75} stroke="#a78bfa" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`75th ${stats.p75.toFixed(2)} ¢`} fill="#a78bfa" />} />}
-                    {stats && showP90 && <ReferenceLine y={stats.p90} stroke="#f472b6" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`90th ${stats.p90.toFixed(2)} ¢`} fill="#f472b6" />} />}
-                    {stats && showP95 && <ReferenceLine y={stats.p95} stroke="#fb923c" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`95th ${stats.p95.toFixed(2)} ¢`} fill="#fb923c" />} />}
+                    {stats && showMean && <ReferenceLine y={stats.mean} stroke="#fde047" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`Mean ${stats.mean.toFixed(2)} ¢`} fill="#fde047" isHovering={isHovering} />} />}
+                    {stats && showMedian && <ReferenceLine y={stats.median} stroke="#f43f5e" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`Median ${stats.median.toFixed(2)} ¢`} fill="#f43f5e" isHovering={isHovering} />} />}
+                    {stats && showP75 && <ReferenceLine y={stats.p75} stroke="#a78bfa" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`75th ${stats.p75.toFixed(2)} ¢`} fill="#a78bfa" isHovering={isHovering} />} />}
+                    {stats && showP90 && <ReferenceLine y={stats.p90} stroke="#f472b6" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`90th ${stats.p90.toFixed(2)} ¢`} fill="#f472b6" isHovering={isHovering} />} />}
+                    {stats && showP95 && <ReferenceLine y={stats.p95} stroke="#fb923c" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`95th ${stats.p95.toFixed(2)} ¢`} fill="#fb923c" isHovering={isHovering} />} />}
 
                     <Area
                         type="monotone"
@@ -524,7 +546,7 @@ export default function PriceChart({
                             fill="#22d3ee"
                             stroke="#083344"
                             strokeWidth={2}
-                            label={<MinMaxLabel type="min" value={`${minPoint.displayPrice} ¢`} />}
+                            label={<MinMaxLabel type="min" value={`${minPoint.displayPrice} ¢`} isHovering={isHovering} />}
                         />
                     )}
                     {showMinMax && maxPoint && (
@@ -535,7 +557,7 @@ export default function PriceChart({
                             fill="#f59e0b"
                             stroke="#451a03"
                             strokeWidth={2}
-                            label={<MinMaxLabel type="max" value={`${maxPoint.displayPrice} ¢`} />}
+                            label={<MinMaxLabel type="max" value={`${maxPoint.displayPrice} ¢`} isHovering={isHovering} />}
                         />
                     )}
                 </AreaChart>
