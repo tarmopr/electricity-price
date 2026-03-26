@@ -54,7 +54,11 @@ const scheduledHandler = `    async scheduled(controller, env, ctx) {
         const url = "http://localhost/api/sync";
         console.log(\`[Cron] Triggered at \${new Date(controller.scheduledTime).toISOString()}, calling \${url}\`);
         try {
-            const request = new Request(url, { method: "POST" });
+            const headers = {};
+            if (env.SYNC_SECRET) {
+                headers["Authorization"] = \`Bearer \${env.SYNC_SECRET}\`;
+            }
+            const request = new Request(url, { method: "POST", headers });
             const response = await __worker.fetch(request, env, ctx);
             const body = await response.text();
             console.log(\`[Cron] Sync response (\${response.status}): \${body}\`);
