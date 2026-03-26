@@ -355,6 +355,10 @@ export default function PriceChart({
         }
     }
 
+    const nowDisplayPrice = activeCurrentTimestamp
+        ? chartData.find(d => d.timestamp === activeCurrentTimestamp)?.displayPrice ?? null
+        : null;
+
     const gridOpacity = isHovering ? 0.1 : 0.4;
     const lineOpacity = isHovering ? 0.3 : 0.5;
 
@@ -472,7 +476,7 @@ export default function PriceChart({
                             strokeDasharray="3 3"
                             strokeOpacity={lineOpacity}
                             style={{ transition: 'opacity 0.3s' }}
-                            label={<ChartReferenceLabel orientation="vertical" value={`Now ${format(now, 'HH:mm')}`} fill="#38bdf8" isHovering={isHovering} />}
+                            label={<ChartReferenceLabel orientation="vertical" value={nowDisplayPrice !== null ? `Now ${nowDisplayPrice} ¢` : 'Now'} fill="#38bdf8" isHovering={isHovering} />}
                         />
                     )}
 
