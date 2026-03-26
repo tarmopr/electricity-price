@@ -116,13 +116,15 @@ export default function PriceHeatmap({
 
       {/* Heatmap Grid */}
       <div className="overflow-x-auto">
-        <div className="min-w-[700px]">
+        <div className="min-w-[700px]" role="grid">
           {/* Hour Headers */}
-          <div className="flex">
-            <div className="w-24 shrink-0" /> {/* spacer for row labels */}
+          <div className="flex" role="row">
+            <div className="w-24 shrink-0" role="columnheader" aria-label="Row label" /> {/* spacer for row labels */}
             {hours.map((h) => (
               <div
                 key={h}
+                role="columnheader"
+                aria-label={`${h.toString().padStart(2, "0")}:00`}
                 className="flex-1 text-center text-[10px] text-zinc-500 pb-1"
               >
                 {h.toString().padStart(2, "0")}
@@ -134,12 +136,13 @@ export default function PriceHeatmap({
           {heatmapData.rows.map((row, rowIdx) => (
             <div
               key={row.label + rowIdx}
+              role="row"
               className={`flex items-center transition-opacity duration-200 ${
                 row.isHighlighted === false ? "opacity-40" : ""
               }`}
             >
               {/* Row Label */}
-              <div className="w-24 shrink-0 text-xs text-zinc-400 pr-2 text-right truncate">
+              <div role="rowheader" className="w-24 shrink-0 text-xs text-zinc-400 pr-2 text-right truncate">
                 {row.label}
               </div>
 
@@ -149,10 +152,16 @@ export default function PriceHeatmap({
                   ? cheapestHourKeys.has(`${row.dateKey}:${cell.hour}`)
                   : false;
 
+                const cellTitle = cell.price !== null
+                  ? `${row.label} ${cell.hour.toString().padStart(2, "0")}:00 — ${cell.price.toFixed(2)} ¢/kWh${cell.isPredicted ? " (predicted)" : ""}${isCheapestCell ? " (cheapest window)" : ""}`
+                  : "No data";
+
                 return (
                   <div
                     key={cell.hour}
-                    className={`flex-1 aspect-square m-[1px] rounded-sm cursor-crosshair transition-all duration-150 hover:ring-1 hover:ring-white/30 hover:scale-110 hover:z-10 ${
+                    role="gridcell"
+                    tabIndex={0}
+                    className={`flex-1 aspect-square m-[1px] rounded-sm cursor-crosshair transition-all duration-150 hover:ring-1 hover:ring-white/30 hover:scale-110 hover:z-10 focus:outline-none focus:ring-2 focus:ring-white/50 focus:z-10 ${
                       isCheapestCell ? "ring-2 ring-emerald-400/70 z-10" : ""
                     }`}
                     style={{
@@ -174,17 +183,32 @@ export default function PriceHeatmap({
                       })
                     }
                     onMouseLeave={() => setHoveredCell(null)}
-                    title={
-                      cell.price !== null
-                        ? `${row.label} ${cell.hour
-                            .toString()
-                            .padStart(2, "0")}:00 — ${cell.price.toFixed(
-                            2
-                          )} ¢/kWh${cell.isPredicted ? " (predicted)" : ""}${
-                            isCheapestCell ? " (cheapest window)" : ""
-                          }`
-                        : "No data"
+                    onFocus={() =>
+                      setHoveredCell({
+                        row: rowIdx,
+                        hour: cell.hour,
+                        price: cell.price,
+                        label: row.label,
+                        isPredicted: cell.isPredicted,
+                        isCheapest: isCheapestCell,
+                      })
                     }
+                    onBlur={() => setHoveredCell(null)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setHoveredCell({
+                          row: rowIdx,
+                          hour: cell.hour,
+                          price: cell.price,
+                          label: row.label,
+                          isPredicted: cell.isPredicted,
+                          isCheapest: isCheapestCell,
+                        });
+                      }
+                    }}
+                    title={cellTitle}
+                    aria-label={cellTitle}
                   />
                 );
               })}

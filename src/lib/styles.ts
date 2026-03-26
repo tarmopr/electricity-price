@@ -14,6 +14,10 @@ export const PILL_ACTIVE =
 export const PILL_INACTIVE =
   "bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800";
 
+/** Indigo variant — used for the Heatmap view toggle */
+export const PILL_ACTIVE_INDIGO =
+  "bg-indigo-400/20 text-indigo-300 border-indigo-400/50";
+
 /** Returns PILL_ACTIVE or PILL_INACTIVE based on condition. */
 export function pillClass(isActive: boolean): string {
   return isActive ? PILL_ACTIVE : PILL_INACTIVE;

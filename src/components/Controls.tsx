@@ -279,6 +279,8 @@ export default function Controls({
                     {/* Statistical Overlays */}
                     <div className="flex flex-col space-y-2 w-full md:w-auto">
                         <div className="flex flex-wrap gap-2">
+                            {/* Stat buttons use per-stat active colours matching their chart reference lines,
+                                intentionally diverging from shared PILL_ACTIVE (emerald) */}
                             {/* Primary stat buttons */}
                             <button
                                 onClick={() => setShowNow(!showNow)}
