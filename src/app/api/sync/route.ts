@@ -30,7 +30,8 @@ import {
 export async function POST(request: NextRequest) {
   try {
     // When SYNC_SECRET is not set (e.g. local dev), the endpoint is unauthenticated.
-    // In production, always set SYNC_SECRET in wrangler.toml or Cloudflare dashboard.
+    // In production, set via: wrangler secret put SYNC_SECRET
+    // For local dev, add SYNC_SECRET=your-value to .dev.vars (already git-ignored).
     const syncSecret = process.env.SYNC_SECRET;
     if (syncSecret) {
       const authHeader = request.headers.get('Authorization');
