@@ -10,6 +10,8 @@
 import { getTallinnHour, getNextTallinnOccurrence, isValidHHMM } from '@/lib/timezone';
 
 const HOUR_MS = 60 * 60 * 1000;
+/** Length of one search slot (15 minutes). */
+export const SLOT_MS = 15 * 60 * 1000;
 
 export interface CheapestWindow {
   /** ISO timestamp of the first slot in the window */
@@ -104,15 +106,25 @@ export function getVisibleWindowRange(
   }
 
   if (x1 === x2) return null;
+  // The data covers through the end of the last point's bucket, so a window ending exactly
+  // at the data end (e.g. 22:00–24:00 with the last point at 23:45) is not "clipped".
+  // Bucket length = smallest of the last (up to) 3 intervals, so a data hole right before
+  // the last point doesn't inflate it. Not capped: aggregated 6/12/24 h buckets are valid.
+  // A single point defaults to 15 min.
+  let lastBucketMs = Infinity;
+  for (let i = data.length - 1; i >= Math.max(1, data.length - 3); i--) {
+    const gap = new Date(data[i].timestamp).getTime() - new Date(data[i - 1].timestamp).getTime();
+    if (gap > 0 && gap < lastBucketMs) lastBucketMs = gap;
+  }
+  if (!Number.isFinite(lastBucketMs)) lastBucketMs = SLOT_MS;
+  const dataEndMs = lastMs + lastBucketMs;
   // Clipped when part of the window lies outside the chart data
-  const clipped = startMs < firstMs || !x2Found;
+  const clipped = startMs < firstMs || (!x2Found && endMs > dataEndMs);
   return { x1, x2, clipped };
 }
 
 // ─── 15-minute rolling-horizon search ────────────────────────────────────────
 
-/** Length of one search slot (15 minutes). */
-export const SLOT_MS = 15 * 60 * 1000;
 
 /** Input point for slot normalization (hourly or 15-minute resolution). */
 export interface SlotSourcePoint {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import Dashboard from "@/components/Dashboard";
 import type { ElectricityPrice } from "@/lib/api";
 
@@ -133,6 +133,16 @@ function makeCostCalc(overrides: Record<string, unknown> = {}) {
     };
 }
 
+/**
+ * The Best Window card is rendered twice (mobile: `lg:hidden`, desktop: `hidden lg:block`);
+ * jsdom ignores CSS, so tests scope queries to one copy.
+ */
+function bestWindowCopies(container: HTMLElement) {
+    const mobile = container.querySelector<HTMLElement>(".lg\\:hidden")!;
+    const desktop = container.querySelector<HTMLElement>(".hidden.lg\\:block")!;
+    return { mobile, desktop };
+}
+
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 const { useDashboardPrices } = vi.mocked(await import("@/lib/useDashboardPrices"));
@@ -246,10 +256,38 @@ describe("Dashboard", () => {
         useCostCalculator.mockReturnValue(
             makeCostCalc({ cheapestWindow, startingNowPrice: 10 }) as unknown as ReturnType<typeof useCostCalculator>
         );
-        render(<Dashboard />);
-        expect(screen.getByRole("button", { name: /best time ·\s*ev charge/i })).toBeInTheDocument();
-        // 8.5 ¢ × 40 kWh = €3.40
-        expect(screen.getAllByText("€3.40").length).toBeGreaterThan(0);
+        const { container } = render(<Dashboard />);
+        const { mobile, desktop } = bestWindowCopies(container);
+        for (const copy of [mobile, desktop]) {
+            expect(within(copy).getByRole("button", { name: /best time ·\s*ev charge/i })).toBeInTheDocument();
+            // 8.5 ¢ × 40 kWh = €3.40
+            expect(within(copy).getByText("€3.40")).toBeInTheDocument();
+        }
+    });
+
+    it("renders one card copy per breakpoint so DOM order matches visual order (no order-* classes)", () => {
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({ cheapestWindow }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        const { container } = render(<Dashboard />);
+        const { mobile, desktop } = bestWindowCopies(container);
+        // Mobile copy: hidden from lg up; desktop copy: hidden below lg, full width
+        expect(mobile.className).toContain("lg:hidden");
+        expect(desktop.className).toContain("hidden lg:block lg:col-span-3");
+
+        // Grid order: price card → mobile card → controls → desktop card
+        const grid = mobile.parentElement!;
+        const children = Array.from(grid.children) as HTMLElement[];
+        expect(children.indexOf(mobile)).toBe(1);
+        expect(within(children[2]).getByRole("group", { name: /period selection/i })).toBeInTheDocument();
+        expect(children.indexOf(desktop)).toBe(3);
+        const orderTokens = Array.from(container.querySelectorAll<HTMLElement>("[class]"))
+            .flatMap((el) => Array.from(el.classList))
+            .filter((c) => /^([a-z]+:)?order-/.test(c));
+        expect(orderTokens).toEqual([]);
+        // No duplicate ids introduced by the two copies
+        const ids = Array.from(container.querySelectorAll("[id]")).map((el) => el.id);
+        expect(new Set(ids).size).toBe(ids.length);
     });
 
     it("tapping the Best Window card opens the cost calculator", () => {
@@ -257,9 +295,21 @@ describe("Dashboard", () => {
         useCostCalculator.mockReturnValue(
             makeCostCalc({ cheapestWindow, setCostCalcOpen }) as unknown as ReturnType<typeof useCostCalculator>
         );
-        render(<Dashboard />);
-        fireEvent.click(screen.getByRole("button", { name: /open cost calculator/i }));
+        const scrollIntoView = vi.fn();
+        const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+            cb(0);
+            return 0;
+        });
+        const { container } = render(<Dashboard />);
+        document.getElementById("cost-calculator")!.scrollIntoView = scrollIntoView;
+        const { mobile, desktop } = bestWindowCopies(container);
+        // Works from both copies: opens the calculator and scrolls to it
+        fireEvent.click(within(mobile).getByRole("button", { name: /open cost calculator/i }));
+        fireEvent.click(within(desktop).getByRole("button", { name: /open cost calculator/i }));
+        expect(setCostCalcOpen).toHaveBeenCalledTimes(2);
         expect(setCostCalcOpen).toHaveBeenCalledWith(true);
+        expect(scrollIntoView).toHaveBeenCalledTimes(2);
+        raf.mockRestore();
     });
 
     it("passes the cheapest window to the chart even when the calculator is closed", () => {
@@ -288,8 +338,10 @@ describe("Dashboard", () => {
         useCostCalculator.mockReturnValue(
             makeCostCalc({ costError: "boom" }) as unknown as ReturnType<typeof useCostCalculator>
         );
-        render(<Dashboard />);
-        expect(screen.getByRole("alert")).toHaveTextContent("Couldn't load prices");
+        const { container } = render(<Dashboard />);
+        const { mobile, desktop } = bestWindowCopies(container);
+        expect(within(mobile).getByRole("alert")).toHaveTextContent("Couldn't load prices");
+        expect(within(desktop).getByRole("alert")).toHaveTextContent("Couldn't load prices");
     });
 
     it("highlights a deadline-ignoring fallback window on the chart and flags it on the card", () => {
@@ -300,9 +352,9 @@ describe("Dashboard", () => {
                 readyByLimitMs: new Date("2024-01-02T05:00:00.000Z").getTime(), // next 07:00 Tallinn
             }) as unknown as ReturnType<typeof useCostCalculator>
         );
-        render(<Dashboard />);
+        const { container } = render(<Dashboard />);
         expect(screen.getByTestId("cheapest-area")).toBeInTheDocument();
-        expect(screen.getByText(/Finishes after 07:00/)).toBeInTheDocument();
+        expect(within(bestWindowCopies(container).mobile).getByText(/Finishes after 07:00/)).toBeInTheDocument();
     });
 
     it("renders the Next 24h period pill", () => {

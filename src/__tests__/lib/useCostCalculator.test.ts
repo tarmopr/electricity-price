@@ -263,14 +263,14 @@ describe("useCostCalculator", () => {
     const stale = hourly("2024-06-14T17:00:00.000Z", Array(14).fill(99));
     getPricesWithPrediction.mockReturnValueOnce(slow).mockResolvedValueOnce(fresh);
 
-    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
     const { result } = renderHook(() => useCostCalculator(false));
     await waitFor(() => expect(getPricesWithPrediction).toHaveBeenCalledTimes(1));
 
-    // Second (newer) load completes first
-    act(() => {
-      document.dispatchEvent(new Event("visibilitychange"));
+    // Second (newer) load — from the 15-min refresh interval — completes first
+    await act(async () => {
+      vi.advanceTimersByTime(15 * 60 * 1000);
     });
+    expect(getPricesWithPrediction).toHaveBeenCalledTimes(2);
     await waitFor(() => expect(result.current.cheapestWindow?.averagePrice).toBeCloseTo(3));
     const nowAfterFresh = result.current.costNowMs;
 
@@ -281,10 +281,9 @@ describe("useCostCalculator", () => {
     });
     expect(result.current.cheapestWindow!.averagePrice).toBeCloseTo(3);
     expect(result.current.costNowMs).toBe(nowAfterFresh);
-    visibility.mockRestore();
   });
 
-  it("refetches when the tab becomes visible again, and stops listening on unmount", async () => {
+  it("refetches on becoming visible once the last load is ≥ 60 s old, and stops listening on unmount", async () => {
     getPricesWithPrediction.mockResolvedValue([]);
     const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
     const { unmount } = renderHook(() => useCostCalculator(false));
@@ -296,6 +295,9 @@ describe("useCostCalculator", () => {
     });
     expect(getPricesWithPrediction).toHaveBeenCalledTimes(1);
 
+    await act(async () => {
+      vi.advanceTimersByTime(60 * 1000);
+    });
     visibility.mockReturnValue("visible");
     act(() => {
       document.dispatchEvent(new Event("visibilitychange"));
@@ -303,10 +305,114 @@ describe("useCostCalculator", () => {
     await waitFor(() => expect(getPricesWithPrediction).toHaveBeenCalledTimes(2));
 
     unmount();
+    await act(async () => {
+      vi.advanceTimersByTime(60 * 1000);
+    });
     act(() => {
       document.dispatchEvent(new Event("visibilitychange"));
     });
     expect(getPricesWithPrediction).toHaveBeenCalledTimes(2);
+    visibility.mockRestore();
+  });
+
+  it("skips the refetch when becoming visible within 60 s of the last successful load", async () => {
+    getPricesWithPrediction.mockResolvedValue([]);
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    const { result } = renderHook(() => useCostCalculator(false));
+    await waitFor(() => expect(result.current.costLoading).toBe(false));
+
+    await act(async () => {
+      vi.advanceTimersByTime(59 * 1000);
+    });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    // Give any (unexpected) load a chance to start
+    await act(async () => {});
+    expect(getPricesWithPrediction).toHaveBeenCalledTimes(1);
+    visibility.mockRestore();
+  });
+
+  it("advances 'now' to the current slot on becoming visible even when the refetch is skipped", async () => {
+    vi.setSystemTime(new Date("2024-06-14T17:14:50.000Z"));
+    getPricesWithPrediction.mockResolvedValue([]);
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    const { result } = renderHook(() => useCostCalculator(false));
+    await waitFor(() => expect(result.current.costLoading).toBe(false));
+    expect(new Date(result.current.costNowMs!).toISOString()).toBe("2024-06-14T17:00:00.000Z");
+
+    // 30 s later (device asleep, no tick fired) the clock is in the next slot
+    vi.setSystemTime(new Date("2024-06-14T17:15:20.000Z"));
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(new Date(result.current.costNowMs!).toISOString()).toBe("2024-06-14T17:15:00.000Z");
+    await act(async () => {});
+    expect(getPricesWithPrediction).toHaveBeenCalledTimes(1); // refetch throttled
+    visibility.mockRestore();
+  });
+
+  it("on-visible refetches after a failed interval load when the last success is ≥ 60 s old", async () => {
+    getPricesWithPrediction
+      .mockResolvedValueOnce(hourly("2024-06-14T17:00:00.000Z", Array(14).fill(3)))
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockResolvedValue([]);
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    const { result } = renderHook(() => useCostCalculator(false));
+    await waitFor(() => expect(result.current.costLoading).toBe(false));
+
+    await act(async () => {
+      vi.advanceTimersByTime(61 * 1000);
+    });
+    expect(getPricesWithPrediction).toHaveBeenCalledTimes(1);
+    // The interval load (at 15 min) fails — not in flight anymore, last success is old
+    await act(async () => {
+      vi.advanceTimersByTime(15 * 60 * 1000 - 61 * 1000);
+    });
+    await waitFor(() => expect(result.current.costError).not.toBeNull());
+    expect(getPricesWithPrediction).toHaveBeenCalledTimes(2);
+
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await waitFor(() => expect(getPricesWithPrediction).toHaveBeenCalledTimes(3));
+    visibility.mockRestore();
+  });
+
+  it("on-visible refetches within 60 s when the very first load failed", async () => {
+    getPricesWithPrediction.mockRejectedValueOnce(new Error("boom")).mockResolvedValue([]);
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    const { result } = renderHook(() => useCostCalculator(false));
+    await waitFor(() => expect(result.current.costError).not.toBeNull());
+
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await waitFor(() => expect(getPricesWithPrediction).toHaveBeenCalledTimes(2));
+    visibility.mockRestore();
+  });
+
+  it("on-visible does not start a second fetch while the initial load is pending", async () => {
+    let resolveFirst: (v: ElectricityPrice[]) => void = () => {};
+    const first = new Promise<ElectricityPrice[]>((r) => {
+      resolveFirst = r;
+    });
+    getPricesWithPrediction.mockReturnValueOnce(first).mockResolvedValue([]);
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    const { result } = renderHook(() => useCostCalculator(false));
+    await waitFor(() => expect(getPricesWithPrediction).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(getPricesWithPrediction).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveFirst(hourly("2024-06-14T17:00:00.000Z", Array(14).fill(3)));
+      await first;
+    });
+    await waitFor(() => expect(result.current.costLoading).toBe(false));
+    expect(getPricesWithPrediction).toHaveBeenCalledTimes(1);
     visibility.mockRestore();
   });
 

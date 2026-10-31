@@ -11,6 +11,8 @@ import type { ElectricityPrice } from '@/lib/api';
 
 /** Same cadence as the dashboard price refresh. */
 const REFRESH_MS = 15 * 60 * 1000;
+/** Skip the on-visible refetch if the last successful load is newer than this. */
+const VISIBILITY_REFETCH_MIN_MS = 60 * 1000;
 /** How often to check whether "now" has entered a new 15-minute slot. */
 const NOW_TICK_MS = 60 * 1000;
 
@@ -89,6 +91,10 @@ export function useCostCalculator(includeVat: boolean) {
         // Slot last written to state. All nowMs writes go through advanceNow, so this
         // lets a same-slot tick skip setState entirely (not even a bail-out render).
         let currentSlot: number | null = null;
+        // When the last successful load finished (throttles on-visible refetches)
+        let lastSuccessMs: number | null = null;
+        // True while the latest request is pending (on-visible must not stack another fetch)
+        let inFlight = false;
 
         /** Advance "now" to the slot of `ms`; never backwards, no-op within the same slot. */
         function advanceNow(ms: number) {
@@ -100,18 +106,21 @@ export function useCostCalculator(includeVat: boolean) {
 
         async function load() {
             const requestId = ++latestRequest;
+            inFlight = true;
             const now = new Date();
             const isCurrent = () => !cancelled && requestId === latestRequest;
             try {
                 // Fetch from the start of the current hour so hourly data still covers "now"
                 const data = await getPricesWithPrediction(floorToHour(now), getEndOfTomorrowTallinn(now));
                 if (!isCurrent()) return;
+                lastSuccessMs = Date.now();
                 setHorizonPrices(data);
                 setError(null);
             } catch (err: unknown) {
                 if (!isCurrent()) return;
                 setError(err instanceof Error ? err.message : 'Failed to load prices');
             } finally {
+                if (requestId === latestRequest) inFlight = false;
                 if (isCurrent()) {
                     advanceNow(now.getTime());
                     setLoading(false);
@@ -119,9 +128,15 @@ export function useCostCalculator(includeVat: boolean) {
             }
         }
 
-        // Phone tabs resumed hours later: refetch as soon as the tab is visible again
+        // Phone tabs resumed hours later: refetch as soon as the tab is visible again.
+        // Quick app switches skip the refetch (it pulls 8+ days of history for predictions),
+        // but "now" is always advanced — cheap, and correct after a long sleep.
         function handleVisibility() {
-            if (document.visibilityState === 'visible') load();
+            if (document.visibilityState !== 'visible') return;
+            advanceNow(Date.now());
+            if (inFlight) return;
+            if (lastSuccessMs !== null && Date.now() - lastSuccessMs < VISIBILITY_REFETCH_MIN_MS) return;
+            load();
         }
 
         load();

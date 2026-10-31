@@ -132,6 +132,25 @@ export default function Dashboard() {
         });
     }, [setCostCalcOpen]);
 
+    const bestWindowCard = (
+        <BestWindowCard
+            presetLabel={costActivePreset}
+            window={cheapestWindow}
+            consumptionKwh={costConsumptionKwh}
+            durationHours={costDurationHours}
+            startingNowPrice={startingNowPrice}
+            readyBy={costReadyBy}
+            readyByLimitMs={readyByLimitMs}
+            startingNowEndMs={startingNowEndMs}
+            ignoresDeadline={bestIgnoresDeadline}
+            isPredicted={cheapestIsPredicted}
+            loading={costLoading}
+            error={costError}
+            nowMs={costNowMs}
+            onOpen={openCostCalculator}
+        />
+    );
+
     // Show info banner when tomorrow is selected but official prices aren't published yet
     const allPredicted = useMemo(() => {
         return period === 'tomorrow' && prices.length > 0 && prices.every(p => p.isPredicted);
@@ -168,10 +187,12 @@ export default function Dashboard() {
                 />
             )}
 
-            {/* Top Row: Current Price & Controls; Best Window sits under the price on mobile,
-                full-width under the top row on desktop (single instance, reordered via grid order) */}
+            {/* Top Row: Current Price & Controls. The Best Window card is rendered in two DOM
+                positions so DOM (Tab) order matches visual order at each breakpoint (WCAG 2.4.3):
+                under the price on mobile, full-width under the top row from lg up. display:none
+                keeps the inactive copy out of the accessibility tree and Tab order. */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-                <div className="order-1 lg:col-span-1 h-full">
+                <div className="lg:col-span-1 h-full">
                     <CurrentPriceCard
                         currentPrice={currentPrice}
                         previousPrice={previousPrice}
@@ -180,25 +201,10 @@ export default function Dashboard() {
                         includeVat={includeVat}
                     />
                 </div>
-                <div className="order-2 lg:order-3 lg:col-span-3">
-                    <BestWindowCard
-                        presetLabel={costActivePreset}
-                        window={cheapestWindow}
-                        consumptionKwh={costConsumptionKwh}
-                        durationHours={costDurationHours}
-                        startingNowPrice={startingNowPrice}
-                        readyBy={costReadyBy}
-                        readyByLimitMs={readyByLimitMs}
-                        startingNowEndMs={startingNowEndMs}
-                        ignoresDeadline={bestIgnoresDeadline}
-                        isPredicted={cheapestIsPredicted}
-                        loading={costLoading}
-                        error={costError}
-                        nowMs={costNowMs}
-                        onOpen={openCostCalculator}
-                    />
+                <div className="lg:hidden">
+                    {bestWindowCard}
                 </div>
-                <div className="order-3 lg:order-2 lg:col-span-2 h-full">
+                <div className="lg:col-span-2 h-full">
                     <Controls
                         includeVat={includeVat}
                         setIncludeVat={setIncludeVat}
@@ -227,6 +233,9 @@ export default function Dashboard() {
                         alertConfig={alertConfig}
                         setAlertConfig={setAlertConfig}
                     />
+                </div>
+                <div className="hidden lg:block lg:col-span-3">
+                    {bestWindowCard}
                 </div>
             </div>
 

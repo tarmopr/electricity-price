@@ -584,6 +584,54 @@ describe("cheapestWindow", () => {
       expect(getVisibleWindowRange(win("2024-06-14T20:00:00.000Z", "2024-06-15T00:00:00.000Z"), data)).toBeNull();
     });
 
+    it("hourly data: a window ending exactly at the data end (last point + 1 h) is not clipped", () => {
+      // data: 00:00..23:00Z hourly → covers through 24:00Z
+      const r = getVisibleWindowRange(win("2024-06-15T22:00:00.000Z", "2024-06-16T00:00:00.000Z"), data);
+      expect(r).toEqual({ x1: "2024-06-15T22:00:00.000Z", x2: data[23].timestamp, clipped: false });
+    });
+
+    it("hourly data: a window ending beyond the data end is clipped", () => {
+      const r = getVisibleWindowRange(win("2024-06-15T22:00:00.000Z", "2024-06-16T00:15:00.000Z"), data);
+      expect(r!.clipped).toBe(true);
+    });
+
+    it("15-min data: a 22:00–24:00 window with the last point at 23:45 is not clipped", () => {
+      const start = new Date("2024-06-15T00:00:00Z").getTime();
+      const quarter = Array.from({ length: 96 }, (_, i) => ({
+        timestamp: new Date(start + i * SLOT_MS).toISOString(),
+      }));
+      const end = getVisibleWindowRange(win("2024-06-15T22:00:00.000Z", "2024-06-16T00:00:00.000Z"), quarter);
+      expect(end).toEqual({ x1: "2024-06-15T22:00:00.000Z", x2: "2024-06-15T23:45:00.000Z", clipped: false });
+
+      const beyond = getVisibleWindowRange(win("2024-06-15T22:00:00.000Z", "2024-06-16T00:15:00.000Z"), quarter);
+      expect(beyond!.clipped).toBe(true);
+    });
+
+    it("a data hole before the last point doesn't inflate the bucket: past-end window is clipped", () => {
+      // hourly 00:00..20:00Z, then a 3 h hole, last point 23:00Z → bucket = 1 h, data end 24:00Z
+      const holey = [...data.slice(0, 21), data[23]];
+      const r = getVisibleWindowRange(win("2024-06-15T21:00:00.000Z", "2024-06-16T00:30:00.000Z"), holey);
+      expect(r!.clipped).toBe(true);
+      const exact = getVisibleWindowRange(win("2024-06-15T21:00:00.000Z", "2024-06-16T00:00:00.000Z"), holey);
+      expect(exact!.clipped).toBe(false);
+    });
+
+    it("6 h aggregated data: a window ending exactly at the data end is not clipped", () => {
+      const start = new Date("2024-06-15T00:00:00Z").getTime();
+      const sixH = Array.from({ length: 4 }, (_, i) => ({
+        timestamp: new Date(start + i * 6 * 60 * 60 * 1000).toISOString(),
+      }));
+      const end = getVisibleWindowRange(win("2024-06-15T12:00:00.000Z", "2024-06-16T00:00:00.000Z"), sixH);
+      expect(end).toEqual({ x1: "2024-06-15T12:00:00.000Z", x2: "2024-06-15T18:00:00.000Z", clipped: false });
+      const beyond = getVisibleWindowRange(win("2024-06-15T12:00:00.000Z", "2024-06-16T01:00:00.000Z"), sixH);
+      expect(beyond!.clipped).toBe(true);
+    });
+
+    it("single data point: nothing to draw (x1 === x2), so the 15-min bucket default is moot", () => {
+      const one = [{ timestamp: "2024-06-15T10:00:00.000Z" }];
+      expect(getVisibleWindowRange(win("2024-06-15T10:00:00.000Z", "2024-06-15T10:15:00.000Z"), one)).toBeNull();
+    });
+
     it("maps a mid-hour window onto the hourly bucket containing its start", () => {
       const r = getVisibleWindowRange(win("2024-06-15T02:15:00.000Z", "2024-06-15T04:15:00.000Z"), data);
       expect(r).toEqual({ x1: "2024-06-15T02:00:00.000Z", x2: "2024-06-15T05:00:00.000Z", clipped: false });
