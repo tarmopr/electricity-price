@@ -160,6 +160,12 @@ describe("shareState", () => {
       expect(state!.period).toBe("this_week");
     });
 
+    it("decodes and roundtrips next_24h period", () => {
+      expect(decodeParamsToState(new URLSearchParams("tf=next_24h"))!.period).toBe("next_24h");
+      const encoded = encodeStateToParams({ period: "next_24h", includeVat: false, viewMode: "chart" });
+      expect(decodeParamsToState(new URLSearchParams(encoded))!.period).toBe("next_24h");
+    });
+
     it("roundtrips this_week encode/decode", () => {
       const original: ShareableState = {
         period: "this_week",

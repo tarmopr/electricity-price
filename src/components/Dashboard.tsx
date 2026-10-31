@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
     calculateStatistics,
 } from '@/lib/api';
@@ -20,6 +20,7 @@ import Controls from './Controls';
 import DashboardSkeleton from './DashboardSkeleton';
 import PriceAlertBanner from './PriceAlertBanner';
 import CostCalculator from './CostCalculator';
+import BestWindowCard from './BestWindowCard';
 import PriceHeatmap from './PriceHeatmap';
 import ShareButton from './ShareButton';
 import { decodeParamsToState } from '@/lib/shareState';
@@ -103,16 +104,32 @@ export default function Dashboard() {
     // Calculate statistics only once when prices or VAT settings change
     const stats = calculateStatistics(prices, includeVat);
 
-    // Cost calculator state and derived values
+    // Cost calculator state + rolling-horizon cheapest window (independent of chart period)
     const {
         costConsumptionKwh, setCostConsumptionKwh,
         costDurationHours, setCostDurationHours,
-        costUntilHour, setCostUntilHour,
+        costReadyBy, setCostReadyBy,
         costActivePreset, setCostActivePreset,
         costCalcOpen, setCostCalcOpen,
         cheapestWindow,
-        currentWindowAvgPrice,
-    } = useCostCalculator(prices, includeVat, period);
+        startingNowPrice,
+        horizonAvgPrice,
+        horizonMaxPrice,
+        isPredicted: cheapestIsPredicted,
+        costNowMs,
+        costLoading,
+        costError,
+        readyByLimitMs,
+        startingNowEndMs,
+    } = useCostCalculator(includeVat);
+
+    // Best-window card tap: expand the calculator, then scroll it into view after it renders
+    const openCostCalculator = useCallback(() => {
+        setCostCalcOpen(true);
+        requestAnimationFrame(() => {
+            document.getElementById('cost-calculator')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+        });
+    }, [setCostCalcOpen]);
 
     // Show info banner when tomorrow is selected but official prices aren't published yet
     const allPredicted = useMemo(() => {
@@ -150,9 +167,10 @@ export default function Dashboard() {
                 />
             )}
 
-            {/* Top Row: Current Price & Controls */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-1 border-b border-zinc-800 pb-4 lg:border-none lg:pb-0 h-full">
+            {/* Top Row: Current Price & Controls; Best Window sits under the price on mobile,
+                full-width under the top row on desktop (single instance, reordered via grid order) */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+                <div className="order-1 lg:col-span-1 h-full">
                     <CurrentPriceCard
                         currentPrice={currentPrice}
                         previousPrice={previousPrice}
@@ -161,7 +179,24 @@ export default function Dashboard() {
                         includeVat={includeVat}
                     />
                 </div>
-                <div className="lg:col-span-2 h-full">
+                <div className="order-2 lg:order-3 lg:col-span-3">
+                    <BestWindowCard
+                        presetLabel={costActivePreset}
+                        window={cheapestWindow}
+                        consumptionKwh={costConsumptionKwh}
+                        durationHours={costDurationHours}
+                        startingNowPrice={startingNowPrice}
+                        readyBy={costReadyBy}
+                        readyByLimitMs={readyByLimitMs}
+                        startingNowEndMs={startingNowEndMs}
+                        isPredicted={cheapestIsPredicted}
+                        loading={costLoading}
+                        error={costError}
+                        nowMs={costNowMs}
+                        onOpen={openCostCalculator}
+                    />
+                </div>
+                <div className="order-3 lg:order-2 lg:col-span-2 h-full">
                     <Controls
                         includeVat={includeVat}
                         setIncludeVat={setIncludeVat}
@@ -248,7 +283,7 @@ export default function Dashboard() {
                         showP90={showP90}
                         showP95={showP95}
                         stats={stats}
-                        cheapestWindow={costCalcOpen ? cheapestWindow : null}
+                        cheapestWindow={cheapestWindow}
                         avg7dPattern={avg7dPattern}
                         avg30dPattern={avg30dPattern}
                         showAvg7d={showAvg7d}
@@ -259,7 +294,7 @@ export default function Dashboard() {
                         data={heatmapPrices}
                         includeVat={includeVat}
                         highlightedDates={highlightedDates}
-                        cheapestWindow={costCalcOpen ? cheapestWindow : null}
+                        cheapestWindow={cheapestWindow}
                     />
                 )}
             </div>
@@ -268,18 +303,23 @@ export default function Dashboard() {
             <CostCalculator
                 isOpen={costCalcOpen}
                 setIsOpen={setCostCalcOpen}
-                currentPrice={currentWindowAvgPrice}
+                currentPrice={startingNowPrice}
                 cheapestWindow={cheapestWindow}
-                meanPrice={stats?.mean ?? null}
-                maxPrice={stats?.max ?? null}
+                meanPrice={horizonAvgPrice}
+                maxPrice={horizonMaxPrice}
                 consumptionKwh={costConsumptionKwh}
                 setConsumptionKwh={setCostConsumptionKwh}
                 durationHours={costDurationHours}
                 setDurationHours={setCostDurationHours}
-                untilHour={costUntilHour}
-                setUntilHour={setCostUntilHour}
+                readyBy={costReadyBy}
+                setReadyBy={setCostReadyBy}
                 activePreset={costActivePreset}
                 setActivePreset={setCostActivePreset}
+                isPredicted={cheapestIsPredicted}
+                nowMs={costNowMs}
+                readyByLimitMs={readyByLimitMs}
+                startingNowEndMs={startingNowEndMs}
+                error={costError}
             />
 
         </div>

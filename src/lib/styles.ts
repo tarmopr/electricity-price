@@ -5,8 +5,9 @@
  * toggle pills or buttons with the same visual pattern.
  */
 
+/** ≥44px tall on mobile (touch target), compact from `sm` up. */
 export const PILL_BASE =
-  "px-3 py-1.5 rounded-lg text-sm transition-all border font-medium";
+  "px-3 py-1.5 min-h-11 sm:min-h-0 rounded-lg text-sm transition-all border font-medium";
 
 export const PILL_ACTIVE =
   "bg-emerald-400/20 text-emerald-300 border-emerald-400/50";

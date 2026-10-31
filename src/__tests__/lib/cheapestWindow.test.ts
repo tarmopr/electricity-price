@@ -1,9 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
-  findCheapestWindow,
   getCheapestWindowHours,
-  computeWindowAverage,
   CheapestWindow,
+  normalizeTo15MinSlots,
+  findCheapestSlotWindow,
+  computeRollingWindow,
+  getVisibleWindowRange,
+  resolveReadyByLimit,
+  SLOT_MS,
 } from "@/lib/cheapestWindow";
 
 /**
@@ -21,277 +25,6 @@ function makePrices(
 }
 
 describe("cheapestWindow", () => {
-  describe("findCheapestWindow", () => {
-    it("returns null for empty price data", () => {
-      const result = findCheapestWindow([], 3, null, new Date());
-      expect(result).toBeNull();
-    });
-
-    it("returns null for zero hours", () => {
-      const prices = makePrices(new Date("2024-06-15T00:00:00Z"), [5, 10, 3]);
-      const result = findCheapestWindow(prices, 0, null, new Date("2024-06-15T00:00:00Z"));
-      expect(result).toBeNull();
-    });
-
-    it("returns null when not enough data for window size", () => {
-      const prices = makePrices(new Date("2024-06-15T00:00:00Z"), [5, 10]);
-      const result = findCheapestWindow(prices, 3, null, new Date("2024-06-15T00:00:00Z"));
-      expect(result).toBeNull();
-    });
-
-    it("returns null when all data is before scanFrom", () => {
-      const prices = makePrices(new Date("2024-06-15T00:00:00Z"), [5, 10, 3]);
-      const result = findCheapestWindow(
-        prices,
-        2,
-        null,
-        new Date("2024-06-16T00:00:00Z")
-      );
-      expect(result).toBeNull();
-    });
-
-    it("finds the cheapest 3-hour window without constraints", () => {
-      // Prices: [10, 8, 3, 2, 5, 12, 7]
-      // Cheapest 3h = indices 2,3,4 → sum=10, avg=3.33
-      const start = new Date("2024-06-15T00:00:00Z");
-      const prices = makePrices(start, [10, 8, 3, 2, 5, 12, 7]);
-
-      const result = findCheapestWindow(prices, 3, null, start);
-      expect(result).not.toBeNull();
-      expect(result!.hours).toBe(3);
-      expect(result!.startIndex).toBe(2);
-      expect(result!.endIndex).toBe(4);
-      expect(result!.averagePrice).toBeCloseTo(10 / 3);
-      expect(result!.startTimestamp).toBe(prices[2].timestamp);
-    });
-
-    it("finds cheapest 1-hour window (minimum price)", () => {
-      const start = new Date("2024-06-15T00:00:00Z");
-      const prices = makePrices(start, [10, 8, 3, 2, 5]);
-
-      const result = findCheapestWindow(prices, 1, null, start);
-      expect(result).not.toBeNull();
-      expect(result!.startIndex).toBe(3);
-      expect(result!.averagePrice).toBe(2);
-    });
-
-    it("handles window size equal to data length", () => {
-      const start = new Date("2024-06-15T00:00:00Z");
-      const prices = makePrices(start, [10, 5, 3]);
-
-      const result = findCheapestWindow(prices, 3, null, start);
-      expect(result).not.toBeNull();
-      expect(result!.startIndex).toBe(0);
-      expect(result!.endIndex).toBe(2);
-      expect(result!.averagePrice).toBe(6); // (10+5+3)/3
-    });
-
-    // --- scanFrom tests (today vs tomorrow) ---
-
-    it("scans from current hour for today scenario", () => {
-      // 24 hours of data, 00:00 to 23:00
-      // Make hour 2-4 very cheap, but scanFrom is hour 5 → should skip them
-      const start = new Date("2024-06-15T00:00:00Z");
-      const pricesArr: number[] = Array.from({ length: 24 }, (_, i) =>
-        i >= 2 && i <= 4 ? 1 : 10
-      );
-      // Also make hours 10-12 cheap but not as cheap
-      pricesArr[10] = 2;
-      pricesArr[11] = 2;
-      pricesArr[12] = 2;
-
-      const prices = makePrices(start, pricesArr);
-
-      // Scan from hour 5 — should find hours 10-12 as cheapest
-      const scanFrom = new Date("2024-06-15T05:00:00Z");
-      const result = findCheapestWindow(prices, 3, null, scanFrom);
-      expect(result).not.toBeNull();
-      expect(result!.startIndex).toBe(10);
-      expect(result!.endIndex).toBe(12);
-    });
-
-    it("scans from 00:00 for tomorrow scenario", () => {
-      // Data spans today and tomorrow
-      const todayStart = new Date("2024-06-15T00:00:00Z");
-      const todayPrices = Array.from({ length: 24 }, () => 10);
-      const tomorrowPrices = [5, 3, 2, 4, 8, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10];
-
-      const prices = makePrices(todayStart, [...todayPrices, ...tomorrowPrices]);
-
-      // Scan from tomorrow 00:00
-      const scanFrom = new Date("2024-06-16T00:00:00Z");
-      const result = findCheapestWindow(prices, 3, null, scanFrom);
-      expect(result).not.toBeNull();
-      // Cheapest 3h in tomorrow: indices 1,2,3 → prices 3,2,4 → sum=9
-      expect(result!.startIndex).toBe(25); // 24 (today) + 1
-      expect(result!.averagePrice).toBe(3); // (3+2+4)/3
-    });
-
-    // --- untilHour constraint tests ---
-
-    it("respects untilHour constraint", () => {
-      // Hours 00-23 with prices, cheapest at end of day
-      const start = new Date("2024-06-15T00:00:00Z");
-      const pricesArr: number[] = Array.from({ length: 24 }, (_, i) =>
-        i >= 20 ? 1 : 10
-      );
-      // Hours 20-23 are cheap, but untilHour=20 means window must end by 20:00
-      // Make hours 5-7 somewhat cheap
-      pricesArr[5] = 3;
-      pricesArr[6] = 3;
-      pricesArr[7] = 3;
-
-      const prices = makePrices(start, pricesArr);
-
-      const result = findCheapestWindow(prices, 3, 20, start);
-      expect(result).not.toBeNull();
-      // Should find hours 5-7 since hours 20+ are excluded by untilHour
-      expect(result!.startIndex).toBe(5);
-      expect(result!.endIndex).toBe(7);
-    });
-
-    it("returns null when no window fits within untilHour", () => {
-      // Only 2 hours of data, need 3 hours, untilHour=2
-      const start = new Date("2024-06-15T00:00:00Z");
-      const prices = makePrices(start, [5, 5]);
-
-      const result = findCheapestWindow(prices, 3, 2, start);
-      expect(result).toBeNull();
-    });
-
-    it("allows window when untilHour is null (no limit)", () => {
-      const start = new Date("2024-06-15T20:00:00Z");
-      const prices = makePrices(start, [10, 5, 3, 2]);
-
-      const result = findCheapestWindow(prices, 3, null, start);
-      expect(result).not.toBeNull();
-      expect(result!.startIndex).toBe(1);
-      expect(result!.averagePrice).toBeCloseTo(10 / 3);
-    });
-
-    it("handles untilHour that rolls over to next day", () => {
-      // Data starts at 20:00 UTC = 22:00 Tallinn (EET, UTC+2, January).
-      // untilHour=2 means 02:00 Tallinn = 00:00 UTC next day (4 Tallinn-hours away).
-      const start = new Date("2024-01-15T20:00:00Z"); // 22:00 Tallinn
-      const prices = makePrices(start, [10, 5, 3, 2, 8]); // Tallinn: 22, 23, 00, 01, 02
-
-      const result = findCheapestWindow(prices, 2, 2, start);
-      expect(result).not.toBeNull();
-      // Window 00:00-01:00 Tallinn (sum=5) is cheapest; 01:00-02:00 is excluded (ends after limit)
-      expect(result!.startIndex).toBe(2);
-      expect(result!.endIndex).toBe(3);
-    });
-
-    // --- endTimestamp tests ---
-
-    it("sets endTimestamp from next data point when available", () => {
-      const start = new Date("2024-06-15T00:00:00Z");
-      const prices = makePrices(start, [5, 3, 10, 8]);
-
-      const result = findCheapestWindow(prices, 2, null, start);
-      expect(result).not.toBeNull();
-      // Cheapest 2h: indices 0,1 → endTimestamp should be prices[2].timestamp
-      expect(result!.endTimestamp).toBe(prices[2].timestamp);
-    });
-
-    it("computes endTimestamp by adding 1h when at end of data", () => {
-      const start = new Date("2024-06-15T00:00:00Z");
-      const prices = makePrices(start, [10, 5, 3]);
-
-      const result = findCheapestWindow(prices, 2, null, start);
-      expect(result).not.toBeNull();
-      // Cheapest 2h: indices 1,2 → no prices[3], so endTimestamp = prices[2] + 1h
-      const expectedEnd = new Date(
-        new Date(prices[2].timestamp).getTime() + 60 * 60 * 1000
-      ).toISOString();
-      expect(result!.endTimestamp).toBe(expectedEnd);
-    });
-
-    it("handles negative prices", () => {
-      const start = new Date("2024-06-15T00:00:00Z");
-      const prices = makePrices(start, [5, -3, -5, 2, 10]);
-
-      const result = findCheapestWindow(prices, 2, null, start);
-      expect(result).not.toBeNull();
-      expect(result!.startIndex).toBe(1);
-      expect(result!.averagePrice).toBe(-4); // (-3 + -5) / 2
-    });
-  });
-
-  describe("computeWindowAverage", () => {
-    it("returns null for empty prices", () => {
-      expect(computeWindowAverage([], 3, new Date())).toBeNull();
-    });
-
-    it("returns null for zero duration", () => {
-      const prices = makePrices(new Date("2024-06-15T00:00:00Z"), [5, 10, 3]);
-      expect(
-        computeWindowAverage(prices, 0, new Date("2024-06-15T00:00:00Z"))
-      ).toBeNull();
-    });
-
-    it("returns null when scanFrom is after all data", () => {
-      const prices = makePrices(new Date("2024-06-15T00:00:00Z"), [5, 10, 3]);
-      expect(
-        computeWindowAverage(prices, 2, new Date("2024-06-16T00:00:00Z"))
-      ).toBeNull();
-    });
-
-    it("computes average over a 3-hour window", () => {
-      const start = new Date("2024-06-15T00:00:00Z");
-      const prices = makePrices(start, [10, 8, 3, 2, 5, 12, 7]);
-      // Window from 00:00, 3 hours → prices 10, 8, 3
-      expect(computeWindowAverage(prices, 3, start)).toBeCloseTo(7);
-    });
-
-    it("computes average starting from mid-data", () => {
-      const start = new Date("2024-06-15T00:00:00Z");
-      const prices = makePrices(start, [10, 8, 3, 2, 5, 12, 7]);
-      const scanFrom = new Date("2024-06-15T03:00:00Z");
-      // Window from 03:00, 3 hours → prices 2, 5, 12
-      expect(computeWindowAverage(prices, 3, scanFrom)).toBeCloseTo(19 / 3);
-    });
-
-    it("averages available points when window extends beyond data", () => {
-      const start = new Date("2024-06-15T00:00:00Z");
-      const prices = makePrices(start, [10, 8, 3]);
-      // Window from 01:00, 5 hours → only 01, 02 have data → prices 8, 3
-      expect(
-        computeWindowAverage(prices, 5, new Date("2024-06-15T01:00:00Z"))
-      ).toBeCloseTo(5.5);
-    });
-
-    it("returns single price when window contains one point", () => {
-      const start = new Date("2024-06-15T00:00:00Z");
-      const prices = makePrices(start, [10, 8, 3]);
-      expect(
-        computeWindowAverage(prices, 1, new Date("2024-06-15T01:00:00Z"))
-      ).toBe(8);
-    });
-
-    it("handles negative prices", () => {
-      const start = new Date("2024-06-15T00:00:00Z");
-      const prices = makePrices(start, [-5, -3, 2]);
-      expect(computeWindowAverage(prices, 2, start)).toBe(-4);
-    });
-
-    it("returns null for negative duration", () => {
-      const prices = makePrices(new Date("2024-06-15T00:00:00Z"), [5, 10, 3]);
-      expect(
-        computeWindowAverage(prices, -2, new Date("2024-06-15T00:00:00Z"))
-      ).toBeNull();
-    });
-
-    it("returns different averages for different durations", () => {
-      const start = new Date("2024-06-15T00:00:00Z");
-      const prices = makePrices(start, [2, 4, 10, 20]);
-      // 2 hours → (2 + 4) / 2 = 3
-      expect(computeWindowAverage(prices, 2, start)).toBe(3);
-      // 4 hours → (2 + 4 + 10 + 20) / 4 = 9
-      expect(computeWindowAverage(prices, 4, start)).toBe(9);
-    });
-  });
-
   describe("getCheapestWindowHours", () => {
     it("returns empty set when window is null", () => {
       const result = getCheapestWindowHours(null);
@@ -351,6 +84,470 @@ describe("cheapestWindow", () => {
 
       const result = getCheapestWindowHours(window);
       expect(result.size).toBe(8);
+    });
+  });
+
+  describe("getCheapestWindowHours (15-minute boundaries)", () => {
+    it("includes every hour overlapping a window that starts/ends mid-hour", () => {
+      // 01:15–03:15 Tallinn (EEST) → overlaps hours 1, 2, 3
+      const window: CheapestWindow = {
+        startTimestamp: "2024-06-14T22:15:00.000Z",
+        endTimestamp: "2024-06-15T00:15:00.000Z",
+        startHour: 1,
+        hours: 2,
+        averagePrice: 3,
+        startIndex: 0,
+        endIndex: 7,
+      };
+      const keys = getCheapestWindowHours(window);
+      expect([...keys]).toEqual(["2024-06-15:1", "2024-06-15:2", "2024-06-15:3"]);
+    });
+
+    it("keys a window crossing Tallinn midnight on both dates", () => {
+      // 23:00–01:00 Tallinn
+      const window: CheapestWindow = {
+        startTimestamp: "2024-06-14T20:00:00.000Z",
+        endTimestamp: "2024-06-14T22:00:00.000Z",
+        startHour: 23,
+        hours: 2,
+        averagePrice: 3,
+        startIndex: 0,
+        endIndex: 7,
+      };
+      expect([...getCheapestWindowHours(window)]).toEqual(["2024-06-14:23", "2024-06-15:0"]);
+    });
+  });
+
+  // ─── 15-minute slot normalization ──────────────────────────────────────────
+
+  describe("normalizeTo15MinSlots", () => {
+    it("returns empty array for empty input", () => {
+      expect(normalizeTo15MinSlots([])).toEqual([]);
+    });
+
+    it("expands hourly points into 4 equal 15-minute slots", () => {
+      const start = new Date("2024-06-15T00:00:00Z");
+      const slots = normalizeTo15MinSlots(makePrices(start, [10, 20]));
+      expect(slots).toHaveLength(8);
+      expect(slots.slice(0, 4).every((s) => s.displayPrice === 10)).toBe(true);
+      expect(slots.slice(4).every((s) => s.displayPrice === 20)).toBe(true);
+      expect(slots[1].startMs - slots[0].startMs).toBe(SLOT_MS);
+    });
+
+    it("maps 15-minute points 1:1", () => {
+      const start = new Date("2024-06-15T00:00:00Z").getTime();
+      const points = [1, 2, 3, 4, 5].map((p, i) => ({
+        timestamp: new Date(start + i * SLOT_MS).toISOString(),
+        displayPrice: p,
+      }));
+      const slots = normalizeTo15MinSlots(points);
+      expect(slots.map((s) => s.displayPrice)).toEqual([1, 2, 3, 4, 5]);
+    });
+
+    it("handles 15-minute actuals followed by hour-aligned hourly predictions", () => {
+      // Realistic: last official 15-min price at 21:45Z; predictions start at the next
+      // full hour (floorToHour(lastActual) + 1h = 22:00Z) and are hourly.
+      const last = new Date("2024-06-15T21:45:00Z").getTime();
+      const points = [
+        { timestamp: new Date(last - 3 * SLOT_MS).toISOString(), displayPrice: 1 },
+        { timestamp: new Date(last - 2 * SLOT_MS).toISOString(), displayPrice: 2 },
+        { timestamp: new Date(last - SLOT_MS).toISOString(), displayPrice: 3 },
+        { timestamp: new Date(last).toISOString(), displayPrice: 4 },
+        { timestamp: "2024-06-15T22:00:00.000Z", displayPrice: 9, isPredicted: true },
+        { timestamp: "2024-06-15T23:00:00.000Z", displayPrice: 7, isPredicted: true },
+      ];
+      const slots = normalizeTo15MinSlots(points);
+      expect(slots).toHaveLength(12);
+      expect(slots.map((s) => s.displayPrice)).toEqual([1, 2, 3, 4, 9, 9, 9, 9, 7, 7, 7, 7]);
+      expect(slots.slice(0, 4).every((s) => !s.isPredicted)).toBe(true);
+      expect(slots.slice(4).every((s) => s.isPredicted)).toBe(true);
+    });
+
+    it("never fabricates official prices: fills beyond a point's native span are predicted", () => {
+      // Unaligned: predictions start at lastActual + 1h (21:45Z → 22:45Z).
+      // The 22:00–22:30Z fill slots extend the last official price but are not official.
+      const last = new Date("2024-06-15T21:45:00Z").getTime();
+      const points = [
+        { timestamp: new Date(last - 2 * SLOT_MS).toISOString(), displayPrice: 2 },
+        { timestamp: new Date(last - SLOT_MS).toISOString(), displayPrice: 3 },
+        { timestamp: new Date(last).toISOString(), displayPrice: 4 },
+        { timestamp: "2024-06-15T22:45:00.000Z", displayPrice: 9, isPredicted: true },
+      ];
+      const slots = normalizeTo15MinSlots(points);
+      const byTime = new Map(slots.map((s) => [new Date(s.startMs).toISOString(), s]));
+      expect(byTime.get("2024-06-15T21:45:00.000Z")!.isPredicted).toBe(false);
+      for (const t of ["22:00", "22:15", "22:30"]) {
+        const slot = byTime.get(`2024-06-15T${t}:00.000Z`)!;
+        expect(slot.displayPrice).toBe(4);
+        expect(slot.isPredicted).toBe(true);
+      }
+    });
+
+    it("keeps hourly official points fully official (native span = 1 h)", () => {
+      const slots = normalizeTo15MinSlots(makePrices(new Date("2024-06-15T00:00:00Z"), [10, 20, 30]));
+      expect(slots.every((s) => !s.isPredicted)).toBe(true);
+    });
+
+    it("clips slots at the horizon end", () => {
+      const points = makePrices(new Date("2024-06-15T20:00:00Z"), [10, 20]);
+      const endMs = new Date("2024-06-15T21:30:00Z").getTime();
+      const slots = normalizeTo15MinSlots(points, endMs);
+      expect(slots).toHaveLength(6);
+      expect(slots[slots.length - 1].startMs).toBe(new Date("2024-06-15T21:15:00Z").getTime());
+    });
+
+    it("sorts unsorted input", () => {
+      const start = new Date("2024-06-15T00:00:00Z");
+      const points = makePrices(start, [10, 20]).reverse();
+      const slots = normalizeTo15MinSlots(points);
+      expect(slots[0].displayPrice).toBe(10);
+    });
+
+    it("leaves gaps larger than one hour as holes", () => {
+      const points = [
+        { timestamp: "2024-06-15T00:00:00.000Z", displayPrice: 1 },
+        { timestamp: "2024-06-15T03:00:00.000Z", displayPrice: 2 },
+      ];
+      const slots = normalizeTo15MinSlots(points);
+      // 4 slots for the first (gap capped at 1h) + 4 for the last (prev spacing capped at 1h)
+      expect(slots).toHaveLength(8);
+      expect(slots[4].startMs - slots[3].startMs).toBeGreaterThan(SLOT_MS);
+    });
+  });
+
+  // ─── Slot window search ────────────────────────────────────────────────────
+
+  describe("findCheapestSlotWindow", () => {
+    function slotsFrom(startIso: string, prices: number[], predicted: boolean[] = []) {
+      const start = new Date(startIso).getTime();
+      return prices.map((p, i) => ({
+        startMs: start + i * SLOT_MS,
+        displayPrice: p,
+        isPredicted: predicted[i] ?? false,
+      }));
+    }
+
+    it("returns null for empty slots or non-positive count", () => {
+      expect(findCheapestSlotWindow([], 4, 0, null)).toBeNull();
+      expect(findCheapestSlotWindow(slotsFrom("2024-06-15T00:00:00Z", [1, 2]), 0, 0, null)).toBeNull();
+    });
+
+    it("finds the cheapest run with 15-minute resolution", () => {
+      const slots = slotsFrom("2024-06-15T00:00:00Z", [5, 5, 1, 1, 1, 5, 5]);
+      const w = findCheapestSlotWindow(slots, 3, slots[0].startMs, null)!;
+      expect(w.startIndex).toBe(2);
+      expect(w.endIndex).toBe(4);
+      expect(w.hours).toBe(0.75);
+      expect(w.averagePrice).toBeCloseTo(1);
+      expect(w.startTimestamp).toBe("2024-06-15T00:30:00.000Z");
+      expect(w.endTimestamp).toBe("2024-06-15T01:15:00.000Z");
+    });
+
+    it("respects the end limit (window must end at or before it)", () => {
+      const slots = slotsFrom("2024-06-15T00:00:00Z", [5, 3, 3, 9, 1, 1]);
+      const limit = slots[0].startMs + 3 * SLOT_MS; // window must end by 00:45
+      const w = findCheapestSlotWindow(slots, 2, slots[0].startMs, limit)!;
+      expect(w.startIndex).toBe(1);
+      expect(w.endTimestamp).toBe("2024-06-15T00:45:00.000Z");
+    });
+
+    it("returns null when no window fits the end limit", () => {
+      const slots = slotsFrom("2024-06-15T00:00:00Z", [5, 3, 3]);
+      expect(findCheapestSlotWindow(slots, 3, slots[0].startMs, slots[0].startMs + SLOT_MS)).toBeNull();
+    });
+
+    it("skips windows spanning a data gap", () => {
+      const a = slotsFrom("2024-06-15T00:00:00Z", [1, 1]);
+      const b = slotsFrom("2024-06-15T02:00:00Z", [4, 4]);
+      const w = findCheapestSlotWindow([...a, ...b], 2, a[0].startMs, null)!;
+      expect(w.startIndex).toBe(0);
+      expect(findCheapestSlotWindow([...a, ...b], 3, a[0].startMs, null)).toBeNull();
+    });
+
+    it("keeps the earliest window on ties", () => {
+      const slots = slotsFrom("2024-06-15T00:00:00Z", [2, 2, 2, 2]);
+      expect(findCheapestSlotWindow(slots, 2, slots[0].startMs, null)!.startIndex).toBe(0);
+    });
+
+    it("flags windows containing predicted slots", () => {
+      const slots = slotsFrom("2024-06-15T00:00:00Z", [5, 5, 1, 1], [false, false, false, true]);
+      expect(findCheapestSlotWindow(slots, 2, slots[0].startMs, null)!.isPredicted).toBe(true);
+      expect(findCheapestSlotWindow(slots, 1, slots[0].startMs, null)!.isPredicted).toBe(false);
+    });
+  });
+
+  // ─── Rolling horizon ───────────────────────────────────────────────────────
+
+  describe("computeRollingWindow", () => {
+    /** Hourly prices starting at a Tallinn-local hour on 2024-06-14 (EEST, UTC+3). */
+    function hourlyFromTallinn(tallinnHour: number, prices: number[], predictedFrom = Infinity) {
+      const start = new Date(Date.UTC(2024, 5, 14, tallinnHour - 3));
+      return prices.map((p, i) => ({
+        timestamp: new Date(start.getTime() + i * 3_600_000).toISOString(),
+        displayPrice: p,
+        isPredicted: i >= predictedFrom,
+      }));
+    }
+
+    it("returns empty result when there is no data", () => {
+      const r = computeRollingWindow([], { now: new Date(), durationHours: 2, readyBy: null });
+      expect(r.cheapestWindow).toBeNull();
+      expect(r.startingNowPrice).toBeNull();
+      expect(r.horizonAvgPrice).toBeNull();
+      expect(r.isPredicted).toBe(false);
+    });
+
+    it("finds a night window crossing midnight (independent of chart day)", () => {
+      // From 20:00 Tallinn: 20,21,22,23 expensive; 00–05 cheap; then expensive
+      const prices = [20, 20, 15, 10, 2, 1, 1, 1, 2, 3, 30, 30];
+      const points = hourlyFromTallinn(20, prices);
+      const now = new Date(points[0].timestamp); // 20:00 Tallinn
+      const r = computeRollingWindow(points, { now, durationHours: 4, readyBy: null });
+      // Cheapest 4h: 00:00–04:00 Tallinn (2,1,1,1)
+      expect(r.cheapestWindow!.startTimestamp).toBe("2024-06-14T21:00:00.000Z");
+      expect(r.cheapestWindow!.endTimestamp).toBe("2024-06-15T01:00:00.000Z");
+      expect(r.cheapestWindow!.averagePrice).toBeCloseTo(1.25);
+    });
+
+    it("finds a window spanning 23:00 → 01:00 across midnight", () => {
+      const prices = [9, 9, 9, 1, 1, 9, 9]; // 20..02 Tallinn, cheap at 23 and 00
+      const points = hourlyFromTallinn(20, prices);
+      const r = computeRollingWindow(points, {
+        now: new Date(points[0].timestamp),
+        durationHours: 2,
+        readyBy: null,
+      });
+      expect(r.cheapestWindow!.startHour).toBe(23);
+      expect([...getCheapestWindowHours(r.cheapestWindow)]).toEqual(["2024-06-14:23", "2024-06-15:0"]);
+    });
+
+    it("applies the ready-by deadline (next occurrence after now)", () => {
+      // 20:00 → 09:00 Tallinn; cheapest hours at 06–08, but must be ready by 07:00
+      const prices = [9, 9, 9, 9, 5, 5, 9, 9, 9, 9, 1, 1, 1];
+      const points = hourlyFromTallinn(20, prices);
+      const now = new Date(points[0].timestamp);
+      const r = computeRollingWindow(points, { now, durationHours: 2, readyBy: "07:00" });
+      expect(r.readyByLimit!.toISOString()).toBe("2024-06-15T04:00:00.000Z");
+      // Best 2h ending by 07:00 → 00:00–02:00 (5,5)
+      expect(r.cheapestWindow!.startTimestamp).toBe("2024-06-14T21:00:00.000Z");
+      expect(new Date(r.cheapestWindow!.endTimestamp).getTime()).toBeLessThanOrEqual(r.readyByLimit!.getTime());
+    });
+
+    it("rolls the deadline to the following day when today's is too soon for the duration", () => {
+      // 05:00 Tallinn, EV 8 h ready by 07:00 → today's 07:00 is only 2 h away → use tomorrow 07:00
+      const points = hourlyFromTallinn(5, Array(30).fill(5).map((p, i) => (i >= 20 && i < 28 ? 1 : p)));
+      const r = computeRollingWindow(points, {
+        now: new Date(points[0].timestamp),
+        durationHours: 8,
+        readyBy: "07:00",
+      });
+      expect(r.readyByRolledOver).toBe(true);
+      expect(r.readyByLimit!.toISOString()).toBe("2024-06-15T04:00:00.000Z");
+      // Cheap block is 01:00–09:00 tomorrow, but the window must end by 07:00
+      expect(r.cheapestWindow!.startTimestamp).toBe("2024-06-14T20:00:00.000Z"); // 23:00 Tallinn
+      expect(r.cheapestWindow!.endTimestamp).toBe("2024-06-15T04:00:00.000Z"); // 07:00 Tallinn
+      expect(r.startingNowPrice).toBeCloseTo(5);
+    });
+
+    it("late evening EV: no window fits before 07:00, starting now finishes 07:30", () => {
+      // Fri 23:30 Tallinn, plenty of data through Saturday evening
+      const points = hourlyFromTallinn(23, Array(20).fill(5));
+      const now = new Date(new Date(points[0].timestamp).getTime() + 30 * 60_000);
+      const r = computeRollingWindow(points, { now, durationHours: 8, readyBy: "07:00" });
+      expect(r.readyByRolledOver).toBe(false);
+      expect(r.cheapestWindow).toBeNull();
+      expect(r.startingNowEnd!.toISOString()).toBe("2024-06-15T04:30:00.000Z"); // 07:30 Tallinn
+    });
+
+    it("returns no window when data does not reach far enough before the deadline", () => {
+      const points = hourlyFromTallinn(20, [1, 1, 1]); // only 3 h of data
+      const r = computeRollingWindow(points, {
+        now: new Date(points[0].timestamp),
+        durationHours: 8,
+        readyBy: "07:00",
+      });
+      expect(r.cheapestWindow).toBeNull();
+      expect(r.readyByRolledOver).toBe(false);
+    });
+
+    it("clips the horizon so predictions do not extend past horizonEndMs", () => {
+      const points = hourlyFromTallinn(20, [9, 9, 9, 1], 3); // last point predicted, 23:00 Tallinn
+      const horizonEndMs = new Date(points[3].timestamp).getTime() + 2 * SLOT_MS; // 23:30
+      const r = computeRollingWindow(points, {
+        now: new Date(points[0].timestamp),
+        durationHours: 1,
+        readyBy: null,
+        horizonEndMs,
+      });
+      // Only 2 cheap slots remain → best 1 h window must mix in a 9
+      expect(r.cheapestWindow!.averagePrice).toBeCloseTo(5);
+      expect(new Date(r.cheapestWindow!.endTimestamp).getTime()).toBeLessThanOrEqual(horizonEndMs);
+    });
+
+    it("searches at 15-minute resolution and floors now to 15 minutes", () => {
+      const points = hourlyFromTallinn(10, [8, 2, 2, 8]);
+      // now = 10:20 Tallinn → floor 10:15
+      const now = new Date(new Date(points[0].timestamp).getTime() + 20 * 60_000);
+      const r = computeRollingWindow(points, { now, durationHours: 1.5, readyBy: null });
+      expect(r.cheapestWindow!.hours).toBe(1.5);
+      // 1.5h window fully inside the 2,2 block → 11:00–12:30 Tallinn
+      expect(r.cheapestWindow!.averagePrice).toBeCloseTo(2);
+      // Starting now (10:15, 6 slots): 3×8 + 3×2 → 5
+      expect(r.startingNowPrice).toBeCloseTo(5);
+    });
+
+    it("rounds duration to the nearest 15 minutes", () => {
+      const points = hourlyFromTallinn(10, [1, 1, 1]);
+      const r = computeRollingWindow(points, {
+        now: new Date(points[0].timestamp),
+        durationHours: 1.1, // → 4 slots
+        readyBy: null,
+      });
+      expect(r.cheapestWindow!.hours).toBe(1);
+    });
+
+    it("computes horizon average and peak", () => {
+      const points = hourlyFromTallinn(10, [2, 4, 12]);
+      const r = computeRollingWindow(points, { now: new Date(points[0].timestamp), durationHours: 1, readyBy: null });
+      expect(r.horizonAvgPrice).toBeCloseTo(6);
+      expect(r.horizonMaxPrice).toBe(12);
+    });
+
+    it("ignores data before now", () => {
+      const points = hourlyFromTallinn(8, [0, 0, 5, 6]);
+      const now = new Date(points[2].timestamp);
+      const r = computeRollingWindow(points, { now, durationHours: 1, readyBy: null });
+      expect(r.cheapestWindow!.averagePrice).toBe(5);
+    });
+
+    it("sets isPredicted when the best window uses predicted prices", () => {
+      // Official prices until index 4, predictions afterwards (cheapest overnight)
+      const points = hourlyFromTallinn(20, [9, 9, 9, 9, 1, 1, 9], 4);
+      const r = computeRollingWindow(points, { now: new Date(points[0].timestamp), durationHours: 2, readyBy: null });
+      expect(r.isPredicted).toBe(true);
+    });
+
+    it("isPredicted is false when the best window is all official", () => {
+      const points = hourlyFromTallinn(20, [1, 1, 9, 9, 9, 9, 9], 4);
+      const r = computeRollingWindow(points, { now: new Date(points[0].timestamp), durationHours: 2, readyBy: null });
+      expect(r.isPredicted).toBe(false);
+    });
+
+    it("returns no window for zero duration but still reports horizon stats", () => {
+      const points = hourlyFromTallinn(10, [2, 4]);
+      const r = computeRollingWindow(points, { now: new Date(points[0].timestamp), durationHours: 0, readyBy: null });
+      expect(r.cheapestWindow).toBeNull();
+      expect(r.horizonAvgPrice).toBeCloseTo(3);
+    });
+
+    it("ignores an invalid readyBy string", () => {
+      const points = hourlyFromTallinn(10, [2, 4]);
+      const r = computeRollingWindow(points, { now: new Date(points[0].timestamp), durationHours: 1, readyBy: "25:99" });
+      expect(r.readyByLimit).toBeNull();
+      expect(r.cheapestWindow).not.toBeNull();
+    });
+  });
+
+  // ─── Ready-by resolution ───────────────────────────────────────────────────
+
+  describe("resolveReadyByLimit", () => {
+    it("returns null limit for null/invalid readyBy", () => {
+      expect(resolveReadyByLimit(null, new Date(), 8)).toEqual({ limit: null, rolledOver: false });
+      expect(resolveReadyByLimit("7am", new Date(), 8)).toEqual({ limit: null, rolledOver: false });
+    });
+
+    it("keeps the next occurrence when it is at least the duration away", () => {
+      const now = new Date("2024-06-14T17:00:00Z"); // 20:00 Tallinn
+      const r = resolveReadyByLimit("07:00", now, 8);
+      expect(r.rolledOver).toBe(false);
+      expect(r.limit!.toISOString()).toBe("2024-06-15T04:00:00.000Z");
+    });
+
+    it("keeps the next occurrence when exactly the duration away", () => {
+      const now = new Date("2024-06-14T20:00:00Z"); // 23:00 Tallinn, 8 h before 07:00
+      expect(resolveReadyByLimit("07:00", now, 8).rolledOver).toBe(false);
+    });
+
+    it("does NOT roll over late evening (23:30, 8 h, 07:00): keeps the near deadline", () => {
+      const now = new Date("2024-06-14T20:30:00Z"); // Fri 23:30 Tallinn
+      const r = resolveReadyByLimit("07:00", now, 8);
+      expect(r.rolledOver).toBe(false);
+      expect(r.limit!.toISOString()).toBe("2024-06-15T04:00:00.000Z");
+    });
+
+    it("does not roll over with exactly half the duration left (03:00, 8 h, 07:00)", () => {
+      const now = new Date("2024-06-15T00:00:00Z"); // 03:00 Tallinn
+      const r = resolveReadyByLimit("07:00", now, 8);
+      expect(r.rolledOver).toBe(false);
+      expect(r.limit!.toISOString()).toBe("2024-06-15T04:00:00.000Z");
+    });
+
+    it("rolls over at 06:30 with 07:00 and 8 h", () => {
+      const now = new Date("2024-06-15T03:30:00Z"); // 06:30 Tallinn
+      const r = resolveReadyByLimit("07:00", now, 8);
+      expect(r.rolledOver).toBe(true);
+      expect(r.limit!.toISOString()).toBe("2024-06-16T04:00:00.000Z");
+    });
+
+    it("rolls over DST-safely across the autumn fall-back", () => {
+      // Sat 26 Oct 2024, 06:30 EEST → next-day 07:00 is EET (UTC+2)
+      const now = new Date("2024-10-26T03:30:00Z");
+      const r = resolveReadyByLimit("07:00", now, 8);
+      expect(r.rolledOver).toBe(true);
+      expect(r.limit!.toISOString()).toBe("2024-10-27T05:00:00.000Z");
+    });
+
+    it("rolls over DST-safely across the spring-forward", () => {
+      // Sat 30 Mar 2024, 06:30 EET → next-day 07:00 is EEST (UTC+3)
+      const now = new Date("2024-03-30T04:30:00Z");
+      const r = resolveReadyByLimit("07:00", now, 8);
+      expect(r.rolledOver).toBe(true);
+      expect(r.limit!.toISOString()).toBe("2024-03-31T04:00:00.000Z");
+    });
+  });
+
+  // ─── Chart clipping ────────────────────────────────────────────────────────
+
+  describe("getVisibleWindowRange", () => {
+    const data = makePrices(new Date("2024-06-15T00:00:00Z"), Array(24).fill(5));
+    const win = (start: string, end: string): CheapestWindow => ({
+      startTimestamp: start,
+      endTimestamp: end,
+      startHour: 0,
+      hours: 2,
+      averagePrice: 1,
+      startIndex: 0,
+      endIndex: 0,
+    });
+
+    it("returns null for null window or empty data", () => {
+      expect(getVisibleWindowRange(null, data)).toBeNull();
+      expect(getVisibleWindowRange(win("2024-06-15T02:00:00Z", "2024-06-15T04:00:00Z"), [])).toBeNull();
+    });
+
+    it("maps a fully visible window to exact data timestamps", () => {
+      const r = getVisibleWindowRange(win("2024-06-15T02:00:00.000Z", "2024-06-15T04:00:00.000Z"), data);
+      expect(r).toEqual({ x1: "2024-06-15T02:00:00.000Z", x2: "2024-06-15T04:00:00.000Z", clipped: false });
+    });
+
+    it("clips a window that starts before the chart range", () => {
+      const r = getVisibleWindowRange(win("2024-06-14T22:00:00.000Z", "2024-06-15T03:00:00.000Z"), data);
+      expect(r).toEqual({ x1: data[0].timestamp, x2: "2024-06-15T03:00:00.000Z", clipped: true });
+    });
+
+    it("clips a window that ends after the chart range", () => {
+      const r = getVisibleWindowRange(win("2024-06-15T22:00:00.000Z", "2024-06-16T04:00:00.000Z"), data);
+      expect(r).toEqual({ x1: "2024-06-15T22:00:00.000Z", x2: data[23].timestamp, clipped: true });
+    });
+
+    it("returns null when the window is entirely outside the chart range", () => {
+      expect(getVisibleWindowRange(win("2024-06-16T02:00:00.000Z", "2024-06-16T04:00:00.000Z"), data)).toBeNull();
+      expect(getVisibleWindowRange(win("2024-06-14T20:00:00.000Z", "2024-06-15T00:00:00.000Z"), data)).toBeNull();
+    });
+
+    it("maps a mid-hour window onto the hourly bucket containing its start", () => {
+      const r = getVisibleWindowRange(win("2024-06-15T02:15:00.000Z", "2024-06-15T04:15:00.000Z"), data);
+      expect(r).toEqual({ x1: "2024-06-15T02:00:00.000Z", x2: "2024-06-15T05:00:00.000Z", clipped: false });
     });
   });
 });

@@ -14,7 +14,9 @@ import {
     startOfTomorrow, endOfTomorrow,
     startOfWeek, endOfWeek,
     subDays, subMonths, addDays,
+    addHours,
 } from 'date-fns';
+import { floorToHour } from '@/lib/timezone';
 import { getHeatmapWeekRange } from '@/lib/heatmapData';
 import { Period } from '@/lib/types';
 
@@ -45,6 +47,11 @@ export function getDateRangeForPeriod(
             return { start: startOfToday(), end: endOfToday() };
         case 'tomorrow':
             return { start: startOfTomorrow(), end: endOfTomorrow() };
+        case 'next_24h': {
+            // Rolling: from the start of the current hour, 24 hours ahead (end exclusive → -1 ms)
+            const start = floorToHour(new Date());
+            return { start, end: new Date(addHours(start, 24).getTime() - 1) };
+        }
         case 'this_week':
             return {
                 start: startOfWeek(new Date(), { weekStartsOn: 1 }),
@@ -83,6 +90,10 @@ export function getAggregationHours(period: Period, start: Date, end: Date): num
     }
     if (period === 'last_30_days') {
         return 6;
+    }
+    if (period === 'next_24h') {
+        // Raw resolution (15-min) — a single day of data
+        return 0;
     }
     if (period === 'custom') {
         const daysDifference = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);

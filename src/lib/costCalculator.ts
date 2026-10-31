@@ -9,15 +9,35 @@ export interface ConsumptionPreset {
   label: string;
   kWh: number;
   durationHours: number;
+  /** Default "ready by" deadline ("HH:MM" Tallinn time), or null for no limit */
+  readyBy: string | null;
 }
 
+// Overnight appliances default to being done by 07:00 (before the morning commute/peak)
 export const PRESETS: ConsumptionPreset[] = [
-  { label: "EV Charge", kWh: 40, durationHours: 8 },
-  { label: "Washing Machine", kWh: 2, durationHours: 2 },
-  { label: "Dryer", kWh: 3.5, durationHours: 2 },
-  { label: "Dishwasher", kWh: 1.8, durationHours: 2 },
-  { label: "Sauna", kWh: 15, durationHours: 3 },
+  { label: "EV Charge", kWh: 40, durationHours: 8, readyBy: "07:00" },
+  { label: "Washing Machine", kWh: 2, durationHours: 2, readyBy: null },
+  { label: "Dryer", kWh: 3.5, durationHours: 2, readyBy: null },
+  { label: "Dishwasher", kWh: 1.8, durationHours: 2, readyBy: "07:00" },
+  { label: "Sauna", kWh: 15, durationHours: 3, readyBy: null },
 ];
+
+/** Default calculator state = EV Charge preset. */
+export const DEFAULT_PRESET = PRESETS[0];
+
+/**
+ * Minimum savings (€) worth showing — below half a cent the "save" message
+ * would just display €0.00. Shared by the best-window card and the calculator.
+ */
+export const MIN_SAVINGS_EUR = 0.005;
+
+/** Estimate labels (shared between estimate builder and UI). */
+export const ESTIMATE_LABELS = {
+  now: "Starting Now",
+  best: "Best Window",
+  average: "Next-hours average",
+  peak: "Peak",
+} as const;
 
 export interface CostEstimate {
   /** Label for the scenario */
@@ -53,7 +73,7 @@ export function buildEstimates(
 
   if (currentPrice !== null) {
     estimates.push({
-      label: "Starting Now",
+      label: ESTIMATE_LABELS.now,
       priceCentsKwh: currentPrice,
       costEur: calcCostEur(currentPrice, consumptionKwh),
     });
@@ -61,7 +81,7 @@ export function buildEstimates(
 
   if (cheapestPrice !== null) {
     estimates.push({
-      label: "Cheapest Window",
+      label: ESTIMATE_LABELS.best,
       priceCentsKwh: cheapestPrice,
       costEur: calcCostEur(cheapestPrice, consumptionKwh),
     });
@@ -69,7 +89,7 @@ export function buildEstimates(
 
   if (meanPrice !== null) {
     estimates.push({
-      label: "Day Average",
+      label: ESTIMATE_LABELS.average,
       priceCentsKwh: meanPrice,
       costEur: calcCostEur(meanPrice, consumptionKwh),
     });
@@ -77,7 +97,7 @@ export function buildEstimates(
 
   if (maxPrice !== null) {
     estimates.push({
-      label: "Peak Price",
+      label: ESTIMATE_LABELS.peak,
       priceCentsKwh: maxPrice,
       costEur: calcCostEur(maxPrice, consumptionKwh),
     });

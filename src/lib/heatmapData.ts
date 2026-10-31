@@ -340,7 +340,7 @@ export interface HeatmapWeekRange {
 export function getHeatmapWeekRange(
   period: Period,
   periodStart: Date,
-  _periodEnd: Date
+  periodEnd: Date
 ): HeatmapWeekRange | null {
   const SINGLE_DAY_TIMEFRAMES: Period[] = [
     "yesterday",
@@ -360,6 +360,25 @@ export function getHeatmapWeekRange(
       weekStart: startOfDay(weekStart),
       weekEnd: endOfDay(weekEnd),
       highlightedDates: [selectedDate],
+    };
+  }
+
+  if (period === "next_24h") {
+    // Week containing the start, extended if the 24h window spills into next week;
+    // highlight every date the window touches (today and usually tomorrow).
+    const weekStart = startOfWeek(periodStart, { weekStartsOn: 1 });
+    const weekEndOfStart = endOfWeek(periodStart, { weekStartsOn: 1 });
+    const weekEnd = periodEnd > weekEndOfStart ? endOfDay(periodEnd) : weekEndOfStart;
+
+    const highlightedDates = eachDayOfInterval({
+      start: startOfDay(periodStart),
+      end: startOfDay(periodEnd),
+    }).map((d) => format(d, "yyyy-MM-dd"));
+
+    return {
+      weekStart: startOfDay(weekStart),
+      weekEnd: endOfDay(weekEnd),
+      highlightedDates,
     };
   }
 

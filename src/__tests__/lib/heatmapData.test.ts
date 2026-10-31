@@ -365,6 +365,27 @@ describe("heatmapData", () => {
       expect(getHeatmapWeekRange("custom", start, end)).toBeNull();
     });
 
+    it("returns the week containing the start for 'next_24h', highlighting both dates", () => {
+      // Wed 12 Jun 2024 15:00 → Thu 13 Jun 14:59 (local)
+      const start = new Date(2024, 5, 12, 15, 0, 0);
+      const end = new Date(2024, 5, 13, 14, 59, 59, 999);
+      const result = getHeatmapWeekRange("next_24h", start, end)!;
+      expect(result).not.toBeNull();
+      expect(result.weekStart).toEqual(new Date(2024, 5, 10, 0, 0, 0, 0)); // Monday
+      expect(result.weekEnd.getDate()).toBe(16); // Sunday
+      expect(result.highlightedDates).toEqual(["2024-06-12", "2024-06-13"]);
+    });
+
+    it("extends the 'next_24h' week range when the window spills into next week", () => {
+      // Sun 16 Jun 2024 18:00 → Mon 17 Jun 17:59
+      const start = new Date(2024, 5, 16, 18, 0, 0);
+      const end = new Date(2024, 5, 17, 17, 59, 59, 999);
+      const result = getHeatmapWeekRange("next_24h", start, end)!;
+      expect(result.weekStart.getDate()).toBe(10);
+      expect(result.weekEnd.getDate()).toBe(17);
+      expect(result.highlightedDates).toEqual(["2024-06-16", "2024-06-17"]);
+    });
+
     it("returns week range for 'today' period", () => {
       const today = new Date("2024-06-05T10:00:00Z"); // Wednesday
       const result = getHeatmapWeekRange("today", today, today);

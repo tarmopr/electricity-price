@@ -9,18 +9,19 @@ export default function Home() {
       <div className="fixed inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-900 via-zinc-950 to-zinc-950"></div>
       <div className="fixed top-0 inset-x-0 h-[500px] -z-10 bg-gradient-to-b from-green-500/5 to-transparent pointer-events-none"></div>
 
-      <div className="max-w-6xl mx-auto mb-6 mt-8 flex flex-col md:flex-row items-start md:items-end justify-between gap-4">
+      <div className="max-w-6xl mx-auto mb-4 sm:mb-6 mt-1 sm:mt-8 flex flex-col md:flex-row items-start md:items-end justify-between gap-4">
         <div className="w-full">
-          <div className="flex items-center space-x-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center shadow-lg shadow-green-500/20">
-              <Zap className="text-zinc-950 w-6 h-6" />
+          <div className="flex items-center space-x-2.5 sm:space-x-3 mb-1 sm:mb-2">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center shadow-lg shadow-green-500/20 shrink-0">
+              <Zap className="text-zinc-950 w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <h1 className="text-xl sm:text-3xl md:text-5xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-zinc-100 to-zinc-500">
+            <h1 className="text-lg sm:text-3xl md:text-5xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-zinc-100 to-zinc-500">
               Electricity Price in Estonia
             </h1>
           </div>
-          <p className="text-zinc-400 mt-2 text-base md:text-lg max-w-none">
-            Live Nord Pool spot market prices. <span className="hidden sm:inline">Monitor current rates, analyze trends, and plan your energy consumption.</span>
+          <p className="text-zinc-400 mt-1 sm:mt-2 text-sm sm:text-base md:text-lg max-w-none">
+            <span className="sm:hidden">Live Nord Pool spot prices.</span>
+            <span className="hidden sm:inline">Live Nord Pool spot market prices. Monitor current rates, analyze trends, and plan your energy consumption.</span>
           </p>
         </div>
       </div>

@@ -17,8 +17,9 @@ import {
 import { format, isSameHour } from 'date-fns';
 import { ElectricityPrice, HourlyAveragePattern } from '@/lib/api';
 import { applyVat } from '@/lib/price';
-import { CheapestWindow } from '@/lib/cheapestWindow';
+import { CheapestWindow, getVisibleWindowRange } from '@/lib/cheapestWindow';
 import { getTallinnHour } from '@/lib/timezone';
+import { formatDuration } from '@/lib/numericInput';
 
 // ─── Sub-component interfaces ────────────────────────────────────────────────
 
@@ -245,33 +246,11 @@ export default function PriceChart({
     useEffect(() => setMounted(true), []);
 
     // Map cheapest window timestamps to actual chart data timestamps.
-    // The cheapest window is computed from hourly-aggregated data, but the chart
-    // may display higher-resolution data (e.g. 15-min intervals). Recharts'
-    // categorical X axis requires exact string matches for ReferenceArea x1/x2.
+    // The cheapest window is computed on a rolling horizon independent of the chart
+    // period (15-min slots), while the chart may show a different range/resolution.
+    // Recharts' categorical X axis requires exact string matches for ReferenceArea x1/x2.
     // This hook must be before early returns to satisfy Rules of Hooks.
-    const cheapestRef = useMemo(() => {
-        if (!cheapestWindow || !data || data.length === 0) return null;
-
-        const startMs = new Date(cheapestWindow.startTimestamp).getTime();
-        const endMs = new Date(cheapestWindow.endTimestamp).getTime();
-
-        let x1: string | null = null;
-        let x2: string | null = null;
-
-        for (const d of data) {
-            const t = new Date(d.timestamp).getTime();
-            if (!x1 && t >= startMs) x1 = d.timestamp;
-            if (!x2 && t >= endMs) x2 = d.timestamp;
-            if (x1 && x2) break;
-        }
-
-        // If end timestamp is past chart data, use the last data point
-        if (!x2 && data.length > 0) {
-            x2 = data[data.length - 1].timestamp;
-        }
-
-        return x1 && x2 ? { x1, x2 } : null;
-    }, [cheapestWindow, data]);
+    const cheapestRef = useMemo(() => getVisibleWindowRange(cheapestWindow, data), [cheapestWindow, data]);
 
     if (!mounted) {
         return <div className="w-full h-[300px] sm:h-[400px] mt-4 relative bg-zinc-900/10 animate-pulse rounded-xl flex items-center justify-center text-zinc-600 border border-zinc-800/50">Loading chart...</div>;
@@ -467,8 +446,9 @@ export default function PriceChart({
                             fill="#86efac" // subtle green fill
                             fillOpacity={0.15}
                             strokeOpacity={0}
-                            label={{
-                                value: `Cheapest ${cheapestWindow.hours}h: ${cheapestWindow.averagePrice.toFixed(2)} ¢/kWh`,
+                            // Window stats describe the whole window — hide the label when only part is visible
+                            label={cheapestRef.clipped ? undefined : {
+                                value: `Cheapest ${formatDuration(cheapestWindow.hours)}: ${cheapestWindow.averagePrice.toFixed(2)} ¢/kWh`,
                                 position: 'insideTop',
                                 fill: '#4ade80',
                                 fontSize: 12,

@@ -41,6 +41,15 @@ describe("getDateRangeForPeriod", () => {
         expect(end.getDate()).toBe(16);
     });
 
+    it("'next_24h' starts at the current hour and spans 24 hours", () => {
+        vi.setSystemTime(new Date("2024-06-15T09:37:10.000Z")); // 12:37 Tallinn
+        const { start, end } = getDateRangeForPeriod("next_24h", "", "");
+        // Tallinn-safe hour floor (independent of the browser's local timezone)
+        expect(start.toISOString()).toBe("2024-06-15T09:00:00.000Z");
+        // End is exclusive of the 25th hour: start + 24h - 1ms
+        expect(end.getTime() - start.getTime()).toBe(24 * 60 * 60 * 1000 - 1);
+    });
+
     it("'last_7_days' starts 7 days before today midnight", () => {
         const { start, end } = getDateRangeForPeriod("last_7_days", "", "");
         // 7 days before June 15 = June 8
@@ -105,6 +114,11 @@ describe("getAggregationHours", () => {
         const end = new Date(start.getTime() + daysApart * 24 * 60 * 60 * 1000);
         return { start, end };
     }
+
+    it("returns 0 for next_24h (raw resolution)", () => {
+        const { start, end } = makeRange(1);
+        expect(getAggregationHours("next_24h", start, end)).toBe(0);
+    });
 
     it("returns 1 for last_7_days", () => {
         const { start, end } = makeRange(7);
