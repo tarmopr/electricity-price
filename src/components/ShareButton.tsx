@@ -7,6 +7,7 @@ import {
   copyToClipboard,
   ShareableState,
 } from "@/lib/shareState";
+import { PILL_BASE } from "@/lib/styles";
 
 interface ShareButtonProps {
   state: ShareableState;
@@ -40,14 +41,21 @@ export default function ShareButton({ state }: ShareButtonProps) {
   }
 
   return (
+    <>
+    {/* Announce the copy result to screen readers (title/aria-label aren't re-announced);
+        kept outside the button so the live region isn't nested in an interactive element */}
+    <span role="status" className="sr-only">
+      {copied ? "Link copied" : ""}
+    </span>
     <button
       onClick={handleShare}
-      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all border ${
+      className={`${PILL_BASE} flex items-center gap-1.5 ${
         copied
           ? "bg-emerald-400/20 text-emerald-300 border-emerald-400/50"
           : "bg-zinc-800/50 text-zinc-400 border-zinc-700 hover:bg-zinc-800 hover:text-zinc-200"
       }`}
       title="Share current view"
+      aria-label={copied ? "Link copied" : "Share current view"}
     >
       {copied ? (
         <>
@@ -62,5 +70,6 @@ export default function ShareButton({ state }: ShareButtonProps) {
         </>
       )}
     </button>
+    </>
   );
 }

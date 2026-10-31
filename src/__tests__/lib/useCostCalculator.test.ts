@@ -133,6 +133,25 @@ describe("useCostCalculator", () => {
     expect(result.current.costLoading).toBe(false);
   });
 
+  it("falls back to the best full window when nothing fits before ready-by (00:16, 8 h, 07:00)", async () => {
+    vi.setSystemTime(new Date("2024-06-14T21:16:00.000Z")); // 00:16 Tallinn Sat
+    // From 00:00 Tallinn: 10 until 09:00, then 2 for 8 h, then 10
+    const cents = Array.from({ length: 24 }, (_, i) => (i >= 9 && i < 17 ? 2 : 10));
+    getPricesWithPrediction.mockResolvedValue(hourly("2024-06-14T21:00:00.000Z", cents));
+    const { result } = renderHook(() => useCostCalculator(false));
+    await waitFor(() => expect(result.current.cheapestWindow).not.toBeNull());
+    expect(result.current.bestIgnoresDeadline).toBe(true);
+    expect(result.current.cheapestWindow!.startTimestamp).toBe("2024-06-15T06:00:00.000Z");
+    expect(new Date(result.current.startingNowEndMs!).toISOString()).toBe("2024-06-15T05:15:00.000Z");
+  });
+
+  it("bestIgnoresDeadline is false when a window fits", async () => {
+    getPricesWithPrediction.mockResolvedValue(hourly("2024-06-14T17:00:00.000Z", Array(14).fill(5)));
+    const { result } = renderHook(() => useCostCalculator(false));
+    await waitFor(() => expect(result.current.cheapestWindow).not.toBeNull());
+    expect(result.current.bestIgnoresDeadline).toBe(false);
+  });
+
   it("applies VAT to all prices when enabled", async () => {
     getPricesWithPrediction.mockResolvedValue(hourly("2024-06-14T17:00:00.000Z", Array(14).fill(10)));
     const { result } = renderHook(() => useCostCalculator(true));

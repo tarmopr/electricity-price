@@ -20,6 +20,7 @@ import { applyVat } from '@/lib/price';
 import { CheapestWindow, getVisibleWindowRange } from '@/lib/cheapestWindow';
 import { getTallinnHour } from '@/lib/timezone';
 import { formatDuration } from '@/lib/numericInput';
+import { computeWindowLabelLayout } from '@/lib/chartLabel';
 
 // ─── Sub-component interfaces ────────────────────────────────────────────────
 
@@ -175,6 +176,44 @@ const MinMaxLabel = ({ viewBox, value, type, isHovering = false }: MinMaxLabelPr
                 {label}
             </text>
         </g>
+    );
+};
+
+interface WindowBandLabelProps {
+    /** Injected by Recharts: the ReferenceArea's pixel rect */
+    viewBox?: { x?: number; y?: number; width?: number; height?: number };
+    text: string;
+    /** Category indices of the band edges */
+    x1Index: number;
+    x2Index: number;
+    /** Index and text of the "Now" pill, if shown (shares the top strip) */
+    nowIndex: number | null;
+    nowText: string | null;
+}
+
+const WINDOW_LABEL_FONT_SIZE = 12;
+
+// Cheapest-window label: drawn at the top of the band only when it fits (inside the
+// band, clear of the Now pill); on narrow phones it would be cut off or overlap.
+const WindowBandLabel = ({ viewBox, text, x1Index, x2Index, nowIndex, nowText }: WindowBandLabelProps) => {
+    const layout = computeWindowLabelLayout({
+        viewBox, x1Index, x2Index, nowIndex, nowText, text, fontSize: WINDOW_LABEL_FONT_SIZE,
+    });
+    if (!layout || !layout.show) return null;
+
+    // Same placement as Recharts' position="insideTop" (top-anchored)
+    return (
+        <text
+            x={layout.x}
+            y={layout.y}
+            dy="0.71em"
+            textAnchor="middle"
+            fill="#4ade80"
+            fontSize={WINDOW_LABEL_FONT_SIZE}
+            fontWeight="bold"
+        >
+            {text}
+        </text>
     );
 };
 
@@ -338,6 +377,10 @@ export default function PriceChart({
         ? chartData.find(d => d.timestamp === activeCurrentTimestamp)?.displayPrice ?? null
         : null;
 
+    const nowLabelText = nowDisplayPrice !== null ? `Now ${nowDisplayPrice} ¢` : 'Now';
+    // Timestamp → category index, for pixel math in the window label
+    const chartIndex = new Map(chartData.map((d, i) => [d.timestamp, i]));
+
     const gridOpacity = isHovering ? 0.1 : 0.4;
     const lineOpacity = isHovering ? 0.3 : 0.5;
 
@@ -447,13 +490,15 @@ export default function PriceChart({
                             fillOpacity={0.15}
                             strokeOpacity={0}
                             // Window stats describe the whole window — hide the label when only part is visible
-                            label={cheapestRef.clipped ? undefined : {
-                                value: `Cheapest ${formatDuration(cheapestWindow.hours)}: ${cheapestWindow.averagePrice.toFixed(2)} ¢/kWh`,
-                                position: 'insideTop',
-                                fill: '#4ade80',
-                                fontSize: 12,
-                                fontWeight: 'bold'
-                            }}
+                            label={cheapestRef.clipped ? undefined : (
+                                <WindowBandLabel
+                                    text={`Cheapest ${formatDuration(cheapestWindow.hours)}: ${cheapestWindow.averagePrice.toFixed(2)} ¢/kWh`}
+                                    x1Index={chartIndex.get(cheapestRef.x1) ?? 0}
+                                    x2Index={chartIndex.get(cheapestRef.x2) ?? 0}
+                                    nowIndex={showNow && currentTimestamp ? chartIndex.get(currentTimestamp) ?? null : null}
+                                    nowText={nowLabelText}
+                                />
+                            )}
                         />
                     )}
 
@@ -465,7 +510,7 @@ export default function PriceChart({
                             strokeDasharray="3 3"
                             strokeOpacity={lineOpacity}
                             style={{ transition: 'opacity 0.3s' }}
-                            label={<ChartReferenceLabel orientation="vertical" value={nowDisplayPrice !== null ? `Now ${nowDisplayPrice} ¢` : 'Now'} fill="#38bdf8" isHovering={isHovering} />}
+                            label={<ChartReferenceLabel orientation="vertical" value={nowLabelText} fill="#38bdf8" isHovering={isHovering} />}
                         />
                     )}
 

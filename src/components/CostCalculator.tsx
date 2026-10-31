@@ -43,6 +43,8 @@ interface CostCalculatorProps {
   error?: string | null;
   /** When a same-length window starting now would finish (for the no-fit hint) */
   startingNowEndMs?: number | null;
+  /** True when `cheapestWindow` finishes after the ready-by time because nothing fits before it */
+  bestIgnoresDeadline?: boolean;
 }
 
 const LABEL_CLASS =
@@ -80,6 +82,7 @@ export default function CostCalculator({
   readyByLimitMs = null,
   error = null,
   startingNowEndMs = null,
+  bestIgnoresDeadline = false,
 }: CostCalculatorProps) {
   const [invalidFields, setInvalidFields] = useState<Record<string, boolean>>({});
   const [showMore, setShowMore] = useState(false);
@@ -93,6 +96,11 @@ export default function CostCalculator({
     readyBy && readyByLimitMs !== null && nowMs != null
       ? formatTallinnDeadline(new Date(readyByLimitMs), new Date(nowMs))
       : readyBy;
+  const finishLabel =
+    deadlineLabel && startingNowEndMs !== null && nowMs != null
+      ? formatTallinnDeadline(new Date(startingNowEndMs), new Date(nowMs))
+      : null;
+  const showDeadlineWarning = bestIgnoresDeadline && cheapestWindow !== null && !!deadlineLabel;
 
   const estimates = buildEstimates(
     consumptionKwh,
@@ -176,11 +184,17 @@ export default function CostCalculator({
                 {cheapestEstimate && (
                   <span className="text-emerald-400/80"> · €{cheapestEstimate.costEur.toFixed(2)} best</span>
                 )}
+                {showDeadlineWarning && (
+                  <span className="text-amber-400"> · after {deadlineLabel}</span>
+                )}
               </span>
               <span className="text-xs text-zinc-500 ml-2 hidden sm:inline truncate">
                 {formatNumber(consumptionKwh)} kWh · {formatDuration(searchedHours)} ≈ €{currentEstimate.costEur.toFixed(2)} now
                 {windowRange && (
                   <span className="text-emerald-400/70"> · best {windowRange}</span>
+                )}
+                {showDeadlineWarning && (
+                  <span className="text-amber-400"> · after {deadlineLabel}</span>
                 )}
               </span>
             </>
@@ -289,6 +303,18 @@ export default function CostCalculator({
             </p>
           )}
 
+          {showDeadlineWarning && (
+            <div role="status" className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-200">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+              <div>
+                <p className="font-medium">
+                  Finishes after {deadlineLabel} — no {formatDuration(searchedHours)} window fits before your ready-by time
+                </p>
+                {finishLabel && <p className="text-xs text-amber-200/70">Starting now finishes {finishLabel}</p>}
+              </div>
+            </div>
+          )}
+
           {/* Estimates Grid */}
           {estimates.length > 0 ? (
             <div className={`space-y-2 transition-opacity duration-200 ${hasInvalidDraft ? "opacity-50" : ""}`}>
@@ -303,6 +329,7 @@ export default function CostCalculator({
                       isCheapest={cheapest?.label === est.label}
                       isMostExpensive={expensive?.label === est.label}
                       timeRange={est.label === ESTIMATE_LABELS.best ? windowRange : null}
+                      warning={est.label === ESTIMATE_LABELS.best && showDeadlineWarning ? `Finishes after ${deadlineLabel}` : null}
                       visibilityClass={secondary && !showMore ? "hidden sm:flex" : "flex"}
                     />
                   );
@@ -329,9 +356,7 @@ export default function CostCalculator({
           {cheapestWindow === null && currentPrice !== null && (
             <p className="text-zinc-500 text-sm">
               No {formatDuration(searchedHours)} window fits{deadlineLabel ? ` before ${deadlineLabel}` : ""}
-              {deadlineLabel && startingNowEndMs !== null && nowMs != null
-                ? ` — starting now finishes ${formatTallinnDeadline(new Date(startingNowEndMs), new Date(nowMs))}.`
-                : "."}
+              {finishLabel ? ` — starting now finishes ${finishLabel}.` : "."}
             </p>
           )}
 
@@ -364,6 +389,7 @@ function EstimateCard({
   isMostExpensive,
   timeRange,
   visibilityClass,
+  warning = null,
 }: {
   estimate: CostEstimate;
   isCheapest: boolean;
@@ -371,6 +397,8 @@ function EstimateCard({
   timeRange: string | null;
   /** Static display classes, e.g. "flex" or "hidden sm:flex" */
   visibilityClass: string;
+  /** Amber caveat, e.g. "Finishes after 07:00" */
+  warning?: string | null;
 }) {
   let borderClass = "border-zinc-800/50";
   let badgeClass = "";
@@ -402,6 +430,12 @@ function EstimateCard({
       {timeRange && (
         <p className="text-xs text-emerald-400/70 font-medium">
           {timeRange}
+        </p>
+      )}
+      {warning && (
+        <p className="text-xs text-amber-300 font-medium flex items-center gap-1">
+          <AlertTriangle className="w-3 h-3 shrink-0" />
+          {warning}
         </p>
       )}
     </div>

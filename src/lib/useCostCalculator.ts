@@ -164,7 +164,9 @@ export function useCostCalculator(includeVat: boolean) {
         costReadyBy, setCostReadyBy,
         costActivePreset, setCostActivePreset,
         costCalcOpen, setCostCalcOpen,
-        cheapestWindow: rolling?.cheapestWindow ?? null,
+        /** Recommended window — may finish after the ready-by time, see bestIgnoresDeadline */
+        cheapestWindow: rolling?.best ?? null,
+        bestIgnoresDeadline: rolling?.bestIgnoresDeadline ?? false,
         startingNowPrice: rolling?.startingNowPrice ?? null,
         horizonAvgPrice: rolling?.horizonAvgPrice ?? null,
         horizonMaxPrice: rolling?.horizonMaxPrice ?? null,

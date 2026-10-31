@@ -126,6 +126,9 @@ function makeCostCalc(overrides: Record<string, unknown> = {}) {
         costNowMs: new Date("2024-01-01T09:00:00.000Z").getTime(),
         costLoading: false,
         costError: null,
+        readyByLimitMs: null,
+        startingNowEndMs: null,
+        bestIgnoresDeadline: false,
         ...overrides,
     };
 }
@@ -244,7 +247,7 @@ describe("Dashboard", () => {
             makeCostCalc({ cheapestWindow, startingNowPrice: 10 }) as unknown as ReturnType<typeof useCostCalculator>
         );
         render(<Dashboard />);
-        expect(screen.getByRole("button", { name: /best time · ev charge/i })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /best time ·\s*ev charge/i })).toBeInTheDocument();
         // 8.5 ¢ × 40 kWh = €3.40
         expect(screen.getAllByText("€3.40").length).toBeGreaterThan(0);
     });
@@ -287,6 +290,19 @@ describe("Dashboard", () => {
         );
         render(<Dashboard />);
         expect(screen.getByRole("alert")).toHaveTextContent("Couldn't load prices");
+    });
+
+    it("highlights a deadline-ignoring fallback window on the chart and flags it on the card", () => {
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({
+                cheapestWindow,
+                bestIgnoresDeadline: true,
+                readyByLimitMs: new Date("2024-01-02T05:00:00.000Z").getTime(), // next 07:00 Tallinn
+            }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        render(<Dashboard />);
+        expect(screen.getByTestId("cheapest-area")).toBeInTheDocument();
+        expect(screen.getByText(/Finishes after 07:00/)).toBeInTheDocument();
     });
 
     it("renders the Next 24h period pill", () => {

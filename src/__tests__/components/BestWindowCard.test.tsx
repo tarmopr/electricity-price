@@ -1,5 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+
+/** Matches an element whose own full text content equals `text` (text split across spans). */
+function byText(text: string) {
+  return (_: string, el: Element | null) =>
+    !!el && el.textContent === text && Array.from(el.children).every((c) => c.textContent !== text);
+}
 import BestWindowCard from "@/components/BestWindowCard";
 import type { CheapestWindow } from "@/lib/cheapestWindow";
 
@@ -33,7 +39,7 @@ const baseProps = {
 describe("BestWindowCard", () => {
   it("renders preset label, Tallinn range with day context, cost and avg price", () => {
     render(<BestWindowCard {...baseProps} />);
-    expect(screen.getByText(/Best time · EV Charge/)).toBeInTheDocument();
+    expect(screen.getByText(byText("Best time · EV Charge"))).toBeInTheDocument();
     // now is 20:00 Tallinn and the window starts before 06:00 tomorrow → "Tonight"
     expect(screen.getByText("Tonight 01:15–09:15")).toBeInTheDocument();
     // 2.5 ¢/kWh × 40 kWh = €1.00
@@ -54,7 +60,7 @@ describe("BestWindowCard", () => {
 
   it("shows the ready-by hint or 'No deadline'", () => {
     const { rerender } = render(<BestWindowCard {...baseProps} />);
-    expect(screen.getByText("Ready by 07:00")).toBeInTheDocument();
+    expect(screen.getByText(byText("Ready by 07:00"))).toBeInTheDocument();
     rerender(<BestWindowCard {...baseProps} readyBy={null} />);
     expect(screen.getByText("No deadline")).toBeInTheDocument();
   });
@@ -63,7 +69,12 @@ describe("BestWindowCard", () => {
     const { rerender } = render(<BestWindowCard {...baseProps} />);
     expect(screen.queryByText("Predicted")).not.toBeInTheDocument();
     rerender(<BestWindowCard {...baseProps} isPredicted />);
-    expect(screen.getByText("Predicted")).toBeInTheDocument();
+    // Header badge (sm+) and a mobile copy on the meta line (<sm)
+    const badges = screen.getAllByText("Predicted");
+    expect(badges).toHaveLength(2);
+    expect(badges[0].className).toContain("hidden sm:inline-flex");
+    expect(badges[1].className).toContain("sm:hidden");
+    expect(badges[1].parentElement).toHaveTextContent(/8 h · 40 kWh/);
   });
 
   it("calls onOpen when tapped", () => {
@@ -94,7 +105,7 @@ describe("BestWindowCard", () => {
         readyByLimitMs={new Date("2024-06-16T04:00:00.000Z").getTime()}
       />
     );
-    expect(screen.getByText("Ready by tomorrow 07:00")).toBeInTheDocument();
+    expect(screen.getByText(byText("Ready by tomorrow 07:00"))).toBeInTheDocument();
   });
 
   it("formats kWh compactly", () => {
@@ -143,7 +154,60 @@ describe("BestWindowCard", () => {
     expect(
       screen.getByText("No 8 h window fits before 07:00 — starting now finishes 07:30.")
     ).toBeInTheDocument();
-    expect(screen.getByText("Ready by 07:00")).toBeInTheDocument();
+    expect(screen.getByText(byText("Ready by 07:00"))).toBeInTheDocument();
+  });
+
+  it("shows the fallback window with an amber warning when nothing fits before ready-by", () => {
+    // 00:16 Tallinn, EV 8 h, ready by 07:00 → best full window 09:00–17:00 (finishes late)
+    const fallback: CheapestWindow = {
+      ...window,
+      startTimestamp: "2024-06-15T06:00:00.000Z",
+      endTimestamp: "2024-06-15T14:00:00.000Z",
+      averagePrice: 2,
+      isPredicted: true,
+    };
+    render(
+      <BestWindowCard
+        {...baseProps}
+        window={fallback}
+        isPredicted
+        ignoresDeadline
+        nowMs={new Date("2024-06-14T21:16:00.000Z").getTime()}
+        readyByLimitMs={new Date("2024-06-15T04:00:00.000Z").getTime()}
+        startingNowEndMs={new Date("2024-06-15T05:15:00.000Z").getTime()}
+      />
+    );
+    expect(screen.getByText("Today 09:00–17:00")).toBeInTheDocument();
+    // Plain text, no live region inside the button (the calculator owns the status region)
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    const warning = screen.getByText("Finishes after 07:00 — no 8 h window fits before your ready-by time")
+      .closest(".border-amber-500\\/30") as HTMLElement;
+    expect(warning).not.toBeNull();
+    expect(warning).toHaveTextContent("Starting now finishes 08:15");
+    // Savings badge and predicted badge still apply in fallback mode (now 10 ¢ vs 2 ¢ × 40 kWh → €3.20)
+    expect(screen.getByText("Save €3.20 vs now")).toBeInTheDocument();
+    expect(screen.getAllByText("Predicted").length).toBeGreaterThan(0);
+  });
+
+  it("mobile header leads with the preset name, not truncated, with badge + deadline present", () => {
+    render(<BestWindowCard {...baseProps} presetLabel="Washing Machine" isPredicted />);
+    const label = screen.getByText(byText("Best time · Washing Machine"));
+    // "Best time ·" is desktop-only; the preset name itself is not in a hidden or truncating element
+    expect(screen.getByText("Best time ·").className).toContain("hidden sm:inline");
+    let node: HTMLElement | null = label;
+    while (node && node.tagName !== "BUTTON") {
+      expect(node.classList.contains("truncate")).toBe(false);
+      expect(node.classList.contains("hidden")).toBe(false);
+      node = node.parentElement;
+    }
+    // Ready-by: "Ready by" is screen-reader-only on phones, the time stays visible
+    expect(screen.getByText("Ready by").className).toContain("sr-only sm:not-sr-only");
+    expect(screen.getByRole("button")).toHaveAccessibleName(/Ready by 07:00/);
+  });
+
+  it("shows no deadline warning when the window fits", () => {
+    render(<BestWindowCard {...baseProps} ignoresDeadline={false} />);
+    expect(screen.queryByText(/Finishes after/)).not.toBeInTheDocument();
   });
 
   it("explains when no window fits before the deadline", () => {

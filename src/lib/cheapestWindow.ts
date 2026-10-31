@@ -262,7 +262,14 @@ export interface RollingWindowOptions {
 }
 
 export interface RollingWindowResult {
-  cheapestWindow: CheapestWindow | null;
+  /**
+   * Best window to recommend: the cheapest one ending by the ready-by deadline or,
+   * if none fits, the cheapest full-length window over the whole horizon
+   * (see `bestIgnoresDeadline`). Null only when no full-length window exists at all.
+   */
+  best: CheapestWindow | null;
+  /** True when `best` ignores the ready-by deadline because no window fits before it */
+  bestIgnoresDeadline: boolean;
   /** Average price of a same-length window starting now */
   startingNowPrice: number | null;
   /** Mean price across the whole horizon */
@@ -286,8 +293,10 @@ export interface RollingWindowResult {
  * "07:00" and 8 h) is the following day's occurrence used — the user can't mean
  * "in 30 minutes". Otherwise the near deadline is kept even if the full duration
  * doesn't fit (e.g. 23:30, 8 h, ready by 07:00): rolling over there would push the
- * deadline past the horizon and recommend a daytime window, leaving the car
- * uncharged by morning. The UI explains the no-fit case instead.
+ * deadline past the horizon, silently drop the constraint and present a daytime
+ * window as if it met the user's deadline. Keeping it lets computeRollingWindow
+ * fall back to the best full-length window with `bestIgnoresDeadline` set, so the
+ * UI recommends it with an explicit "finishes after 07:00" warning.
  * DST-safe: each occurrence is resolved from the Tallinn wall clock.
  */
 export function resolveReadyByLimit(
@@ -321,7 +330,8 @@ export function computeRollingWindow(
   );
 
   const empty: RollingWindowResult = {
-    cheapestWindow: null,
+    best: null,
+    bestIgnoresDeadline: false,
     startingNowPrice: null,
     horizonAvgPrice: null,
     horizonMaxPrice: null,
@@ -359,13 +369,19 @@ export function computeRollingWindow(
   }
   result.startingNowPrice = nowCount > 0 ? nowSum / nowCount : null;
 
-  const cheapestWindow = findCheapestSlotWindow(
+  let best = findCheapestSlotWindow(
     horizon,
     slotCount,
     nowFloorMs,
     readyByLimit ? readyByLimit.getTime() : null
   );
-  result.cheapestWindow = cheapestWindow;
-  result.isPredicted = cheapestWindow?.isPredicted ?? false;
+  // Nothing fits before the deadline (e.g. 00:16, 8 h, ready by 07:00): still recommend
+  // the cheapest full-length window rather than nothing — the UI flags that it finishes late.
+  if (best === null && readyByLimit !== null) {
+    best = findCheapestSlotWindow(horizon, slotCount, nowFloorMs, null);
+    result.bestIgnoresDeadline = best !== null;
+  }
+  result.best = best;
+  result.isPredicted = best?.isPredicted ?? false;
   return result;
 }

@@ -293,6 +293,49 @@ describe("CostCalculator", () => {
     ).toBeInTheDocument();
   });
 
+  it("flags a fallback best window that finishes after ready-by (amber warning + card caveat)", () => {
+    render(
+      <CostCalculator
+        {...openProps}
+        bestIgnoresDeadline
+        nowMs={new Date("2024-06-04T21:16:00.000Z").getTime()} // 00:16 Tallinn
+        readyByLimitMs={new Date("2024-06-05T04:00:00.000Z").getTime()} // 07:00
+        startingNowEndMs={new Date("2024-06-05T05:15:00.000Z").getTime()} // 08:15
+      />
+    );
+    const warning = screen.getByRole("status");
+    expect(warning).toHaveTextContent("Finishes after 07:00 — no 8 h window fits before your ready-by time");
+    expect(warning).toHaveTextContent("Starting now finishes 08:15");
+    expect(screen.getByText("Finishes after 07:00")).toBeInTheDocument(); // Best Window card caveat
+    expect(screen.getByText(/Save €2\.80/)).toBeInTheDocument();
+  });
+
+  it("collapsed header shows an amber 'after 07:00' hint in fallback mode (mobile + desktop)", () => {
+    render(
+      <CostCalculator
+        {...defaultProps}
+        bestIgnoresDeadline
+        nowMs={new Date("2024-06-04T21:16:00.000Z").getTime()}
+        readyByLimitMs={new Date("2024-06-05T04:00:00.000Z").getTime()}
+      />
+    );
+    const hints = screen.getAllByText("· after 07:00");
+    expect(hints).toHaveLength(2);
+    for (const h of hints) expect(h.className).toContain("text-amber-400");
+    expect(hints[0].closest(".sm\\:hidden")).not.toBeNull();
+    expect(hints[1].closest(".sm\\:inline")).not.toBeNull();
+  });
+
+  it("collapsed header has no 'after' hint when the window fits", () => {
+    render(<CostCalculator {...defaultProps} />);
+    expect(screen.queryByText(/after 07:00/)).not.toBeInTheDocument();
+  });
+
+  it("shows no deadline warning when the best window fits", () => {
+    render(<CostCalculator {...openProps} bestIgnoresDeadline={false} />);
+    expect(screen.queryByText(/Finishes after/)).not.toBeInTheDocument();
+  });
+
   it("uses the searched (snapped) duration in the no-window message", () => {
     render(<CostCalculator {...openProps} cheapestWindow={null} durationHours={2.3} />);
     expect(screen.getByText("No 2.25 h window fits before 07:00.")).toBeInTheDocument();

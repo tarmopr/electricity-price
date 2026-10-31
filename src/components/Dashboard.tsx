@@ -121,6 +121,7 @@ export default function Dashboard() {
         costError,
         readyByLimitMs,
         startingNowEndMs,
+        bestIgnoresDeadline,
     } = useCostCalculator(includeVat);
 
     // Best-window card tap: expand the calculator, then scroll it into view after it renders
@@ -189,6 +190,7 @@ export default function Dashboard() {
                         readyBy={costReadyBy}
                         readyByLimitMs={readyByLimitMs}
                         startingNowEndMs={startingNowEndMs}
+                        ignoresDeadline={bestIgnoresDeadline}
                         isPredicted={cheapestIsPredicted}
                         loading={costLoading}
                         error={costError}
@@ -319,6 +321,7 @@ export default function Dashboard() {
                 nowMs={costNowMs}
                 readyByLimitMs={readyByLimitMs}
                 startingNowEndMs={startingNowEndMs}
+                bestIgnoresDeadline={bestIgnoresDeadline}
                 error={costError}
             />
 

@@ -18,6 +18,8 @@ interface BestWindowCardProps {
     readyByLimitMs?: number | null;
     /** When a same-length window starting now would finish (for the no-fit hint) */
     startingNowEndMs?: number | null;
+    /** True when `window` finishes after the ready-by time because nothing fits before it */
+    ignoresDeadline?: boolean;
     isPredicted: boolean;
     loading: boolean;
     /** Price fetch error, if the latest load failed */
@@ -26,6 +28,9 @@ interface BestWindowCardProps {
     nowMs: number | null;
     onOpen: () => void;
 }
+
+const PREDICTED_BADGE =
+    'items-center text-[10px] font-semibold uppercase tracking-wider text-indigo-300 bg-indigo-500/15 border border-indigo-400/30 rounded-full px-2 py-0.5';
 
 const CARD =
     'group block w-full text-left p-4 lg:px-6 lg:py-4 rounded-2xl bg-gradient-to-br from-emerald-950/40 via-zinc-900/60 to-zinc-950/70 border border-emerald-500/20 hover:border-emerald-400/40 backdrop-blur-2xl shadow-xl hover:shadow-[0_0_30px_rgba(16,185,129,0.15)] transition-all duration-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50';
@@ -39,6 +44,7 @@ function BestWindowCard({
     readyBy,
     readyByLimitMs = null,
     startingNowEndMs = null,
+    ignoresDeadline = false,
     isPredicted,
     loading,
     error = null,
@@ -51,9 +57,11 @@ function BestWindowCard({
         readyBy && readyByLimitMs !== null && nowMs !== null
             ? formatTallinnDeadline(new Date(readyByLimitMs), now)
             : readyBy;
-    const readyByHint = deadlineLabel ? `Ready by ${deadlineLabel}` : 'No deadline';
-    const heading = `Best time · ${presetLabel}`;
-    const searchedDuration = formatDuration(snapDurationHours(durationHours));
+    const searchedDuration = formatDuration(window?.hours ?? snapDurationHours(durationHours));
+    const finishLabel =
+        deadlineLabel && startingNowEndMs !== null && nowMs !== null
+            ? formatTallinnDeadline(new Date(startingNowEndMs), now)
+            : null;
 
     let body: React.ReactNode;
     if (loading && !window) {
@@ -71,10 +79,6 @@ function BestWindowCard({
             </span>
         );
     } else if (!window) {
-        const finishLabel =
-            deadlineLabel && startingNowEndMs !== null && nowMs !== null
-                ? formatTallinnDeadline(new Date(startingNowEndMs), now)
-                : null;
         body = (
             <span className="block text-sm text-zinc-400">
                 No {searchedDuration} window fits
@@ -97,6 +101,10 @@ function BestWindowCard({
                     </span>
                     <span className="block text-xs text-zinc-500 mt-0.5">
                         {formatDuration(window.hours)} · {formatNumber(consumptionKwh)} kWh
+                        {isPredicted && (
+                            // Mobile copy of the header badge (header is too narrow on phones)
+                            <span className={`${PREDICTED_BADGE} ml-2 inline-flex sm:hidden`}>Predicted</span>
+                        )}
                     </span>
                 </span>
                 <span className="flex items-baseline gap-4 shrink-0">
@@ -112,6 +120,24 @@ function BestWindowCard({
                 </span>
             </span>
         );
+        if (ignoresDeadline && deadlineLabel) {
+            body = (
+                <>
+                    {body}
+                    <span className="mt-2 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-400" />
+                        <span className="block">
+                            <span className="block font-medium">
+                                Finishes after {deadlineLabel} — no {searchedDuration} window fits before your ready-by time
+                            </span>
+                            {finishLabel && (
+                                <span className="block text-amber-200/70">Starting now finishes {finishLabel}</span>
+                            )}
+                        </span>
+                    </span>
+                </>
+            );
+        }
     }
 
     return (
@@ -119,18 +145,24 @@ function BestWindowCard({
             <span className="flex items-center justify-between gap-2 mb-2">
                 <span className="flex items-center gap-2 min-w-0">
                     <BatteryCharging className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span className="text-xs lg:text-sm font-medium tracking-wide uppercase text-zinc-400 truncate">
-                        {heading}
+                    {/* On phones the preset name comes first; "Best time ·" only from sm up */}
+                    <span className="text-xs lg:text-sm font-medium tracking-wide uppercase text-zinc-400 min-w-0 sm:truncate">
+                        <span className="hidden sm:inline">Best time ·</span>{' '}{presetLabel}
                     </span>
                     {window && isPredicted && (
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-indigo-300 bg-indigo-500/15 border border-indigo-400/30 rounded-full px-2 py-0.5 shrink-0">
-                            Predicted
-                        </span>
+                        <span className={`${PREDICTED_BADGE} shrink-0 hidden sm:inline-flex`}>Predicted</span>
                     )}
                 </span>
                 <span className="flex items-center gap-1 text-xs text-zinc-500 shrink-0">
                     <Clock className="w-3.5 h-3.5" />
-                    <span>{readyByHint}</span>
+                    {deadlineLabel ? (
+                        <span>
+                            {/* Visible from sm up; screen-reader-only on phones */}
+                            <span className="sr-only sm:not-sr-only">Ready by</span>{' '}{deadlineLabel}
+                        </span>
+                    ) : (
+                        <span>No deadline</span>
+                    )}
                     <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-emerald-400 transition-colors" />
                 </span>
             </span>
