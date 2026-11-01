@@ -30,7 +30,7 @@ Welcome to the `electricity-price` project. This file is the single source of in
 ## Coding Conventions
 1. **Design First:** The priority is a superb, premium UI/UX. Do not use default/basic styling.
 2. **Components:** Use Server Components by default in App Router, and `'use client'` explicitly for interactive elements (charts, toggles).
-3. **Timezones:** Convert UTC ↔ Europe/Tallinn with the DST-safe Intl helpers in `@/lib/timezone` — never browser-local time. date-fns `startOfDay`/`format`/`startOfWeek` use the browser's zone; key days with `getTallinnDateStr`.
+3. **Timezones:** Convert UTC ↔ Europe/Tallinn with the DST-safe Intl helpers in `@/lib/timezone` — never browser-local time. date-fns `startOfDay`/`format`/`startOfWeek` use the browser's zone; key days with `getTallinnDateStr`. Elering publishes per CET delivery day, so after each sync the latest Tallinn day holds only 00:00–00:59: never treat the latest stored Tallinn day as complete.
 4. **Calculations:** Electricity prices should be displayed in cents/kWh (the API provides €/MWh). VAT (22%) toggle must be respected in all displayed price metrics and charts.
 5. **Cost Calculator:** `useCostCalculator` (`src/lib/useCostCalculator.ts`) fetches its own prices — now (floored to 15 min) → end of tomorrow in Tallinn, via `getPricesWithPrediction` — independent of the chart period, so windows can cross midnight. `computeRollingWindow` in `cheapestWindow.ts` searches 15-minute slots (`normalizeTo15MinSlots` expands hourly points), honours the "Ready by" deadline (`resolveReadyByLimit`: next occurrence, rolled to the following day only when less than half the duration remains) and falls back to the best full-length window with `bestIgnoresDeadline` when nothing fits. "Starting Now" is the average of a same-length window from now. Numeric inputs use `NumericField` (`src/components/ui/`) with parsing in `src/lib/numericInput.ts`.
 6. **Database:** All aggregate tables above hourly level are computed from `hourly_averages` (not raw prices) to ensure equal hour weighting regardless of data granularity (15-min vs 1-hour).
@@ -74,4 +74,5 @@ Reference this file before making structural changes.
 
 ## Gotchas
 - Stop `npm run dev` before `npm run build` or the OpenNext build — both write `.next/`.
+- **Workers Free plan:** 10 ms CPU and 50 D1 queries per invocation (a `db.batch` counts as one), 100k D1 rows written/day (each index update counts as another row). Size every request path for these; backfill month by month (`npm run recompute`, 31-day sync cap).
 - `.github/workflows/deploy.yml` only validates (lint, test, build, OpenNext build, scheduled-handler patch); it does not deploy. When only docs change (`*.md`, `docs/`, `.claude/`) it skips those steps and still passes.
