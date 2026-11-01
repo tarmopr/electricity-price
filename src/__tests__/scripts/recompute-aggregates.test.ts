@@ -7,6 +7,8 @@ describe("tallinnMonth", () => {
     expect(tallinnMonth("2025-10-31T21:30:00Z")).toBe("2025-10"); // 23:30 EET
     expect(tallinnMonth("2025-10-31T22:00:00Z")).toBe("2025-11"); // 00:00 EET
     expect(tallinnMonth("2025-12-31T22:15:00Z")).toBe("2026-01");
+    expect(tallinnMonth("2025-04-30T20:59:00Z")).toBe("2025-04"); // 23:59 EEST
+    expect(tallinnMonth("2025-04-30T21:00:00Z")).toBe("2025-05"); // 00:00 EEST
   });
 });
 
@@ -30,6 +32,16 @@ describe("parseArgs", () => {
   it("rejects a missing url and malformed months", () => {
     expect(() => parseArgs([])).toThrow(/--url/);
     expect(() => parseArgs(["--url", "https://x.dev", "--from", "2025-1"])).toThrow(/YYYY-MM/);
+  });
+
+  it("rejects unknown flags and flags without a value", () => {
+    expect(() => parseArgs(["--url", "https://x.dev", "--form", "2025-01"])).toThrow(/Unknown option --form/);
+    expect(() => parseArgs(["--url", "https://x.dev", "--from"])).toThrow(/--from needs a value/);
+  });
+
+  it("refuses plain http except for localhost (the secret would travel in cleartext)", () => {
+    expect(() => parseArgs(["--url", "http://x.dev"])).toThrow(/https/);
+    expect(parseArgs(["--url", "http://localhost:3000"]).url).toBe("http://localhost:3000");
   });
 });
 
@@ -67,5 +79,20 @@ describe("recomputeMonths", () => {
       recomputeMonths({ url: "https://x.dev", secret: "", from: "2025-01", to: "2025-04", fetchFn, log: vi.fn() })
     ).rejects.toThrow(/2025-03.*500.*D1 down.*--from 2025-03/);
     expect(fetchFn).toHaveBeenCalledTimes(3);
+  });
+
+  it("stops at once on 401/403 with an auth hint instead of a resume hint", async () => {
+    const fetchFn = vi.fn(async () => json(401, { success: false, error: "Unauthorized" }));
+    await expect(
+      recomputeMonths({ url: "https://x.dev", secret: "", from: "2025-01", to: "2025-04", fetchFn, log: vi.fn() })
+    ).rejects.toThrow(/SYNC_SECRET/);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports a non-JSON 200 (e.g. a login page) with the month and resume hint", async () => {
+    const fetchFn = vi.fn(async () => ({ ok: true, status: 200, json: async () => { throw new SyntaxError("Unexpected token <"); } }) as unknown as Response);
+    await expect(
+      recomputeMonths({ url: "https://x.dev", secret: "s", from: "2025-01", to: "2025-01", fetchFn, log: vi.fn() })
+    ).rejects.toThrow(/2025-01.*invalid response.*--from 2025-01/);
   });
 });

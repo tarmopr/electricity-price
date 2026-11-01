@@ -52,14 +52,24 @@ export interface Args {
   to?: string;
 }
 
+const OPTIONS = ["url", "from", "to"];
+
 export function parseArgs(argv: string[]): Args {
   const values: Record<string, string> = {};
   for (let i = 0; i < argv.length; i++) {
     const [flag, inline] = argv[i].split("=", 2);
     if (!flag.startsWith("--")) throw new Error(`Unexpected argument: ${argv[i]}`);
-    values[flag.slice(2)] = inline ?? argv[++i];
+    const key = flag.slice(2);
+    if (!OPTIONS.includes(key)) throw new Error(`Unknown option --${key} (use --url, --from, --to)`);
+    const value = inline ?? argv[++i];
+    if (value === undefined || value.startsWith("--")) throw new Error(`--${key} needs a value`);
+    values[key] = value;
   }
   if (!values.url) throw new Error("Missing --url (e.g. --url https://your-domain.com)");
+  const url = new URL(values.url);
+  if (url.protocol !== "https:" && url.hostname !== "localhost" && url.hostname !== "127.0.0.1") {
+    throw new Error("--url must use https (except localhost): the request carries SYNC_SECRET");
+  }
   for (const key of ["from", "to"]) {
     if (values[key] !== undefined && !MONTH.test(values[key])) {
       throw new Error(`--${key} must be YYYY-MM, got "${values[key]}"`);
@@ -93,9 +103,12 @@ export async function recomputeMonths(options: Args & {
   if (!from || !to) {
     const res = await fetchFn(`${url}/api/sync`);
     if (!res.ok) throw new Error(`GET /api/sync failed: HTTP ${res.status} ${await readError(res)}`);
-    const { data } = (await res.json()) as {
-      data: { earliestTimestamp: string | null; latestTimestamp: string | null };
-    };
+    let data: { earliestTimestamp: string | null; latestTimestamp: string | null };
+    try {
+      ({ data } = (await res.json()) as { data: typeof data });
+    } catch {
+      throw new Error("GET /api/sync returned an invalid response (not the app's JSON)");
+    }
     if (!data.earliestTimestamp || !data.latestTimestamp) throw new Error("No prices stored yet");
     from ??= tallinnMonth(data.earliestTimestamp);
     to ??= tallinnMonth(data.latestTimestamp);
@@ -111,14 +124,22 @@ export async function recomputeMonths(options: Args & {
       log(`${month}  skipped (no stored data)`);
       continue;
     }
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(`HTTP ${res.status}: set SYNC_SECRET to the production secret and rerun`);
+    }
     if (!res.ok) {
       throw new Error(
         `${month} failed: HTTP ${res.status} ${await readError(res)}. Resume with --from ${month}`
       );
     }
-    const { data } = (await res.json()) as { data: { rows: Record<string, number> } };
+    let rows: Record<string, number>;
+    try {
+      ({ data: { rows } } = (await res.json()) as { data: { rows: Record<string, number> } });
+    } catch {
+      throw new Error(`${month} failed: invalid response (not the app's JSON). Resume with --from ${month}`);
+    }
     done.push(month);
-    log(`${month}  ${JSON.stringify(data.rows)}`);
+    log(`${month}  ${JSON.stringify(rows)}`);
   }
   return { done, skipped };
 }

@@ -147,7 +147,7 @@ The sync also recomputes all aggregate tables (hourly, daily, weekly, monthly, w
 
 #### Upgrading an existing database
 
-`npm run deploy` deploys the Worker and then applies any new scripts in `db/migrations/` to the remote database (`wrangler d1 migrations apply`, tracked in the `d1_migrations` table). They run after the code deploy on purpose, so the old cron cannot write rows in the old format afterwards. If your deploy uses a different command (e.g. a Workers Builds deploy command), run `npx wrangler d1 migrations apply electricity-prices --remote` right after it.
+`npm run deploy` deploys the Worker and then applies any new scripts in `db/migrations/` to the remote database (`wrangler d1 migrations apply`, tracked in the `d1_migrations` table). They run after the code deploy on purpose, so the old cron cannot write rows in the old format afterwards. If your deploy uses a different command (e.g. a Workers Builds deploy command), or `npm run deploy` failed at the migration step, run `npx wrangler d1 migrations apply electricity-prices --remote` right after the deploy.
 
 When a migration resets an aggregate table (e.g. `0002_reset_weekly_averages.sql`), recompute every stored month afterwards (below); until then that table is empty or partial.
 
@@ -222,7 +222,8 @@ External dependencies (Cloudflare context, Elering API, D1 database) are mocked 
 | `npm test` | Run all tests once |
 | `npm run test:watch` | Run tests in watch mode |
 | `npm run preview` | Build and preview as Cloudflare Worker locally |
-| `npm run deploy` | Build and deploy to Cloudflare Workers |
+| `npm run deploy` | Build and deploy to Cloudflare Workers, then apply new `db/migrations/` to the remote D1 |
+| `npm run recompute -- --url <host>` | Rebuild a deployed app's calendar aggregates month by month (needs `SYNC_SECRET`) |
 | `npm run cf-typegen` | Regenerate Cloudflare Worker types after binding changes |
 | `npm run lint` | Run ESLint |
 
