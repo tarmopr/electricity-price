@@ -33,15 +33,16 @@ describe("POST /api/sync", () => {
     expect(body.error).toBe("Start date must be before end date");
   });
 
-  it("returns 400 when date range exceeds 2 years", async () => {
+  it("returns 400 when date range exceeds 31 days", async () => {
+    // Workers Free: 10 ms CPU, 50 D1 queries and 100k rows written per day
     const { POST } = await import("@/app/api/sync/route");
     const request = new Request(
-      "http://localhost/api/sync?start=2022-01-01T00:00:00Z&end=2025-01-01T00:00:00Z"
+      "http://localhost/api/sync?start=2025-01-01T00:00:00Z&end=2025-02-01T00:00:01Z"
     );
     const response = await POST(request as never);
     expect(response.status).toBe(400);
     const body = await response.json() as { error: string };
-    expect(body.error).toBe("Date range exceeds maximum of 2 years");
+    expect(body.error).toBe("Date range exceeds maximum of 31 days");
   });
 
   it("returns 400 for invalid start date format", async () => {
@@ -66,7 +67,7 @@ describe("POST /api/sync", () => {
     expect(body.error).toContain("Invalid end date format");
   });
 
-  it("accepts a valid date range under 2 years", async () => {
+  it("accepts a range of exactly 31 days", async () => {
     const { getCloudflareContext } = await import("@opennextjs/cloudflare");
     const mockFirst = vi.fn().mockResolvedValue({ latest: null });
     const mockBind = vi.fn().mockReturnValue({ run: vi.fn() });
@@ -99,7 +100,7 @@ describe("POST /api/sync", () => {
 
     const { POST } = await import("@/app/api/sync/route");
     const request = new Request(
-      "http://localhost/api/sync?start=2025-01-01T00:00:00Z&end=2025-06-01T00:00:00Z"
+      "http://localhost/api/sync?start=2025-01-01T00:00:00Z&end=2025-02-01T00:00:00Z"
     );
     const response = await POST(request as never);
     expect(response.status).toBe(200);

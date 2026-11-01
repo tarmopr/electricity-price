@@ -20,9 +20,8 @@ import { isSyncAuthorized } from "@/lib/syncAuth";
  *   If DB is empty, defaults to fetching the last 2 days.
  *
  * Manual mode (start provided):
- *   Fetches from the specified start to end (or tomorrow end-of-day if no end).
- *   Useful for historical backfill. Elering API allows max 1 year per chunk,
- *   but this route handles chunking automatically.
+ *   Fetches from the specified start to end (or 48h from now if no end), at most
+ *   31 days per call. Useful for filling gaps in price history.
  *
  * Query params:
  *   - start: ISO date string for sync start (optional, enables manual mode)
@@ -67,10 +66,13 @@ export async function POST(request: NextRequest) {
         return errorResponse("Start date must be before end date", 400);
       }
 
-      const maxRangeMs = 730 * 24 * 60 * 60 * 1000;
+      // Sized for Workers Free (10 ms CPU, 50 D1 queries per invocation, 100k rows
+      // written per day): 31 days is ~3k price slots. Backfill longer ranges in
+      // 31-day calls; to rebuild aggregates only, use /api/sync/recompute.
+      const maxRangeMs = 31 * 24 * 60 * 60 * 1000;
       if (end.getTime() - start.getTime() > maxRangeMs) {
         return errorResponse(
-          "Date range exceeds maximum of 2 years",
+          "Date range exceeds maximum of 31 days",
           400
         );
       }

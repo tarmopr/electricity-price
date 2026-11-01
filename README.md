@@ -130,14 +130,12 @@ This runs the OpenNext build, patches the worker with the scheduled sync handler
 
 ### 5. Sync Historical Data (Prefill Database)
 
-After the first deploy, the database is empty. Trigger a historical backfill by calling the sync endpoint with a start date. The Elering API allows a maximum of 1 year per request, and the sync route handles chunking automatically.
+After the first deploy, the database is empty. Backfill price history by calling the sync endpoint with a start and end date, at most 31 days per call (sized for the Workers Free limits: 10 ms CPU and 50 D1 queries per invocation, 100k rows written per day):
 
 ```bash
-# Backfill the past year
-curl -X POST "https://your-domain.com/api/sync?start=2025-03-01T00:00:00.000Z"
-
-# Backfill a specific range
-curl -X POST "https://your-domain.com/api/sync?start=2025-01-01T00:00:00.000Z&end=2025-06-01T00:00:00.000Z"
+# Backfill one month
+curl -X POST -H "Authorization: Bearer $SYNC_SECRET" \
+  "https://your-domain.com/api/sync?start=2025-01-01T00:00:00.000Z&end=2025-02-01T00:00:00.000Z"
 
 # Verify the sync status
 curl "https://your-domain.com/api/sync"
