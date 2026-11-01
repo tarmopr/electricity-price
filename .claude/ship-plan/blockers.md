@@ -30,6 +30,12 @@ entry rather than adding a second.
 - **Fix:** run `/ai-skills:verify-and-fix`; report that `/verify` itself is unavailable.
 - **Date:** 2026-11-01
 
+### `npm run build` fails once on the Google font module
+- **Symptom:** `Turbopack build failed with 1 errors: [next]/internal/font/google/inter_….module.css Module not found: Can't resolve '@vercel/turbopack-next/internal/font/google/font'` (import trace `./src/app/layout.tsx`).
+- **Cause:** transient — `next/font/google` downloads Inter at build time; the OpenNext build that ran `next build` right after passed, and a rerun passed.
+- **Fix:** rerun the Build gate once (`CI=true npm run build`); treat a second identical failure as real (network/proxy).
+- **Date:** 2026-11-01
+
 ## CI
 
 ## UI
