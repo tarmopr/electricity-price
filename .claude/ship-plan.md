@@ -2,9 +2,14 @@
 
 ## Repo
 - Host: github
-- Tracker: none
+- Tracker: github
 - Base branch: main
 - Merge: squash
+
+## GitHub Issues
+- Start label: in-progress
+- Review label: in-review
+- Type labels: fix → bug, feature → enhancement
 
 ## Prerequisites
 | Command | Background | Ready when |
