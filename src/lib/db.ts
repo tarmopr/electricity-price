@@ -137,8 +137,10 @@ export async function recomputeAllAggregates(
     ),
   ];
 
-  // One batch = one transaction: a failure leaves every aggregate table as it was,
-  // instead of daily/weekly rows rewritten and monthly/weekday-hour rows stale.
+  // One batch = one transaction: if any write fails, daily/weekly/monthly/weekday-hour
+  // stay as they were (hourly_averages is already committed above; a rerun recomputes
+  // everything). Don't split this into several batches: each would commit on its own
+  // and a failure part-way would leave the tables inconsistent with each other.
   // D1 has no per-batch statement cap (the 30 s limit covers the whole batch) and a
   // batch counts as a single query toward the per-invocation limit.
   if (statements.length > 0) {

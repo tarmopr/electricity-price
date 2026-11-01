@@ -15,20 +15,12 @@ import { recomputeAllAggregates } from "@/lib/db";
 const ts = (iso: string) => Math.floor(Date.parse(iso) / 1000);
 
 /** Inserts one raw price per hour in [startIso, endIso); price in ¢/kWh. */
-function seedHourly(
+const seedHourly = (
   sqlite: DatabaseSync,
   startIso: string,
   endIso: string,
-  centsAt: (t: number) => number = () => 10
-) {
-  const insert = sqlite.prepare(
-    "INSERT INTO prices (timestamp, price_eur_mwh, price_cents_kwh) VALUES (?, ?, ?)"
-  );
-  for (let t = ts(startIso); t < ts(endIso); t += 3600) {
-    const cents = centsAt(t);
-    insert.run(t, cents * 10, cents);
-  }
-}
+  centsAt?: (t: number) => number
+) => seedSlots(sqlite, startIso, endIso, 3600, centsAt);
 
 let d1: D1Database;
 let sqlite: DatabaseSync;
@@ -114,6 +106,22 @@ describe("recomputeAllAggregates — month and week boundaries", () => {
     expect(week("2025-10-27")).toEqual({ data_points: 168 }); // Mon 27 Oct – Sun 2 Nov
   });
 
+  it("does not write partial rows for days or weeks outside the whole-week window", async () => {
+    // Production hourly_averages holds all history, not just the recompute window
+    sqlite.exec(
+      "INSERT INTO hourly_averages SELECT timestamp, price_cents_kwh, price_cents_kwh, price_cents_kwh, 1 FROM prices"
+    );
+    await syncMidOctober();
+    expect(daily("2025-09-29")).toMatchObject({ data_points: 24 }); // first day of window (Mon)
+    expect(daily("2025-11-02")).toMatchObject({ data_points: 24 }); // last day of window (Sun)
+    expect(daily("2025-09-28")).toBeUndefined();
+    expect(daily("2025-11-03")).toBeUndefined();
+    const weeks = sqlite
+      .prepare("SELECT MIN(week) AS lo, MAX(week) AS hi, COUNT(*) AS n FROM weekly_averages")
+      .get();
+    expect(weeks).toEqual({ lo: 39, hi: 43, n: 5 });
+  });
+
   it("does not write partial rows for neighbouring months", async () => {
     sqlite
       .prepare(
@@ -146,21 +154,31 @@ describe("recomputeAllAggregates — values", () => {
 });
 
 describe("recomputeAllAggregates — atomic write", () => {
-  it("leaves every aggregate table unchanged when any write fails", async () => {
+  const TABLES = ["daily_averages", "weekly_averages", "monthly_averages", "weekday_hour_averages"];
+  const snapshot = () =>
+    TABLES.map((t) => sqlite.prepare(`SELECT * FROM ${t} ORDER BY 1, 2, 3, 4`).all());
+
+  it("rolls back all four calendar tables when any aggregate write fails", async () => {
     seedHourly(sqlite, "2025-09-15T00:00:00Z", "2025-11-15T00:00:00Z");
+    // Fail on the 200th aggregate insert in any table. The sync writes ~209 rows and no
+    // table has more than 168, so any split into several batches would commit some
+    // rows before the failure, whatever the statement order.
     sqlite.exec(`
       INSERT INTO daily_averages VALUES ('2025-10-10', 999, 999, 999, 1);
-      -- Fail on the last row written (Tue 23:00 is the last weekday-hour first seen in
-      -- October, from Wed 1 Oct), so earlier statements have already run
-      CREATE TRIGGER fail_weekday_hour BEFORE INSERT ON weekday_hour_averages
-      WHEN NEW.weekday = 1 AND NEW.hour = 23
-      BEGIN SELECT RAISE(ABORT, 'simulated D1 failure'); END;
+      INSERT INTO monthly_averages VALUES (2025, 10, 999, 999, 999, 1);
+      CREATE TABLE insert_count (n INTEGER); INSERT INTO insert_count VALUES (0);
+      ${TABLES.map(
+        (t) => `CREATE TRIGGER count_${t} BEFORE INSERT ON ${t} BEGIN
+          UPDATE insert_count SET n = n + 1;
+          SELECT RAISE(ABORT, 'simulated D1 failure') WHERE (SELECT n FROM insert_count) = 200;
+        END;`
+      ).join("\n")}
     `);
+    const before = snapshot();
     await expect(
       recomputeAllAggregates(d1, ts("2025-10-15T00:00:00Z"), ts("2025-10-16T00:00:00Z"))
     ).rejects.toThrow("simulated D1 failure");
-    // A partial write would leave daily/weekly rows new and monthly/weekday-hour stale
-    expect(daily("2025-10-10")).toMatchObject({ avg_price: 999, data_points: 1 });
+    expect(snapshot()).toEqual(before);
   });
 });
 
@@ -177,7 +195,7 @@ const wd = (y: number, m: number, w: number, h: number) =>
   q("SELECT sample_count AS n FROM weekday_hour_averages WHERE year=? AND month=? AND weekday=? AND hour=?", y, m, w, h);
 
 describe("recomputeAllAggregates — coverage", () => {
-  it("writes all 168 weekday-hour rows of a month (rows beyond the first batch)", async () => {
+  it("writes all 168 weekday-hour rows of a month (~200 statements in one batch)", async () => {
     seedSlots(sqlite, "2025-09-15T00:00:00Z", "2025-11-15T00:00:00Z");
     await recomputeAllAggregates(d1, ts("2025-10-15T00:00:00Z"), ts("2025-10-16T00:00:00Z"));
     expect(q("SELECT COUNT(*) AS rows, SUM(sample_count) AS samples FROM weekday_hour_averages WHERE year=2025 AND month=10"))
@@ -245,8 +263,12 @@ describe("recomputeAllAggregates — coverage", () => {
     expect(q("SELECT COUNT(*) AS n FROM weekday_hour_averages")).toEqual({ n: 336 });
   });
 
-  it("no data in window: no throw, no rows", async () => {
+  it("no data in window: no throw, no rows, no batch", async () => {
+    const batch = vi.spyOn(d1, "batch");
     await expect(recomputeAllAggregates(d1, ts("2025-10-15T00:00:00Z"), ts("2025-10-16T00:00:00Z"))).resolves.toBeUndefined();
-    expect(q("SELECT (SELECT COUNT(*) FROM daily_averages)+(SELECT COUNT(*) FROM weekly_averages)+(SELECT COUNT(*) FROM monthly_averages)+(SELECT COUNT(*) FROM weekday_hour_averages) AS n")).toEqual({ n: 0 });
+    const total = q(`SELECT (SELECT COUNT(*) FROM daily_averages) + (SELECT COUNT(*) FROM weekly_averages)
+      + (SELECT COUNT(*) FROM monthly_averages) + (SELECT COUNT(*) FROM weekday_hour_averages) AS n`);
+    expect(total).toEqual({ n: 0 });
+    expect(batch).not.toHaveBeenCalled();
   });
 });

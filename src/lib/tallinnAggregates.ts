@@ -45,7 +45,7 @@ export interface TallinnAggregateRange {
 
 const toUnix = (d: Date) => Math.floor(d.getTime() / 1000);
 
-/** 0=Monday … 6=Sunday for a 'YYYY-MM-DD' calendar date. */
+/** 0=Monday … 6=Sunday (not ISO 1–7) for a 'YYYY-MM-DD' calendar date. */
 function isoWeekday(dateStr: string): number {
   return (new Date(dateStr + "T00:00:00Z").getUTCDay() + 6) % 7;
 }
@@ -162,7 +162,7 @@ export function bucketTallinnAggregates(
     add(weekly, `${year}|${mondayWeekOfYear(year, month, day)}`, row);
     if (months.has(date.slice(0, 7))) {
       add(monthly, `${year}|${month}`, row);
-      // weekday_hour_averages.weekday is 0=Monday … 6=Sunday (JS getUTCDay is 0=Sunday)
+      // weekday_hour_averages.weekday is 0=Monday … 6=Sunday (see isoWeekday)
       add(weekdayHour, `${year}|${month}|${isoWeekday(date)}|${wall.getUTCHours()}`, row);
     }
   }
