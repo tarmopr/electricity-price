@@ -5,7 +5,10 @@ import type { ElectricityPrice } from "@/lib/api";
 
 // Recharts uses ResizeObserver and SVG layout not available in jsdom
 vi.mock("recharts", () => ({
-    AreaChart: ({ children }: { children: React.ReactNode }) => <svg data-testid="area-chart">{children}</svg>,
+    AreaChart: ({ children, accessibilityLayer }: { children: React.ReactNode; accessibilityLayer?: boolean }) => (
+        // Recharts 3 turns the accessibility layer (a keyboard focus stop) on unless told otherwise
+        <svg data-testid="area-chart" data-accessibility-layer={String(accessibilityLayer ?? true)}>{children}</svg>
+    ),
     Area: () => null,
     XAxis: () => null,
     YAxis: () => null,
@@ -184,6 +187,14 @@ describe("PriceChart", () => {
             expect(screen.getAllByTestId("area-chart")).toHaveLength(2);
             expect(screen.getByText("2×")).toBeInTheDocument();
             expect(screen.getByText("Scroll sideways for more")).toBeInTheDocument();
+        });
+
+        it("keeps the pinned price axis out of keyboard navigation", () => {
+            render(<PriceChart {...defaultProps} />);
+            zoomIn();
+            const overlayChart = screen.getByTestId("y-axis-overlay").querySelector("[data-testid='area-chart']")!;
+            expect(overlayChart).toHaveAttribute("data-accessibility-layer", "false");
+            expect(chartBox().querySelector("[data-testid='area-chart']")).toHaveAttribute("data-accessibility-layer", "true");
         });
 
         it("keeps the time at the viewport centre when zooming, allowing for the plot insets", () => {
