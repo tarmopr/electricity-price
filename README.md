@@ -147,7 +147,7 @@ The sync also recomputes all aggregate tables (hourly, daily, weekly, monthly, w
 
 #### Recompute aggregates without refetching
 
-After a change to how aggregates are bucketed, rewrite the calendar tables from the hourly averages already stored, one Tallinn month per call. It does not call Elering or rewrite prices, so each call stays inside the Workers Free limits:
+After a change to how aggregates are bucketed, rewrite the calendar tables from the hourly averages already stored, one Tallinn month per call, for every stored month. If the change also changed a table's keys (for example `db/migrations/0002_reset_weekly_averages.sql`), run that migration first so no rows with old keys remain (after deploying the new code, or the old cron writes old keys again). A month with no stored hourly averages returns 404. It does not call Elering or rewrite prices, so each call stays inside the Workers Free limits:
 
 ```bash
 for m in 2025-01 2025-02 2025-03; do
