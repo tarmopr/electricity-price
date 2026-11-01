@@ -120,6 +120,8 @@ Copy the `database_id` from the output and update `wrangler.jsonc`:
 npx wrangler d1 execute electricity-prices --remote --file=db/schema.sql
 ```
 
+`db/schema.sql` creates a fresh database. An existing database also needs the one-off scripts in `db/migrations/`, run once each in order with the same command and `--file=db/migrations/<file>.sql`.
+
 ### 4. Deploy
 
 ```bash

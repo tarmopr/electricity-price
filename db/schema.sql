@@ -58,8 +58,6 @@ CREATE TABLE IF NOT EXISTS weekday_hour_averages (
   PRIMARY KEY (year, month, weekday, hour)
 );
 
--- Indexes for common query patterns
-CREATE INDEX IF NOT EXISTS idx_prices_timestamp ON prices(timestamp);
-CREATE INDEX IF NOT EXISTS idx_hourly_timestamp ON hourly_averages(timestamp);
-CREATE INDEX IF NOT EXISTS idx_daily_date ON daily_averages(date);
-CREATE INDEX IF NOT EXISTS idx_weekday_hour_period ON weekday_hour_averages(year, month);
+-- No extra indexes: every query is served by a table's primary key (INTEGER PRIMARY
+-- KEY is the rowid; composite keys cover their leading columns). D1 counts each index
+-- update as another row written, which counts against the Workers Free daily limit.
