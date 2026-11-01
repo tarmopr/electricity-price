@@ -74,4 +74,4 @@ Reference this file before making structural changes.
 
 ## Gotchas
 - Stop `npm run dev` before `npm run build` or the OpenNext build — both write `.next/`.
-- `.github/workflows/deploy.yml` only validates (lint, test, build, OpenNext build, scheduled-handler patch); it does not deploy.
+- `.github/workflows/deploy.yml` only validates (lint, test, build, OpenNext build, scheduled-handler patch); it does not deploy. When only docs change (`*.md`, `docs/`, `.claude/`) it skips those steps and still passes.

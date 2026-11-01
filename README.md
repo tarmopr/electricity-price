@@ -164,7 +164,7 @@ Months without stored data (404) are skipped; any other failure stops the run an
 
 ### 6. CI and Deployments
 
-GitHub Actions (`.github/workflows/deploy.yml`, job "Build & Validate") runs on every pull request and push to `main`: `npm ci`, lint, tests, the Next.js build, the OpenNext build and the scheduled-handler patch. Despite the file name it **does not deploy** and needs no secrets.
+GitHub Actions (`.github/workflows/deploy.yml`, job "Build & Validate") runs on every pull request and push to `main`: `npm ci`, lint, tests, the Next.js build, the OpenNext build and the scheduled-handler patch. Despite the file name it **does not deploy** and needs no secrets. When a change only touches documentation (`*.md`, `docs/`, `.claude/`), the job skips those steps and still passes, so the PR check stays green.
 
 Deploy with `npm run deploy`, or connect the repository to [Cloudflare Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/) (this repository's PRs show a "Workers Builds" check).
 

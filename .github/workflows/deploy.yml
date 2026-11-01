@@ -13,27 +13,60 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+
+      # Docs-only changes (Markdown, docs/, .claude/) skip the build steps below.
+      # The job itself still runs and succeeds, so the PR check stays green.
+      - name: Detect docs-only change
+        id: changes
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "No usable base commit: running the full build"
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only "$BASE" "$GITHUB_SHA")
+          echo "Changed files:"; echo "$changed"
+          if [ -n "$changed" ] && ! echo "$changed" | grep -qvE '(\.md$|^docs/|^\.claude/)'; then
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Docs-only change, build skipped
+        if: steps.changes.outputs.code == 'false'
+        run: echo "Only documentation changed; lint, tests and builds were skipped."
 
       - name: Setup Node
+        if: steps.changes.outputs.code == 'true'
         uses: actions/setup-node@v6.3.0
         with:
           node-version: "24"
           cache: npm
 
       - name: Install dependencies
+        if: steps.changes.outputs.code == 'true'
         run: npm ci
 
       - name: Lint
+        if: steps.changes.outputs.code == 'true'
         run: npm run lint
 
       - name: Test
+        if: steps.changes.outputs.code == 'true'
         run: npm test
 
       - name: Build Next.js
+        if: steps.changes.outputs.code == 'true'
         run: npm run build
 
       - name: Build with OpenNext
+        if: steps.changes.outputs.code == 'true'
         run: npx opennextjs-cloudflare build
 
       - name: Patch worker with scheduled handler
+        if: steps.changes.outputs.code == 'true'
         run: node scripts/add-scheduled-handler.js
