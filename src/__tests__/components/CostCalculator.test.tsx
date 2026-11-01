@@ -510,6 +510,21 @@ describe("CostCalculator", () => {
     expect(screen.getByText("No 8 h window fits before predicted prices start (01:00).")).toBeInTheDocument();
   });
 
+  it("uses the generic no-window line when predictions are excluded but none are loaded", () => {
+    render(
+      <CostCalculator
+        {...openProps}
+        allowPredicted={false}
+        predictedFromMs={null}
+        cheapestWindow={null}
+      />
+    );
+    expect(screen.getByText("No 8 h window fits in the available prices.")).toBeInTheDocument();
+    expect(screen.queryByText(/before predicted prices start/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Official prices end/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/include predicted prices from/)).not.toBeInTheDocument();
+  });
+
   it("notes that the stats still include predicted prices", () => {
     const { rerender } = render(
       <CostCalculator {...openProps} allowPredicted={false} predictedFromMs={predictedFromMs} />

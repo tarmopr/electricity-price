@@ -391,6 +391,72 @@ describe("useDashboardPrices", () => {
         expect(result.current.heatmapPrices.map(p => p.priceEurMwh)).toEqual([40, 50]);
     });
 
+    it("ignores a stale request that fails after the new period has loaded", async () => {
+        let rejectFirst: (err: Error) => void = () => {};
+        let resolveSecond: (data: ElectricityPrice[]) => void = () => {};
+        getPricesWithPrediction
+            .mockImplementationOnce(() => new Promise((_, reject) => { rejectFirst = reject; }))
+            .mockImplementationOnce(() => new Promise(r => { resolveSecond = r; }));
+        getCurrentPrice.mockResolvedValue(null);
+
+        const freshToday = [
+            makePrice("2024-06-14T21:00:00.000Z", 40), // 00:00 Tallinn, 15 Jun
+            makePrice("2024-06-14T22:00:00.000Z", 50), // 01:00 Tallinn, 15 Jun
+        ];
+
+        const { result, rerender } = renderHook(
+            ({ period }: { period: "next_24h" | "today" }) => useDashboardPrices(period, "", ""),
+            { initialProps: { period: "next_24h" } },
+        );
+        rerender({ period: "today" });
+
+        await act(async () => {
+            resolveSecond(freshToday);
+        });
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        await act(async () => {
+            rejectFirst(new Error("stale request failed"));
+        });
+
+        expect(result.current.error).toBeNull();
+        expect(result.current.prices.map(p => p.priceEurMwh)).toEqual([40, 50]);
+    });
+
+    it("keeps loading while the new period is pending when a stale request resolves", async () => {
+        let resolveFirst: (data: ElectricityPrice[]) => void = () => {};
+        let resolveSecond: (data: ElectricityPrice[]) => void = () => {};
+        getPricesWithPrediction
+            .mockImplementationOnce(() => new Promise(r => { resolveFirst = r; }))
+            .mockImplementationOnce(() => new Promise(r => { resolveSecond = r; }));
+        getCurrentPrice.mockResolvedValue(null);
+
+        const staleNext24h = [makePrice("2024-06-15T10:00:00.000Z", 999)]; // 13:00 Tallinn
+        const freshToday = [
+            makePrice("2024-06-14T21:00:00.000Z", 40), // 00:00 Tallinn, 15 Jun
+            makePrice("2024-06-14T22:00:00.000Z", 50), // 01:00 Tallinn, 15 Jun
+        ];
+
+        const { result, rerender } = renderHook(
+            ({ period }: { period: "next_24h" | "today" }) => useDashboardPrices(period, "", ""),
+            { initialProps: { period: "next_24h" } },
+        );
+        rerender({ period: "today" });
+
+        await act(async () => {
+            resolveFirst(staleNext24h);
+        });
+
+        expect(result.current.loading).toBe(true);
+        expect(result.current.prices).toEqual([]);
+
+        await act(async () => {
+            resolveSecond(freshToday);
+        });
+        await waitFor(() => expect(result.current.loading).toBe(false));
+        expect(result.current.prices.map(p => p.priceEurMwh)).toEqual([40, 50]);
+    });
+
     it("returns null previousPrice when current is first in chart data (boundary case)", async () => {
         // currentPrice is index 0 → fetchCurrentPriceContext falls back to a context window fetch
         const contextPrices = [

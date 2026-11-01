@@ -233,6 +233,14 @@ describe("BestWindowCard", () => {
       screen.getByText("No 8 h window fits before predicted prices start (01:00). Tap to adjust.")
     ).toBeInTheDocument();
   });
+
+  it("falls back to the generic no-window text when predictions are excluded but none are loaded", () => {
+    render(<BestWindowCard {...baseProps} window={null} excludesPredicted predictedFromMs={null} />);
+    expect(
+      screen.getByText("No 8 h window fits in the available prices. Tap to adjust.")
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/before predicted prices start/)).not.toBeInTheDocument();
+  });
 });
 
 describe("BestWindowCard failure states", () => {

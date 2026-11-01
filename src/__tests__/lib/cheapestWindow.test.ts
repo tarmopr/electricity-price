@@ -590,6 +590,32 @@ describe("cheapestWindow", () => {
       expect(r.predictedFrom!.toISOString()).toBe("2024-06-14T20:00:00.000Z"); // 23:00 Tallinn, not the 20:30 fill
     });
 
+    it("excludePredicted: a cheap predicted fill inside official prices is not searched", () => {
+      // Official 15-minute points 20:00–22:45 Tallinn (17:00–19:45Z) with 20:30 missing;
+      // 20:15 is priced 0, so the 20:30 fill copies 0 and 20:15–20:45 would average 0
+      // if the fill were searched
+      const start = Date.UTC(2024, 5, 14, 17); // 20:00 Tallinn
+      const points: { timestamp: string; displayPrice: number; isPredicted: boolean }[] = [];
+      for (let k = 0; k < 12; k++) {
+        if (k === 2) continue;
+        points.push({
+          timestamp: new Date(start + k * 15 * 60_000).toISOString(),
+          displayPrice: k === 1 ? 0 : k === 3 || k === 4 ? 1 : 5,
+          isPredicted: false,
+        });
+      }
+
+      const r = computeRollingWindow(points, {
+        now: new Date(start),
+        durationHours: 0.5,
+        readyBy: null,
+        excludePredicted: true,
+      });
+      expect(r.best!.startTimestamp).toBe("2024-06-14T17:45:00.000Z"); // 20:45 Tallinn
+      expect(r.best!.averagePrice).toBeCloseTo(1);
+      expect(r.isPredicted).toBe(false);
+    });
+
     it("excludePredicted: no window when the whole horizon is predicted", () => {
       // Every point predicted from 20:00 Tallinn
       const points = hourlyFromTallinn(20, [3, 2, 1], 0);
