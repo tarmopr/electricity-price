@@ -13,17 +13,20 @@ export interface ConsumptionPreset {
   readyBy: string | null;
 }
 
+const EV_CHARGE: ConsumptionPreset = { label: "EV Charge", kWh: 40, durationHours: 8, readyBy: "07:00" };
+
 // Overnight appliances default to being done by 07:00 (before the morning commute/peak)
 export const PRESETS: ConsumptionPreset[] = [
-  { label: "EV Charge", kWh: 40, durationHours: 8, readyBy: "07:00" },
+  { label: "Plug-in Hybrid", kWh: 14, durationHours: 8, readyBy: "07:00" },
+  EV_CHARGE,
   { label: "Washing Machine", kWh: 2, durationHours: 2, readyBy: null },
   { label: "Dryer", kWh: 3.5, durationHours: 2, readyBy: null },
   { label: "Dishwasher", kWh: 1.8, durationHours: 2, readyBy: "07:00" },
   { label: "Sauna", kWh: 15, durationHours: 3, readyBy: null },
 ];
 
-/** Default calculator state = EV Charge preset. */
-export const DEFAULT_PRESET = PRESETS[0];
+/** Default calculator state = EV Charge preset. Plug-in Hybrid is listed first but is not the default. */
+export const DEFAULT_PRESET = EV_CHARGE;
 
 /** Consumption field limits (kWh); also applied to persisted values. */
 export const KWH_LIMITS = { min: 0, max: 200 } as const;

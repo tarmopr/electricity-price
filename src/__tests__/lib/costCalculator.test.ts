@@ -12,6 +12,10 @@ describe("costCalculator", () => {
       expect(PRESETS.length).toBeGreaterThanOrEqual(3);
     });
 
+    it("lists Plug-in Hybrid first (14 kWh, 8 h, ready by 07:00)", () => {
+      expect(PRESETS[0]).toEqual({ label: "Plug-in Hybrid", kWh: 14, durationHours: 8, readyBy: "07:00" });
+    });
+
     it("each preset has a label, positive kWh, and positive durationHours", () => {
       for (const p of PRESETS) {
         expect(p.label).toBeTruthy();

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import CostCalculator from "@/components/CostCalculator";
 import { CheapestWindow } from "@/lib/cheapestWindow";
 
@@ -51,6 +51,19 @@ describe("CostCalculator", () => {
     render(<CostCalculator {...defaultProps} />);
     // Preset buttons should not be visible when collapsed
     expect(screen.queryByText("Appliance")).not.toBeInTheDocument();
+  });
+
+  it("selecting the Plug-in Hybrid preset sets 14 kWh, 8 h and 07:00", () => {
+    const setActivePreset = vi.fn(), setConsumptionKwh = vi.fn(), setDurationHours = vi.fn(), setReadyBy = vi.fn();
+    render(<CostCalculator {...openProps} setActivePreset={setActivePreset} setConsumptionKwh={setConsumptionKwh}
+      setDurationHours={setDurationHours} setReadyBy={setReadyBy} />);
+    const pill = screen.getByText("Plug-in Hybrid").closest("button")!;
+    expect(within(pill).getByText("14 kWh · 8 h")).toBeInTheDocument();
+    fireEvent.click(pill);
+    expect(setActivePreset).toHaveBeenCalledWith("Plug-in Hybrid");
+    expect(setConsumptionKwh).toHaveBeenCalledWith(14);
+    expect(setDurationHours).toHaveBeenCalledWith(8);
+    expect(setReadyBy).toHaveBeenCalledWith("07:00");
   });
 
   it("shows collapsed summary with current cost", () => {
