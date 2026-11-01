@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "preview": "opennextjs-cloudflare build && node scripts/add-scheduled-handler.js && opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare build && node scripts/add-scheduled-handler.js && opennextjs-cloudflare deploy",
+    "deploy": "opennextjs-cloudflare build && node scripts/add-scheduled-handler.js && opennextjs-cloudflare deploy && wrangler d1 migrations apply electricity-prices --remote",
+    "recompute": "node scripts/recompute-aggregates.mts",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
