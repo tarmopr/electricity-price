@@ -265,7 +265,7 @@ export default function CostCalculator({
             <span className="flex items-center gap-2 min-w-0">
               <SlidersHorizontal className="w-4 h-4 shrink-0" />
               <span className={LABEL_CLASS}>Settings</span>
-              {!settingsOpen && <span id={settingsSummaryId} className="text-xs text-zinc-400 line-clamp-2 break-words">{settingsSummary}</span>}
+              {!settingsOpen && <span id={settingsSummaryId} className="text-xs text-zinc-400 break-words">{settingsSummary}</span>}
             </span>
             {settingsOpen ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}
           </button>
