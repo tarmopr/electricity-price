@@ -78,5 +78,3 @@ describe("recomputeHourlyAverages", () => {
     expect(boundEnd).toBe(Math.ceil(endMidHour / 3600) * 3600);
   });
 });
-
-// recomputeAllAggregates runs against real SQLite in aggregates.test.ts

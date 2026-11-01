@@ -20,13 +20,13 @@ CREATE TABLE IF NOT EXISTS daily_averages (
   avg_price REAL NOT NULL,         -- Average ¢/kWh for the day
   min_price REAL NOT NULL,
   max_price REAL NOT NULL,
-  data_points INTEGER NOT NULL     -- Should be 96 (96 × 15-min slots)
+  data_points INTEGER NOT NULL     -- Hourly averages in the Tallinn day (24; 23/25 on DST days)
 );
 
 -- Weekly aggregates
 CREATE TABLE IF NOT EXISTS weekly_averages (
   year INTEGER NOT NULL,
-  week INTEGER NOT NULL,           -- ISO week number (1–53)
+  week INTEGER NOT NULL,           -- Monday-based week of year, SQLite strftime('%W') (0–53)
   avg_price REAL NOT NULL,
   min_price REAL NOT NULL,
   max_price REAL NOT NULL,
@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS weekday_hour_averages (
   weekday INTEGER NOT NULL,        -- 0=Monday, 6=Sunday (ISO)
   hour INTEGER NOT NULL,           -- 0–23
   avg_price REAL NOT NULL,
-  sample_count INTEGER NOT NULL,   -- How many 15-min slots contributed
+  sample_count INTEGER NOT NULL,   -- How many hourly averages contributed
   PRIMARY KEY (year, month, weekday, hour)
 );
 

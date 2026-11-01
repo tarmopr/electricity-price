@@ -1,5 +1,6 @@
-// Minimal typings for Node's built-in `node:sqlite` (Node ≥ 22.5), used only by
-// test helpers. The installed @types/node (20.x) predates the module.
+// Minimal typings for Node's built-in `node:sqlite` (unflagged from Node 22.13), used
+// only by test helpers. Delete this file once @types/node >= 22 is installed — it then
+// ships these types and this declaration would conflict.
 declare module "node:sqlite" {
   type SQLValue = number | string | bigint | null | Uint8Array;
 

@@ -78,14 +78,16 @@ export async function recomputeHourlyAverages(
  * Calendar bucketing uses Europe/Tallinn dates (DST-aware) and happens in
  * application code (see tallinnAggregates.ts) because SQLite has no timezone
  * support. The range is expanded to whole Tallinn months and the whole weeks
- * around them so no recomputed day, week or month is written from partial data.
+ * around them, so every rewritten day, week or month is recomputed from its full
+ * window rather than a slice of it.
  */
 export async function recomputeAllAggregates(
   db: D1Database,
   startTimestamp: number,
   endTimestamp: number
 ): Promise<void> {
-  const { readStart, readEnd, months } = getTallinnAggregateRange(startTimestamp, endTimestamp);
+  const range = getTallinnAggregateRange(startTimestamp, endTimestamp);
+  const { readStart, readEnd } = range;
 
   // 1. Hourly averages from raw prices for the whole window
   await recomputeHourlyAverages(db, readStart, readEnd);
@@ -101,7 +103,7 @@ export async function recomputeAllAggregates(
     .bind(readStart, readEnd)
     .all<HourlyAverageRow>();
 
-  const agg = bucketTallinnAggregates(results, months);
+  const agg = bucketTallinnAggregates(results, range);
 
   const dailyStmt = db.prepare(
     `INSERT OR REPLACE INTO daily_averages (date, avg_price, min_price, max_price, data_points)
@@ -135,9 +137,11 @@ export async function recomputeAllAggregates(
     ),
   ];
 
-  // D1 batch limit is 100 statements per batch
-  const BATCH_SIZE = 100;
-  for (let i = 0; i < statements.length; i += BATCH_SIZE) {
-    await db.batch(statements.slice(i, i + BATCH_SIZE));
+  // One batch = one transaction: a failure leaves every aggregate table as it was,
+  // instead of daily/weekly rows rewritten and monthly/weekday-hour rows stale.
+  // D1 has no per-batch statement cap (the 30 s limit covers the whole batch) and a
+  // batch counts as a single query toward the per-invocation limit.
+  if (statements.length > 0) {
+    await db.batch(statements);
   }
 }

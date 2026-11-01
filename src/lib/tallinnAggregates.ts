@@ -2,8 +2,9 @@
  * Buckets UTC hourly averages into Europe/Tallinn calendar aggregates (daily,
  * weekly, monthly, weekday-hour) for the D1 aggregate tables.
  *
- * SQLite has no timezone support, so bucketing happens here with the same
- * DST-safe Intl helpers the UI uses; the database keeps UTC timestamps only.
+ * SQLite has no timezone support, so bucketing happens here with the DST-safe Intl
+ * helpers in @/lib/timezone. prices and hourly_averages hold UTC timestamps; the
+ * aggregate tables are keyed by Tallinn calendar values.
  * Higher-level aggregates are built from hourly averages so every hour has equal
  * weight regardless of raw data granularity (15-min vs 1-hour).
  */
@@ -31,11 +32,15 @@ export interface TallinnAggregates {
 }
 
 export interface TallinnAggregateRange {
-  /** Read/recompute window (Unix seconds): whole Monday-weeks around the whole Tallinn months. */
+  /** Window start (Unix seconds, inclusive): Monday 00:00 Tallinn on/before the first month's 1st. */
   readStart: number;
+  /** Window end (Unix seconds, exclusive): Monday 00:00 Tallinn on/after the 1st after the last month. */
   readEnd: number;
-  /** 'YYYY-MM' Tallinn months fully inside the window; only these get monthly/weekday-hour rows. */
-  months: Set<string>;
+  /**
+   * 'YYYY-MM' Tallinn calendar months the synced range spans; only these get monthly and
+   * weekday-hour rows (data may still be partial for the current month).
+   */
+  months: ReadonlySet<string>;
 }
 
 const toUnix = (d: Date) => Math.floor(d.getTime() / 1000);
@@ -58,7 +63,8 @@ export function mondayWeekOfYear(year: number, month: number, day: number): numb
 
 /**
  * Expands a synced range [startTs, endTs) to whole Tallinn months, then to the
- * whole Monday-weeks around them, so no recomputed day, week or month is partial.
+ * whole Monday-weeks around them, so every rewritten day, week or month is
+ * recomputed from its full window.
  */
 export function getTallinnAggregateRange(startTs: number, endTs: number): TallinnAggregateRange {
   const firstDay = getTallinnDateStr(new Date(startTs * 1000));
@@ -112,22 +118,24 @@ const toAggregate = (a: Acc): PriceAggregate => ({
 });
 
 /**
- * Groups hourly rows by Tallinn day, week, month and weekday-hour. Monthly and
- * weekday-hour groups are emitted only for `months` (fully covered months); daily
- * and weekly groups are complete because the read window is whole weeks.
+ * Groups hourly rows of `range` by Tallinn day, week, month and weekday-hour. Rows
+ * outside [readStart, readEnd) are ignored. Monthly and weekday-hour groups are
+ * emitted only for `range.months`; daily and weekly groups are complete because the
+ * window is whole weeks (a week spanning Dec/Jan yields two %W rows, one per year).
  */
 export function bucketTallinnAggregates(
   rows: HourlyAverageRow[],
-  months: Set<string>
+  range: TallinnAggregateRange
 ): TallinnAggregates {
+  const { readStart, readEnd, months } = range;
   const daily = new Map<string, Acc>();
   const weekly = new Map<string, Acc>();
   const monthly = new Map<string, Acc>();
   const weekdayHour = new Map<string, Acc>();
 
-  // Intl lookups dominate CPU time (Workers have tight CPU limits). The offset changes
-  // at most once per UTC day (at 01:00 UTC), so resolve it per day and only fall back
-  // to a per-hour lookup on the two transition days a year.
+  // Intl lookups are costly on Workers' CPU budget. Tallinn's offset changes at most
+  // once per UTC day, so cache it per day; days with a transition fall back to a
+  // per-hour lookup.
   const dayOffset = new Map<number, number | null>();
   const offsetAt = (unix: number): number => {
     const day = Math.floor(unix / 86_400);
@@ -142,6 +150,7 @@ export function bucketTallinnAggregates(
   };
 
   for (const row of rows) {
+    if (row.timestamp < readStart || row.timestamp >= readEnd) continue;
     // Shift by the Tallinn offset at this instant, then read wall-clock fields via UTC getters
     const wall = new Date(row.timestamp * 1000 + offsetAt(row.timestamp));
     const year = wall.getUTCFullYear();
@@ -153,7 +162,8 @@ export function bucketTallinnAggregates(
     add(weekly, `${year}|${mondayWeekOfYear(year, month, day)}`, row);
     if (months.has(date.slice(0, 7))) {
       add(monthly, `${year}|${month}`, row);
-      add(weekdayHour, `${year}|${month}|${(wall.getUTCDay() + 6) % 7}|${wall.getUTCHours()}`, row);
+      // weekday_hour_averages.weekday is 0=Monday … 6=Sunday (JS getUTCDay is 0=Sunday)
+      add(weekdayHour, `${year}|${month}|${isoWeekday(date)}|${wall.getUTCHours()}`, row);
     }
   }
 

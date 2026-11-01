@@ -59,7 +59,7 @@ describe("recomputeAllAggregates — Tallinn summer time (EEST)", () => {
   });
 
   it("puts the 21:00 UTC hour in the next weekday's hour 0", () => {
-    // 2025-07-15 is a Tuesday (ISO weekday 1); only that day has a 00:00 slot of 100
+    // 2025-07-15 is a Tuesday (weekday 1, 0=Monday): the only seeded Tuesday, so hour 0 averages 100
     const row = sqlite
       .prepare(
         "SELECT avg_price FROM weekday_hour_averages WHERE year = 2025 AND month = 7 AND weekday = 1 AND hour = 0"
@@ -142,5 +142,111 @@ describe("recomputeAllAggregates — values", () => {
     expect(row.avg_price).toBeCloseTo((23 * 10 + 34) / 24);
     expect(row.min_price).toBe(10);
     expect(row.max_price).toBe(34);
+  });
+});
+
+describe("recomputeAllAggregates — atomic write", () => {
+  it("leaves every aggregate table unchanged when any write fails", async () => {
+    seedHourly(sqlite, "2025-09-15T00:00:00Z", "2025-11-15T00:00:00Z");
+    sqlite.exec(`
+      INSERT INTO daily_averages VALUES ('2025-10-10', 999, 999, 999, 1);
+      -- Fail on the last row written (Tue 23:00 is the last weekday-hour first seen in
+      -- October, from Wed 1 Oct), so earlier statements have already run
+      CREATE TRIGGER fail_weekday_hour BEFORE INSERT ON weekday_hour_averages
+      WHEN NEW.weekday = 1 AND NEW.hour = 23
+      BEGIN SELECT RAISE(ABORT, 'simulated D1 failure'); END;
+    `);
+    await expect(
+      recomputeAllAggregates(d1, ts("2025-10-15T00:00:00Z"), ts("2025-10-16T00:00:00Z"))
+    ).rejects.toThrow("simulated D1 failure");
+    // A partial write would leave daily/weekly rows new and monthly/weekday-hour stale
+    expect(daily("2025-10-10")).toMatchObject({ avg_price: 999, data_points: 1 });
+  });
+});
+
+/** Inserts one raw price every `step` seconds in [a, b); price in ¢/kWh. */
+function seedSlots(sqlite: DatabaseSync, a: string, b: string, step = 3600, cents: (t: number) => number = () => 10) {
+  const ins = sqlite.prepare("INSERT INTO prices (timestamp, price_eur_mwh, price_cents_kwh) VALUES (?, ?, ?)");
+  for (let t = ts(a); t < ts(b); t += step) {
+    const c = cents(t);
+    ins.run(t, c * 10, c);
+  }
+}
+const q = (sql: string, ...p: (string | number)[]) => sqlite.prepare(sql).get(...p);
+const wd = (y: number, m: number, w: number, h: number) =>
+  q("SELECT sample_count AS n FROM weekday_hour_averages WHERE year=? AND month=? AND weekday=? AND hour=?", y, m, w, h);
+
+describe("recomputeAllAggregates — coverage", () => {
+  it("writes all 168 weekday-hour rows of a month (rows beyond the first batch)", async () => {
+    seedSlots(sqlite, "2025-09-15T00:00:00Z", "2025-11-15T00:00:00Z");
+    await recomputeAllAggregates(d1, ts("2025-10-15T00:00:00Z"), ts("2025-10-16T00:00:00Z"));
+    expect(q("SELECT COUNT(*) AS rows, SUM(sample_count) AS samples FROM weekday_hour_averages WHERE year=2025 AND month=10"))
+      .toEqual({ rows: 168, samples: 31 * 24 + 1 });
+    expect(wd(2025, 10, 2, 12)).toEqual({ n: 5 }); // Wednesdays 1,8,15,22,29
+    expect(wd(2025, 10, 0, 12)).toEqual({ n: 4 }); // Mondays
+    expect(wd(2025, 10, 6, 3)).toEqual({ n: 5 });  // 4 Sundays + repeated 03:00 on 26 Oct
+  });
+
+  it("overwrites stale rows (INSERT OR REPLACE)", async () => {
+    seedSlots(sqlite, "2025-09-15T00:00:00Z", "2025-11-15T00:00:00Z");
+    sqlite.exec(`INSERT INTO daily_averages VALUES ('2025-10-10', 999, 999, 999, 1);
+      INSERT INTO monthly_averages VALUES (2025, 10, 999, 999, 999, 1);
+      INSERT INTO weekly_averages VALUES (2025, 40, 999, 999, 999, 1);
+      INSERT INTO weekday_hour_averages VALUES (2025, 10, 0, 0, 999, 1);`);
+    await recomputeAllAggregates(d1, ts("2025-10-15T00:00:00Z"), ts("2025-10-16T00:00:00Z"));
+    expect(q("SELECT avg_price, data_points FROM daily_averages WHERE date='2025-10-10'")).toEqual({ avg_price: 10, data_points: 24 });
+    expect(q("SELECT avg_price, data_points FROM monthly_averages WHERE year=2025 AND month=10")).toEqual({ avg_price: 10, data_points: 745 });
+    expect(q("SELECT avg_price, data_points FROM weekly_averages WHERE year=2025 AND week=40")).toEqual({ avg_price: 10, data_points: 168 });
+    expect(q("SELECT avg_price, sample_count FROM weekday_hour_averages WHERE year=2025 AND month=10 AND weekday=0 AND hour=0")).toEqual({ avg_price: 10, sample_count: 4 });
+  });
+
+  it("fall-back day: repeated 03:00 gets two samples, 02:00 one", async () => {
+    seedSlots(sqlite, "2025-10-25T00:00:00Z", "2025-10-28T00:00:00Z");
+    await recomputeAllAggregates(d1, ts("2025-10-25T00:00:00Z"), ts("2025-10-28T00:00:00Z"));
+    expect(wd(2025, 10, 6, 2)).toEqual({ n: 1 });
+    expect(wd(2025, 10, 6, 3)).toEqual({ n: 2 });
+    expect(wd(2025, 10, 6, 4)).toEqual({ n: 1 });
+  });
+
+  it("spring-forward day: no 03:00 slot, 02:00 and 04:00 present", async () => {
+    seedSlots(sqlite, "2025-03-29T00:00:00Z", "2025-04-01T00:00:00Z");
+    await recomputeAllAggregates(d1, ts("2025-03-29T00:00:00Z"), ts("2025-04-01T00:00:00Z"));
+    expect(wd(2025, 3, 6, 2)).toEqual({ n: 1 });
+    expect(wd(2025, 3, 6, 3)).toBeUndefined();
+    expect(wd(2025, 3, 6, 4)).toEqual({ n: 1 });
+  });
+
+  it("daily min/max come from sub-hour extremes, not hourly averages", async () => {
+    const slot = [8, 10, 12, 10];
+    seedSlots(sqlite, "2025-01-14T22:00:00Z", "2025-01-15T22:00:00Z", 900, (t) => slot[(t / 900) % 4]);
+    await recomputeAllAggregates(d1, ts("2025-01-15T00:00:00Z"), ts("2025-01-15T12:00:00Z"));
+    expect(q("SELECT avg_price, min_price, max_price, data_points FROM daily_averages WHERE date='2025-01-15'"))
+      .toEqual({ avg_price: 10, min_price: 8, max_price: 12, data_points: 24 });
+  });
+
+  it("year boundary: Tallinn 1 Jan 00:00 (31 Dec 22:00Z) lands in 2026 rows; %W week split", async () => {
+    const spike = ts("2025-12-31T22:00:00Z");
+    seedSlots(sqlite, "2025-12-28T22:00:00Z", "2026-01-05T22:00:00Z", 3600, (t) => (t === spike ? 100 : 10));
+    await recomputeAllAggregates(d1, ts("2026-01-01T00:00:00Z"), ts("2026-01-02T00:00:00Z"));
+    expect(q("SELECT max_price, data_points FROM daily_averages WHERE date='2026-01-01'")).toEqual({ max_price: 100, data_points: 24 });
+    expect(q("SELECT max_price, data_points FROM daily_averages WHERE date='2025-12-31'")).toEqual({ max_price: 10, data_points: 24 });
+    expect(q("SELECT data_points FROM weekly_averages WHERE year=2025 AND week=52")).toEqual({ data_points: 72 });
+    expect(q("SELECT max_price, data_points FROM weekly_averages WHERE year=2026 AND week=0")).toEqual({ max_price: 100, data_points: 96 });
+    expect(q("SELECT COUNT(*) AS n FROM weekly_averages")).toEqual({ n: 3 }); // (2025,52) (2026,0) (2026,1)
+    expect(q("SELECT avg_price FROM weekday_hour_averages WHERE year=2026 AND month=1 AND weekday=3 AND hour=0")).toEqual({ avg_price: 100 });
+    expect(q("SELECT COUNT(*) AS n FROM monthly_averages WHERE year=2025")).toEqual({ n: 0 });
+  });
+
+  it("sync spanning a Tallinn month boundary writes both months whole", async () => {
+    seedSlots(sqlite, "2025-09-15T00:00:00Z", "2025-12-05T00:00:00Z");
+    await recomputeAllAggregates(d1, ts("2025-10-31T12:00:00Z"), ts("2025-11-01T12:00:00Z"));
+    expect(q("SELECT data_points FROM monthly_averages WHERE year=2025 AND month=10")).toEqual({ data_points: 745 });
+    expect(q("SELECT data_points FROM monthly_averages WHERE year=2025 AND month=11")).toEqual({ data_points: 720 });
+    expect(q("SELECT COUNT(*) AS n FROM weekday_hour_averages")).toEqual({ n: 336 });
+  });
+
+  it("no data in window: no throw, no rows", async () => {
+    await expect(recomputeAllAggregates(d1, ts("2025-10-15T00:00:00Z"), ts("2025-10-16T00:00:00Z"))).resolves.toBeUndefined();
+    expect(q("SELECT (SELECT COUNT(*) FROM daily_averages)+(SELECT COUNT(*) FROM weekly_averages)+(SELECT COUNT(*) FROM monthly_averages)+(SELECT COUNT(*) FROM weekday_hour_averages) AS n")).toEqual({ n: 0 });
   });
 });
