@@ -49,6 +49,11 @@ const RING_YELLOW = 'focus:ring-yellow-500/50';
  * the value being coerced; valid drafts are committed live, and the draft is
  * normalized to the committed value on blur.
  */
+/** Empty or just a sign / decimal separator: the user is still typing, not wrong. */
+function isIncompleteDraft(draft: string): boolean {
+    return /^[-+]?[.,]?$/.test(draft.trim());
+}
+
 export default function NumericField({
     value,
     onCommit,
@@ -92,7 +97,7 @@ export default function NumericField({
             ? `max ${formatNumber(max)} ${unit}`
             : evaluation.outOfRange === 'min'
                 ? `min ${formatNumber(min)} ${unit}`
-                : invalid && draft.trim() !== ''
+                : invalid && !isIncompleteDraft(draft)
                     ? 'Enter a number'
                     : null;
 

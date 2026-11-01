@@ -3,7 +3,8 @@
  *
  * Recharts can't measure SVG text before render, so label widths are estimated
  * from character count. The cheapest-window label is 12px bold; ~0.6 × font size
- * per character (≈ 7.2px/char at 12px) covers its digits and separators.
+ * per character (≈ 7.2px/char at 12px) approximates the average bold glyph width
+ * of its mixed letters, digits and symbols.
  */
 
 /** Width per character as a fraction of font size (bold text). */

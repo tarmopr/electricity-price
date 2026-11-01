@@ -136,8 +136,8 @@ export function useCostCalculator(includeVat: boolean) {
         }
 
         // Phone tabs resumed hours later: refetch as soon as the tab is visible again.
-        // Resumes within 60 s of the last successful load skip the refetch (it pulls 8+ days
-        // of history for predictions); "now" is always advanced — cheap, and correct after a long sleep.
+        // Resumes within VISIBILITY_REFETCH_MIN_MS of the last successful load skip the refetch (it pulls
+        // 8+ days of history for predictions); "now" is always advanced — cheap, and correct after a long sleep.
         function handleVisibility() {
             if (document.visibilityState !== 'visible') return;
             advanceNow(Date.now());
@@ -146,15 +146,22 @@ export function useCostCalculator(includeVat: boolean) {
             load();
         }
 
+        // Retry as soon as the network returns instead of waiting for the next interval
+        function handleOnline() {
+            if (!inFlight) load();
+        }
+
         load();
         const interval = setInterval(load, REFRESH_MS);
         const tick = setInterval(() => advanceNow(Date.now()), NOW_TICK_MS);
         document.addEventListener('visibilitychange', handleVisibility);
+        window.addEventListener('online', handleOnline);
         return () => {
             cancelled = true;
             clearInterval(interval);
             clearInterval(tick);
             document.removeEventListener('visibilitychange', handleVisibility);
+            window.removeEventListener('online', handleOnline);
         };
     }, []);
 

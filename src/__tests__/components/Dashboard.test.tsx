@@ -126,6 +126,7 @@ function makeCostCalc(overrides: Record<string, unknown> = {}) {
         costNowMs: new Date("2024-01-01T09:00:00.000Z").getTime(),
         costLoading: false,
         costError: null,
+        costNoData: false,
         readyByLimitMs: null,
         startingNowEndMs: null,
         bestIgnoresDeadline: false,
@@ -342,6 +343,27 @@ describe("Dashboard", () => {
         const { mobile, desktop } = bestWindowCopies(container);
         expect(within(mobile).getByRole("alert")).toHaveTextContent("Couldn't load prices");
         expect(within(desktop).getByRole("alert")).toHaveTextContent("Couldn't load prices");
+    });
+
+    it("passes no-data to the Best Window card (not 'no window fits')", () => {
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({ costNoData: true }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        const { container } = render(<Dashboard />);
+        const { mobile } = bestWindowCopies(container);
+        expect(within(mobile).getByText(/No price data available yet/)).toBeInTheDocument();
+        expect(within(mobile).queryByText(/window fits/)).not.toBeInTheDocument();
+    });
+
+    it("passes loading to the card and the open calculator", () => {
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({ costLoading: true, costCalcOpen: true }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        const { container } = render(<Dashboard />);
+        const { mobile } = bestWindowCopies(container);
+        expect(within(mobile).getByLabelText("Finding the best window")).toBeInTheDocument();
+        expect(screen.getByText("Loading prices…")).toBeInTheDocument();
+        expect(screen.queryByText("No price data available for estimation.")).not.toBeInTheDocument();
     });
 
     it("highlights a deadline-ignoring fallback window on the chart and flags it on the card", () => {

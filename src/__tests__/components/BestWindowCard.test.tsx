@@ -141,7 +141,7 @@ describe("BestWindowCard", () => {
     expect(screen.getByLabelText("Finding the best window")).toBeInTheDocument();
   });
 
-  it("no-window message at 23:30 (8 h, ready by 07:00) names neither the deadline nor a finish time", () => {
+  it("no-window message names neither the deadline nor a finish time when no full window exists", () => {
     render(
       <BestWindowCard
         {...baseProps}
@@ -225,7 +225,7 @@ describe("BestWindowCard failure states", () => {
   it("flags stale data when a refresh failed but an earlier window is still shown", () => {
     render(<BestWindowCard {...baseProps} error="Failed to fetch prices: 500" />);
     expect(screen.getByText("Tonight 01:15–09:15")).toBeInTheDocument();
-    expect(screen.getByText(/Couldn.t refresh prices — showing the last loaded data/)).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(/Couldn.t refresh prices — showing the last loaded data/);
   });
 
   it("says it retries automatically when the first load failed (no retry control exists)", () => {
@@ -244,5 +244,19 @@ describe("BestWindowCard failure states", () => {
     // The hook falls back to a window ignoring the deadline, so null means no full window anywhere
     render(<BestWindowCard {...baseProps} window={null} readyBy="07:00" />);
     expect(screen.getByText("No 8 h window fits in the available prices. Tap to adjust.")).toBeInTheDocument();
+  });
+
+  it("keeps the error (no skeleton flicker) while a retry is in flight", () => {
+    render(<BestWindowCard {...baseProps} window={null} error="boom" loading />);
+    expect(screen.getByRole("alert")).toHaveTextContent(/Couldn.t load prices/);
+    expect(screen.queryByLabelText("Finding the best window")).not.toBeInTheDocument();
+  });
+
+  it("keeps live regions outside the button so screen readers announce them", () => {
+    const { rerender } = render(<BestWindowCard {...baseProps} window={null} error="boom" />);
+    expect(screen.getByRole("alert").closest("button")).toBeNull();
+    rerender(<BestWindowCard {...baseProps} error="boom" />);
+    expect(screen.getByRole("status").closest("button")).toBeNull();
+    expect(screen.getByRole("status")).toHaveTextContent(/Couldn.t refresh prices/);
   });
 });

@@ -300,4 +300,12 @@ describe("NumericField unparseable input", () => {
     fireEvent.change(input, { target: { value: "" } });
     expect(screen.queryByText("Enter a number")).not.toBeInTheDocument();
   });
+
+  it.each(["-", "+", ".", ",", "-."])("treats the partial draft %j as incomplete, not invalid", (draft) => {
+    render(<Harness />);
+    const input = getInput();
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: draft } });
+    expect(screen.queryByText("Enter a number")).not.toBeInTheDocument();
+  });
 });

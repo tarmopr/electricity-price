@@ -45,7 +45,7 @@ interface CostCalculatorProps {
   error?: string | null;
   /** True while prices are being (re)loaded */
   loading?: boolean;
-  /** When a same-length window starting now would finish (for the no-fit hint) */
+  /** When a same-length window starting now would finish (for the "starting now finishes …" line in the finishes-after-deadline warning) */
   startingNowEndMs?: number | null;
   /** True when `cheapestWindow` finishes after the ready-by time because nothing fits before it */
   bestIgnoresDeadline?: boolean;
@@ -167,6 +167,11 @@ export default function CostCalculator({
     setReadyBy(value);
   }
 
+  function handleClearReadyBy() {
+    setActivePreset("Custom");
+    setReadyBy(null);
+  }
+
   return (
     <div
       id="cost-calculator"
@@ -285,7 +290,7 @@ export default function CostCalculator({
                 {readyBy !== null ? (
                   <button
                     type="button"
-                    onClick={() => setReadyBy(null)}
+                    onClick={handleClearReadyBy}
                     aria-label="Clear ready-by time"
                     className={`${SECONDARY_BUTTON} border-zinc-700/80 bg-zinc-800/50 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/60`}
                   >
@@ -366,22 +371,22 @@ export default function CostCalculator({
           )}
 
           {/* Null despite the deadline fallback: no full-length window exists in the loaded prices */}
-          {cheapestWindow === null && currentPrice !== null && (
+          {/* Not while reloading: after a long sleep the cached prices may no longer cover "now" */}
+          {cheapestWindow === null && currentPrice !== null && !loading && (
             <p className="text-zinc-500 text-sm">
               No {formatDuration(searchedHours)} window fits in the available prices.
             </p>
           )}
 
-          {/* Stale-data notice */}
+          {/* Stale-data notice (same amber status as the best-window card) */}
           {error && estimates.length > 0 && (
-            <p role="alert" className="flex items-center gap-2 text-xs text-red-300">
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            <p role="status" className="flex items-center gap-2 text-xs text-amber-200">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
               Couldn&apos;t refresh prices — showing the last loaded data.
             </p>
           )}
 
           {/* Savings Highlight */}
-
           {savings !== null && savings > MIN_SAVINGS_EUR && (
             <div className={`flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-2.5 transition-opacity duration-200 ${hasInvalidDraft ? "opacity-50" : ""}`}>
               <Zap className="w-4 h-4 text-emerald-400 shrink-0" />

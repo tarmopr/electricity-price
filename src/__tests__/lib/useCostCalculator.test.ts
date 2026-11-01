@@ -495,4 +495,36 @@ describe("useCostCalculator", () => {
     });
     expect(result.current.costLoading).toBe(true);
   });
+
+  it("retries as soon as the browser comes back online after a failed load", async () => {
+    getPricesWithPrediction.mockRejectedValueOnce(new Error("offline")).mockResolvedValue([]);
+    const { result } = renderHook(() => useCostCalculator(false));
+    await waitFor(() => expect(result.current.costError).not.toBeNull());
+    act(() => {
+      window.dispatchEvent(new Event("online"));
+    });
+    await waitFor(() => expect(getPricesWithPrediction).toHaveBeenCalledTimes(2));
+  });
+
+  it("clears the error once a later load succeeds", async () => {
+    getPricesWithPrediction
+      .mockRejectedValueOnce(new Error("transient 500"))
+      .mockResolvedValue(hourly("2024-06-14T17:00:00.000Z", Array(14).fill(3)));
+    const { result } = renderHook(() => useCostCalculator(false));
+    await waitFor(() => expect(result.current.costError).not.toBeNull());
+    act(() => {
+      window.dispatchEvent(new Event("online"));
+    });
+    await waitFor(() => expect(result.current.cheapestWindow).not.toBeNull());
+    expect(result.current.costError).toBeNull();
+  });
+
+  it("does not flag no-data when prices exist but no full window fits", async () => {
+    // 2 h of prices, 8 h preset: data exists, window doesn't
+    getPricesWithPrediction.mockResolvedValue(hourly("2024-06-14T17:00:00.000Z", [3, 3]));
+    const { result } = renderHook(() => useCostCalculator(false));
+    await waitFor(() => expect(result.current.costLoading).toBe(false));
+    expect(result.current.cheapestWindow).toBeNull();
+    expect(result.current.costNoData).toBe(false);
+  });
 });

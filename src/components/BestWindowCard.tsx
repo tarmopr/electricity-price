@@ -16,7 +16,7 @@ interface BestWindowCardProps {
     readyBy: string | null;
     /** Resolved ready-by deadline (may be the following day's occurrence) */
     readyByLimitMs?: number | null;
-    /** When a same-length window starting now would finish (for the no-fit hint) */
+    /** When a same-length window starting now would finish (for the "starting now finishes …" line in the finishes-after-deadline warning) */
     startingNowEndMs?: number | null;
     /** True when `window` finishes after the ready-by time because nothing fits before it */
     ignoresDeadline?: boolean;
@@ -33,6 +33,9 @@ interface BestWindowCardProps {
 
 const PREDICTED_BADGE =
     'items-center text-[10px] font-semibold uppercase tracking-wider text-indigo-300 bg-indigo-500/15 border border-indigo-400/30 rounded-full px-2 py-0.5';
+
+const LOAD_FAILED = "Couldn't load prices — retrying automatically.";
+const STALE_DATA = "Couldn't refresh prices — showing the last loaded data.";
 
 const CARD =
     'group block w-full text-left p-4 lg:px-6 lg:py-4 rounded-2xl bg-gradient-to-br from-emerald-950/40 via-zinc-900/60 to-zinc-950/70 border border-emerald-500/20 hover:border-emerald-400/40 backdrop-blur-2xl shadow-xl hover:shadow-[0_0_30px_rgba(16,185,129,0.15)] transition-all duration-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50';
@@ -54,7 +57,8 @@ function BestWindowCard({
     nowMs,
     onOpen,
 }: BestWindowCardProps) {
-    // nowMs is set once the first load completes; fall back to the window start for day labels
+    // nowMs is null until the hook's first slot tick; the window-start fallback is defensive
+    // (the hook never yields a window without nowMs)
     const now = new Date(nowMs ?? (window ? new Date(window.startTimestamp).getTime() : 0));
     const deadlineLabel =
         readyBy && readyByLimitMs !== null && nowMs !== null
@@ -67,7 +71,12 @@ function BestWindowCard({
             : null;
 
     let body: React.ReactNode;
-    if (loading && !window) {
+    // Announced from a live region outside the button: content inside a button is
+    // flattened into its accessible name and not announced on change.
+    let liveAlert: string | null = null;
+    let liveStatus: string | null = null;
+    // While a retry is in flight keep showing the error (no error → skeleton → error flicker)
+    if (loading && !window && !error) {
         body = (
             <span className="flex items-center gap-3" aria-label="Finding the best window">
                 <span className="block h-5 w-40 bg-zinc-800/80 rounded animate-pulse" />
@@ -76,11 +85,12 @@ function BestWindowCard({
         );
     } else if (!window && error) {
         body = (
-            <span className="flex items-center gap-2 text-sm text-red-300" role="alert">
+            <span className="flex items-center gap-2 text-sm text-red-300">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
-                Couldn&apos;t load prices — retrying automatically.
+                {LOAD_FAILED}
             </span>
         );
+        liveAlert = LOAD_FAILED;
     } else if (!window && noData) {
         body = (
             <span className="block text-sm text-zinc-400">
@@ -134,12 +144,13 @@ function BestWindowCard({
             body = (
                 <>
                     {body}
-                    <span className="mt-2 flex items-center gap-2 text-xs text-amber-200" role="status">
+                    <span className="mt-2 flex items-center gap-2 text-xs text-amber-200">
                         <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
-                        Couldn&apos;t refresh prices — showing the last loaded data.
+                        {STALE_DATA}
                     </span>
                 </>
             );
+            liveStatus = STALE_DATA;
         }
         if (ignoresDeadline && deadlineLabel) {
             body = (
@@ -162,6 +173,9 @@ function BestWindowCard({
     }
 
     return (
+        <>
+        {liveAlert && <span role="alert" className="sr-only">{liveAlert}</span>}
+        {liveStatus && <span role="status" className="sr-only">{liveStatus}</span>}
         <button type="button" onClick={onOpen} className={CARD}>
             <span className="flex items-center justify-between gap-2 mb-2">
                 <span className="flex items-center gap-2 min-w-0">
@@ -190,6 +204,7 @@ function BestWindowCard({
             {body}
             <span className="sr-only">. Open cost calculator</span>
         </button>
+        </>
     );
 }
 

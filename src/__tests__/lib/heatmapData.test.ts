@@ -437,10 +437,17 @@ describe("heatmapData", () => {
 
 describe("getHeatmapWeekRange next_24h uses Tallinn dates", () => {
   it("highlights the Tallinn dates the window touches, independent of the browser timezone", () => {
-    // Sat 15 Jun 2024 00:30 Tallinn → Sun 16 Jun 00:29 Tallinn (21:30Z Fri → 21:29Z Sat)
-    const start = new Date("2024-06-14T21:30:00.000Z");
-    const end = new Date("2024-06-15T21:29:59.999Z");
-    const result = getHeatmapWeekRange("next_24h", start, end)!;
-    expect(result.highlightedDates).toEqual(["2024-06-15", "2024-06-16"]);
+    // Force a non-Tallinn local zone so the check bites on a Tallinn machine too
+    const prevTz = process.env.TZ;
+    process.env.TZ = "UTC";
+    try {
+      // Sat 15 Jun 2024 00:30 Tallinn → Sun 16 Jun 00:29 Tallinn (21:30Z Fri → 21:29Z Sat)
+      const start = new Date("2024-06-14T21:30:00.000Z");
+      const end = new Date("2024-06-15T21:29:59.999Z");
+      const result = getHeatmapWeekRange("next_24h", start, end)!;
+      expect(result.highlightedDates).toEqual(["2024-06-15", "2024-06-16"]);
+    } finally {
+      process.env.TZ = prevTz;
+    }
   });
 });

@@ -278,7 +278,7 @@ describe("CostCalculator", () => {
     expect(screen.getByText("Ready by tomorrow 07:00")).toBeInTheDocument();
   });
 
-  it("no-window message at 23:30 (8 h, ready by 07:00) names neither the deadline nor a finish time", () => {
+  it("no-window message names neither the deadline nor a finish time when no full window exists", () => {
     render(
       <CostCalculator
         {...openProps}
@@ -358,7 +358,8 @@ describe("CostCalculator", () => {
 
   it("warns that data is stale when a refresh failed but estimates exist", () => {
     render(<CostCalculator {...openProps} error="boom" />);
-    expect(screen.getByRole("alert")).toHaveTextContent(/Couldn't refresh prices/);
+    // Amber status, same severity as the best-window card's stale notice
+    expect(screen.getByRole("status")).toHaveTextContent(/Couldn't refresh prices/);
     expect(screen.getByText("Starting Now")).toBeInTheDocument();
   });
 
@@ -442,5 +443,19 @@ describe("CostCalculator loading and state sync", () => {
   it("does not blame the ready-by time when no full-length window exists at all", () => {
     render(<CostCalculator {...base} currentPrice={10} meanPrice={8} maxPrice={20} />);
     expect(screen.getByText("No 8 h window fits in the available prices.")).toBeInTheDocument();
+  });
+
+  it("does not say 'no window fits' while prices reload over stale partial data", () => {
+    render(<CostCalculator {...base} currentPrice={10} meanPrice={8} maxPrice={20} loading />);
+    expect(screen.queryByText(/window fits/)).not.toBeInTheDocument();
+  });
+
+  it("switches the preset to Custom when the ready-by time is cleared", () => {
+    const setActivePreset = vi.fn();
+    const setReadyBy = vi.fn();
+    render(<CostCalculator {...base} setActivePreset={setActivePreset} setReadyBy={setReadyBy} />);
+    fireEvent.click(screen.getByRole("button", { name: "Clear ready-by time" }));
+    expect(setReadyBy).toHaveBeenCalledWith(null);
+    expect(setActivePreset).toHaveBeenCalledWith("Custom");
   });
 });
