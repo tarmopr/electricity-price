@@ -74,6 +74,32 @@ export async function recomputeHourlyAverages(
  * All higher-level aggregates (daily, weekly, monthly, weekday-hour) are computed
  * from hourly_averages to ensure each hour is weighted equally regardless of
  * the raw data granularity.
+ */
+export async function recomputeAllAggregates(
+  db: D1Database,
+  startTimestamp: number,
+  endTimestamp: number
+): Promise<CalendarAggregateCounts> {
+  const { readStart, readEnd } = getTallinnAggregateRange(startTimestamp, endTimestamp);
+
+  // 1. Hourly averages from raw prices for the whole window
+  await recomputeHourlyAverages(db, readStart, readEnd);
+
+  // 2. Higher-level aggregates from hourly_averages (equal hour weighting)
+  return recomputeCalendarAggregates(db, startTimestamp, endTimestamp);
+}
+
+/** Rows written per calendar table by recomputeCalendarAggregates. */
+export interface CalendarAggregateCounts {
+  daily: number;
+  weekly: number;
+  monthly: number;
+  weekdayHour: number;
+}
+
+/**
+ * Rewrites daily, weekly, monthly and weekday-hour aggregates for a time range from
+ * the hourly_averages already stored; raw prices and hourly_averages are not touched.
  *
  * Calendar bucketing uses Europe/Tallinn dates (DST-aware) and happens in
  * application code (see tallinnAggregates.ts) because SQLite has no timezone
@@ -81,18 +107,14 @@ export async function recomputeHourlyAverages(
  * around them, so every rewritten day, week or month is recomputed from its full
  * window rather than a slice of it.
  */
-export async function recomputeAllAggregates(
+export async function recomputeCalendarAggregates(
   db: D1Database,
   startTimestamp: number,
   endTimestamp: number
-): Promise<void> {
+): Promise<CalendarAggregateCounts> {
   const range = getTallinnAggregateRange(startTimestamp, endTimestamp);
   const { readStart, readEnd } = range;
 
-  // 1. Hourly averages from raw prices for the whole window
-  await recomputeHourlyAverages(db, readStart, readEnd);
-
-  // 2. Higher-level aggregates from hourly_averages (equal hour weighting)
   const { results } = await db
     .prepare(
       `SELECT timestamp, avg_price, min_price, max_price
@@ -138,12 +160,19 @@ export async function recomputeAllAggregates(
   ];
 
   // One batch = one transaction: if any write fails, daily/weekly/monthly/weekday-hour
-  // stay as they were (hourly_averages is already committed above; a rerun recomputes
-  // everything). Don't split this into several batches: each would commit on its own
+  // stay as they were (hourly_averages, if recomputeAllAggregates rewrote it, is already
+  // committed; a rerun recomputes everything). Don't split this into several batches: each would commit on its own
   // and a failure part-way would leave the tables inconsistent with each other.
   // D1 has no per-batch statement cap (the 30 s limit covers the whole batch) and a
   // batch counts as a single query toward the per-invocation limit.
   if (statements.length > 0) {
     await db.batch(statements);
   }
+
+  return {
+    daily: agg.daily.length,
+    weekly: agg.weekly.length,
+    monthly: agg.monthly.length,
+    weekdayHour: agg.weekdayHour.length,
+  };
 }

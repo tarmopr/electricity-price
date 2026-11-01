@@ -145,6 +145,16 @@ curl "https://your-domain.com/api/sync"
 
 The sync also recomputes all aggregate tables (hourly, daily, weekly, monthly, weekday-hour averages).
 
+#### Recompute aggregates without refetching
+
+After a change to how aggregates are bucketed, rewrite the calendar tables from the hourly averages already stored, one Tallinn month per call. It does not call Elering or rewrite prices, so each call stays inside the Workers Free limits:
+
+```bash
+for m in 2025-01 2025-02 2025-03; do
+  curl -X POST -H "Authorization: Bearer $SYNC_SECRET" "https://your-domain.com/api/sync/recompute?month=$m"
+done
+```
+
 ### 6. CI and Deployments
 
 GitHub Actions (`.github/workflows/deploy.yml`, job "Build & Validate") runs on every pull request and push to `main`: `npm ci`, lint, tests, the Next.js build, the OpenNext build and the scheduled-handler patch. Despite the file name it **does not deploy** and needs no secrets.
@@ -222,6 +232,7 @@ External dependencies (Cloudflare context, Elering API, D1 database) are mocked 
 | `/api/prices/weekday-pattern` | GET | Weekday-hour averages from D1 (for heatmap) |
 | `/api/sync` | GET | Sync status (latest/earliest timestamp, total count) |
 | `/api/sync` | POST | Trigger price sync (auto or manual with `start`/`end` params) |
+| `/api/sync/recompute` | POST | Rewrite one month's daily/weekly/monthly/weekday-hour aggregates from stored hourly averages (`month=YYYY-MM`) |
 
 ## Database Schema
 

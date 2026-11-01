@@ -265,7 +265,8 @@ describe("recomputeAllAggregates — coverage", () => {
 
   it("no data in window: no throw, no rows, no batch", async () => {
     const batch = vi.spyOn(d1, "batch");
-    await expect(recomputeAllAggregates(d1, ts("2025-10-15T00:00:00Z"), ts("2025-10-16T00:00:00Z"))).resolves.toBeUndefined();
+    await expect(recomputeAllAggregates(d1, ts("2025-10-15T00:00:00Z"), ts("2025-10-16T00:00:00Z")))
+      .resolves.toEqual({ daily: 0, weekly: 0, monthly: 0, weekdayHour: 0 });
     const total = q(`SELECT (SELECT COUNT(*) FROM daily_averages) + (SELECT COUNT(*) FROM weekly_averages)
       + (SELECT COUNT(*) FROM monthly_averages) + (SELECT COUNT(*) FROM weekday_hour_averages) AS n`);
     expect(total).toEqual({ n: 0 });
