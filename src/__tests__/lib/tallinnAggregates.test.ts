@@ -4,21 +4,28 @@ import { DatabaseSync } from "node:sqlite";
 import {
   bucketTallinnAggregates,
   getTallinnAggregateRange,
-  mondayWeekOfYear,
+  isoWeek,
 } from "@/lib/tallinnAggregates";
 import { addDaysToDateStr } from "@/lib/timezone";
 
 const ts = (iso: string) => Math.floor(Date.parse(iso) / 1000);
 
-describe("mondayWeekOfYear", () => {
-  it("matches SQLite strftime('%W') for every day 2023–2027", () => {
-    // weekly_averages.week has always been SQLite %W; keep stored keys stable
+describe("isoWeek", () => {
+  it("matches SQLite strftime('%G-%V') (ISO 8601 year and week) for every day 2023–2027", () => {
     const sqlite = new DatabaseSync(":memory:");
-    const stmt = sqlite.prepare("SELECT CAST(strftime('%W', ?) AS INTEGER) AS w");
+    const stmt = sqlite.prepare(
+      "SELECT CAST(strftime('%G', ?1) AS INTEGER) AS year, CAST(strftime('%V', ?1) AS INTEGER) AS week"
+    );
     for (let d = "2023-01-01"; d < "2028-01-01"; d = addDaysToDateStr(d, 1)) {
       const [y, m, day] = d.split("-").map(Number);
-      expect(mondayWeekOfYear(y, m, day), d).toBe(stmt.get(d)!.w);
+      expect(isoWeek(y, m, day), d).toEqual({ ...stmt.get(d) });
     }
+  });
+
+  it("puts days around New Year in the week that holds the Thursday", () => {
+    expect(isoWeek(2026, 1, 1)).toEqual({ year: 2026, week: 1 }); // Thu
+    expect(isoWeek(2025, 12, 29)).toEqual({ year: 2026, week: 1 }); // Mon of the same week
+    expect(isoWeek(2027, 1, 1)).toEqual({ year: 2026, week: 53 }); // Fri
   });
 });
 

@@ -51,14 +51,17 @@ function isoWeekday(dateStr: string): number {
 }
 
 /**
- * Week of year with Monday as the first day of the week (00–53), identical to
- * SQLite strftime('%W'): days before the year's first Monday are week 0.
- * Keeps the keys already stored in weekly_averages stable.
+ * ISO 8601 week (weeks start on Monday; week 1 holds the year's first Thursday),
+ * identical to SQLite strftime('%G') / strftime('%V'). Days around New Year may
+ * belong to the previous or next ISO year, so a week is never split across years.
  */
-export function mondayWeekOfYear(year: number, month: number, day: number): number {
-  const yday = (Date.UTC(year, month - 1, day) - Date.UTC(year, 0, 1)) / 86_400_000;
-  const weekday = (new Date(Date.UTC(year, month - 1, day)).getUTCDay() + 6) % 7;
-  return Math.floor((yday + 7 - weekday) / 7);
+export function isoWeek(year: number, month: number, day: number): { year: number; week: number } {
+  const date = Date.UTC(year, month - 1, day);
+  // The Thursday of this Monday-based week decides the ISO year
+  const thursday = new Date(date + (3 - ((new Date(date).getUTCDay() + 6) % 7)) * 86_400_000);
+  const isoYear = thursday.getUTCFullYear();
+  const week = Math.floor((thursday.getTime() - Date.UTC(isoYear, 0, 1)) / (7 * 86_400_000)) + 1;
+  return { year: isoYear, week };
 }
 
 /**
@@ -121,7 +124,7 @@ const toAggregate = (a: Acc): PriceAggregate => ({
  * Groups hourly rows of `range` by Tallinn day, week, month and weekday-hour. Rows
  * outside [readStart, readEnd) are ignored. Monthly and weekday-hour groups are
  * emitted only for `range.months`; daily and weekly groups are complete because the
- * window is whole weeks (a week spanning Dec/Jan yields two %W rows, one per year).
+ * window is whole weeks. Weekly rows are keyed by ISO year and week.
  */
 export function bucketTallinnAggregates(
   rows: HourlyAverageRow[],
@@ -167,9 +170,10 @@ export function bucketTallinnAggregates(
       const year = wall.getUTCFullYear();
       const month = wall.getUTCMonth() + 1;
       const date = wall.toISOString().slice(0, 10);
+      const week = isoWeek(year, month, wall.getUTCDate());
       keys = {
         date,
-        week: `${year}|${mondayWeekOfYear(year, month, wall.getUTCDate())}`,
+        week: `${week.year}|${week.week}`,
         month: months.has(date.slice(0, 7)) ? `${year}|${month}` : null,
         // weekday_hour_averages.weekday is 0=Monday … 6=Sunday (see isoWeekday)
         weekdayHourPrefix: `${year}|${month}|${isoWeekday(date)}|`,

@@ -225,7 +225,7 @@ External dependencies (Cloudflare context, Elering API, D1 database) are mocked 
 | `/api/prices/current` | GET | Current price (D1 with Elering fallback) |
 | `/api/prices/hourly` | GET | Hourly averages from D1 |
 | `/api/prices/daily` | GET | Daily averages from D1 |
-| `/api/prices/weekly` | GET | Weekly averages from D1 |
+| `/api/prices/weekly` | GET | Weekly averages from D1 by ISO year and week (`year`) |
 | `/api/prices/monthly` | GET | Monthly averages from D1 |
 | `/api/prices/weekday-pattern` | GET | Weekday-hour averages from D1 (for heatmap) |
 | `/api/sync` | GET | Sync status (latest/earliest timestamp, total count) |
@@ -239,7 +239,7 @@ Stored in `db/schema.sql`. Six tables:
 - **`prices`** — Raw 15-minute prices (source of truth from Elering)
 - **`hourly_averages`** — Hourly aggregates (computed from raw prices)
 - **`daily_averages`** — Daily aggregates (computed from hourly averages)
-- **`weekly_averages`** — Weekly aggregates (computed from hourly averages)
+- **`weekly_averages`** — Weekly aggregates by ISO 8601 year and week, Tallinn time (computed from hourly averages)
 - **`monthly_averages`** — Monthly aggregates (computed from hourly averages)
 - **`weekday_hour_averages`** — Weekday x hour averages scoped by year+month (for heatmap patterns)
 

@@ -25,8 +25,8 @@ CREATE TABLE IF NOT EXISTS daily_averages (
 
 -- Weekly aggregates
 CREATE TABLE IF NOT EXISTS weekly_averages (
-  year INTEGER NOT NULL,
-  week INTEGER NOT NULL,           -- Monday-based week of year, SQLite strftime('%W') (0–53)
+  year INTEGER NOT NULL,           -- ISO 8601 week-numbering year (strftime('%G'))
+  week INTEGER NOT NULL,           -- ISO 8601 week, Monday-based (strftime('%V'), 1–53)
   avg_price REAL NOT NULL,
   min_price REAL NOT NULL,
   max_price REAL NOT NULL,

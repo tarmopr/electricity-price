@@ -99,7 +99,7 @@ describe("recomputeAllAggregates — month and week boundaries", () => {
     const week = (date: string) =>
       sqlite
         .prepare(
-          "SELECT w.data_points FROM weekly_averages w WHERE w.year = 2025 AND w.week = CAST(strftime('%W', ?) AS INTEGER)"
+          "SELECT w.data_points FROM weekly_averages w WHERE w.year = 2025 AND w.week = CAST(strftime('%V', ?) AS INTEGER)"
         )
         .get(date);
     expect(week("2025-09-29")).toEqual({ data_points: 168 }); // Mon 29 Sep – Sun 5 Oct
@@ -119,7 +119,7 @@ describe("recomputeAllAggregates — month and week boundaries", () => {
     const weeks = sqlite
       .prepare("SELECT MIN(week) AS lo, MAX(week) AS hi, COUNT(*) AS n FROM weekly_averages")
       .get();
-    expect(weeks).toEqual({ lo: 39, hi: 43, n: 5 });
+    expect(weeks).toEqual({ lo: 40, hi: 44, n: 5 }); // ISO weeks 40 (29 Sep) … 44 (27 Oct)
   });
 
   it("does not write partial rows for neighbouring months", async () => {
@@ -209,12 +209,12 @@ describe("recomputeAllAggregates — coverage", () => {
     seedSlots(sqlite, "2025-09-15T00:00:00Z", "2025-11-15T00:00:00Z");
     sqlite.exec(`INSERT INTO daily_averages VALUES ('2025-10-10', 999, 999, 999, 1);
       INSERT INTO monthly_averages VALUES (2025, 10, 999, 999, 999, 1);
-      INSERT INTO weekly_averages VALUES (2025, 40, 999, 999, 999, 1);
+      INSERT INTO weekly_averages VALUES (2025, 41, 999, 999, 999, 1);
       INSERT INTO weekday_hour_averages VALUES (2025, 10, 0, 0, 999, 1);`);
     await recomputeAllAggregates(d1, ts("2025-10-15T00:00:00Z"), ts("2025-10-16T00:00:00Z"));
     expect(q("SELECT avg_price, data_points FROM daily_averages WHERE date='2025-10-10'")).toEqual({ avg_price: 10, data_points: 24 });
     expect(q("SELECT avg_price, data_points FROM monthly_averages WHERE year=2025 AND month=10")).toEqual({ avg_price: 10, data_points: 745 });
-    expect(q("SELECT avg_price, data_points FROM weekly_averages WHERE year=2025 AND week=40")).toEqual({ avg_price: 10, data_points: 168 });
+    expect(q("SELECT avg_price, data_points FROM weekly_averages WHERE year=2025 AND week=41")).toEqual({ avg_price: 10, data_points: 168 });
     expect(q("SELECT avg_price, sample_count FROM weekday_hour_averages WHERE year=2025 AND month=10 AND weekday=0 AND hour=0")).toEqual({ avg_price: 10, sample_count: 4 });
   });
 
@@ -242,15 +242,16 @@ describe("recomputeAllAggregates — coverage", () => {
       .toEqual({ avg_price: 10, min_price: 8, max_price: 12, data_points: 24 });
   });
 
-  it("year boundary: Tallinn 1 Jan 00:00 (31 Dec 22:00Z) lands in 2026 rows; %W week split", async () => {
+  it("year boundary: Tallinn 1 Jan 00:00 (31 Dec 22:00Z) lands in 2026 rows; ISO week not split", async () => {
     const spike = ts("2025-12-31T22:00:00Z");
     seedSlots(sqlite, "2025-12-28T22:00:00Z", "2026-01-05T22:00:00Z", 3600, (t) => (t === spike ? 100 : 10));
     await recomputeAllAggregates(d1, ts("2026-01-01T00:00:00Z"), ts("2026-01-02T00:00:00Z"));
     expect(q("SELECT max_price, data_points FROM daily_averages WHERE date='2026-01-01'")).toEqual({ max_price: 100, data_points: 24 });
     expect(q("SELECT max_price, data_points FROM daily_averages WHERE date='2025-12-31'")).toEqual({ max_price: 10, data_points: 24 });
-    expect(q("SELECT data_points FROM weekly_averages WHERE year=2025 AND week=52")).toEqual({ data_points: 72 });
-    expect(q("SELECT max_price, data_points FROM weekly_averages WHERE year=2026 AND week=0")).toEqual({ max_price: 100, data_points: 96 });
-    expect(q("SELECT COUNT(*) AS n FROM weekly_averages")).toEqual({ n: 3 }); // (2025,52) (2026,0) (2026,1)
+    // Mon 29 Dec 2025 – Sun 4 Jan 2026 is ISO week 2026-W01 (it holds 1 Jan, a Thursday)
+    expect(q("SELECT max_price, data_points FROM weekly_averages WHERE year=2026 AND week=1")).toEqual({ max_price: 100, data_points: 168 });
+    expect(q("SELECT data_points FROM weekly_averages WHERE year=2026 AND week=2")).toEqual({ data_points: 24 });
+    expect(q("SELECT COUNT(*) AS n FROM weekly_averages")).toEqual({ n: 2 });
     expect(q("SELECT avg_price FROM weekday_hour_averages WHERE year=2026 AND month=1 AND weekday=3 AND hour=0")).toEqual({ avg_price: 100 });
     expect(q("SELECT COUNT(*) AS n FROM monthly_averages WHERE year=2025")).toEqual({ n: 0 });
   });
