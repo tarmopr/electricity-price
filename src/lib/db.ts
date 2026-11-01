@@ -1,5 +1,10 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { eurMwhToCentsKwh } from "@/lib/price";
+import {
+  bucketTallinnAggregates,
+  getTallinnAggregateRange,
+  type HourlyAverageRow,
+} from "@/lib/tallinnAggregates";
 
 export async function getDB(): Promise<D1Database> {
   const { env } = await getCloudflareContext({ async: true });
@@ -63,165 +68,76 @@ export async function recomputeHourlyAverages(
 }
 
 /**
- * Recompute daily averages for affected dates.
- * Uses hourly_averages as source to ensure equal hour weighting regardless
- * of whether raw data is 15-min or 1-hour granularity.
- *
- * The '+2 hours' offset converts UTC timestamps to EET (UTC+2) before
- * extracting the calendar date, so prices near midnight are attributed to
- * the correct Estonian local date. During EEST (UTC+3, roughly late March–
- * late October) prices in the 21:00–21:59 UTC window are still one hour
- * off; a dynamic DST offset would require application-level pre-processing
- * since SQLite has no timezone support.
- */
-export async function recomputeDailyAverages(
-  db: D1Database,
-  startTimestamp: number,
-  endTimestamp: number
-): Promise<void> {
-  await db
-    .prepare(
-      `INSERT OR REPLACE INTO daily_averages (date, avg_price, min_price, max_price, data_points)
-       SELECT
-         strftime('%Y-%m-%d', timestamp, 'unixepoch', '+2 hours') as date_str,
-         AVG(avg_price) as avg_price,
-         MIN(min_price) as min_price,
-         MAX(max_price) as max_price,
-         COUNT(*) as data_points
-       FROM hourly_averages
-       WHERE timestamp >= ? AND timestamp < ?
-       GROUP BY date_str`
-    )
-    .bind(startTimestamp, endTimestamp)
-    .run();
-}
-
-/**
- * Recompute weekly averages for affected weeks.
- * Uses hourly_averages as source to ensure equal hour weighting regardless
- * of whether raw data is 15-min or 1-hour granularity.
- * See recomputeDailyAverages for the '+2 hours' EET offset rationale.
- */
-export async function recomputeWeeklyAverages(
-  db: D1Database,
-  startTimestamp: number,
-  endTimestamp: number
-): Promise<void> {
-  await db
-    .prepare(
-      `INSERT OR REPLACE INTO weekly_averages (year, week, avg_price, min_price, max_price, data_points)
-       SELECT
-         CAST(strftime('%Y', timestamp, 'unixepoch', '+2 hours') AS INTEGER) as year,
-         CAST(strftime('%W', timestamp, 'unixepoch', '+2 hours') AS INTEGER) as week,
-         AVG(avg_price) as avg_price,
-         MIN(min_price) as min_price,
-         MAX(max_price) as max_price,
-         COUNT(*) as data_points
-       FROM hourly_averages
-       WHERE timestamp >= ? AND timestamp < ?
-       GROUP BY year, week`
-    )
-    .bind(startTimestamp, endTimestamp)
-    .run();
-}
-
-/**
- * Recompute monthly averages for affected months.
- * Uses hourly_averages as source to ensure equal hour weighting regardless
- * of whether raw data is 15-min or 1-hour granularity.
- * See recomputeDailyAverages for the '+2 hours' EET offset rationale.
- */
-export async function recomputeMonthlyAverages(
-  db: D1Database,
-  startTimestamp: number,
-  endTimestamp: number
-): Promise<void> {
-  await db
-    .prepare(
-      `INSERT OR REPLACE INTO monthly_averages (year, month, avg_price, min_price, max_price, data_points)
-       SELECT
-         CAST(strftime('%Y', timestamp, 'unixepoch', '+2 hours') AS INTEGER) as year,
-         CAST(strftime('%m', timestamp, 'unixepoch', '+2 hours') AS INTEGER) as month,
-         AVG(avg_price) as avg_price,
-         MIN(min_price) as min_price,
-         MAX(max_price) as max_price,
-         COUNT(*) as data_points
-       FROM hourly_averages
-       WHERE timestamp >= ? AND timestamp < ?
-       GROUP BY year, month`
-    )
-    .bind(startTimestamp, endTimestamp)
-    .run();
-}
-
-/**
- * Recompute weekday-hour averages for affected year+month periods.
- * Uses hourly_averages as source to ensure equal hour weighting regardless
- * of whether raw data is 15-min or 1-hour granularity.
- * Uses strftime('%w') which returns 0=Sunday, so we convert to ISO: 0=Monday.
- * See recomputeDailyAverages for the '+2 hours' EET offset rationale.
- */
-export async function recomputeWeekdayHourAverages(
-  db: D1Database,
-  startTimestamp: number,
-  endTimestamp: number
-): Promise<void> {
-  await db
-    .prepare(
-      `INSERT OR REPLACE INTO weekday_hour_averages (year, month, weekday, hour, avg_price, sample_count)
-       SELECT
-         CAST(strftime('%Y', timestamp, 'unixepoch', '+2 hours') AS INTEGER) as year,
-         CAST(strftime('%m', timestamp, 'unixepoch', '+2 hours') AS INTEGER) as month,
-         -- Convert from SQLite %w (0=Sunday) to ISO (0=Monday)
-         CASE CAST(strftime('%w', timestamp, 'unixepoch', '+2 hours') AS INTEGER)
-           WHEN 0 THEN 6  -- Sunday -> 6
-           ELSE CAST(strftime('%w', timestamp, 'unixepoch', '+2 hours') AS INTEGER) - 1
-         END as weekday,
-         CAST(strftime('%H', timestamp, 'unixepoch', '+2 hours') AS INTEGER) as hour,
-         AVG(avg_price) as avg_price,
-         COUNT(*) as sample_count
-       FROM hourly_averages
-       WHERE timestamp >= ? AND timestamp < ?
-       GROUP BY year, month, weekday, hour`
-    )
-    .bind(startTimestamp, endTimestamp)
-    .run();
-}
-
-/**
- * Run all aggregate recomputations for a given time range.
+ * Run all aggregate recomputations for a synced time range.
  *
  * Hourly averages are computed from raw prices (normalizes mixed 15-min/1-hour data).
  * All higher-level aggregates (daily, weekly, monthly, weekday-hour) are computed
  * from hourly_averages to ensure each hour is weighted equally regardless of
  * the raw data granularity.
+ *
+ * Calendar bucketing uses Europe/Tallinn dates (DST-aware) and happens in
+ * application code (see tallinnAggregates.ts) because SQLite has no timezone
+ * support. The range is expanded to whole Tallinn months and the whole weeks
+ * around them so no recomputed day, week or month is written from partial data.
  */
 export async function recomputeAllAggregates(
   db: D1Database,
   startTimestamp: number,
   endTimestamp: number
 ): Promise<void> {
-  // For daily/weekly/monthly/weekday, we need to recompute for the full months
-  // that contain the affected range, to get correct aggregates
-  const startDate = new Date(startTimestamp * 1000);
-  const endDate = new Date(endTimestamp * 1000);
+  const { readStart, readEnd, months } = getTallinnAggregateRange(startTimestamp, endTimestamp);
 
-  // Expand range to full months
-  const monthStart = new Date(
-    Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), 1)
+  // 1. Hourly averages from raw prices for the whole window
+  await recomputeHourlyAverages(db, readStart, readEnd);
+
+  // 2. Higher-level aggregates from hourly_averages (equal hour weighting)
+  const { results } = await db
+    .prepare(
+      `SELECT timestamp, avg_price, min_price, max_price
+       FROM hourly_averages
+       WHERE timestamp >= ? AND timestamp < ?
+       ORDER BY timestamp`
+    )
+    .bind(readStart, readEnd)
+    .all<HourlyAverageRow>();
+
+  const agg = bucketTallinnAggregates(results, months);
+
+  const dailyStmt = db.prepare(
+    `INSERT OR REPLACE INTO daily_averages (date, avg_price, min_price, max_price, data_points)
+     VALUES (?, ?, ?, ?, ?)`
   );
-  const monthEnd = new Date(
-    Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth() + 1, 1)
+  const weeklyStmt = db.prepare(
+    `INSERT OR REPLACE INTO weekly_averages (year, week, avg_price, min_price, max_price, data_points)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  );
+  const monthlyStmt = db.prepare(
+    `INSERT OR REPLACE INTO monthly_averages (year, month, avg_price, min_price, max_price, data_points)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  );
+  const weekdayHourStmt = db.prepare(
+    `INSERT OR REPLACE INTO weekday_hour_averages (year, month, weekday, hour, avg_price, sample_count)
+     VALUES (?, ?, ?, ?, ?, ?)`
   );
 
-  const expandedStart = Math.floor(monthStart.getTime() / 1000);
-  const expandedEnd = Math.floor(monthEnd.getTime() / 1000);
+  const statements = [
+    ...agg.daily.map((r) =>
+      dailyStmt.bind(r.date, r.avgPrice, r.minPrice, r.maxPrice, r.dataPoints)
+    ),
+    ...agg.weekly.map((r) =>
+      weeklyStmt.bind(r.year, r.week, r.avgPrice, r.minPrice, r.maxPrice, r.dataPoints)
+    ),
+    ...agg.monthly.map((r) =>
+      monthlyStmt.bind(r.year, r.month, r.avgPrice, r.minPrice, r.maxPrice, r.dataPoints)
+    ),
+    ...agg.weekdayHour.map((r) =>
+      weekdayHourStmt.bind(r.year, r.month, r.weekday, r.hour, r.avgPrice, r.sampleCount)
+    ),
+  ];
 
-  // 1. Hourly averages from raw prices (expanded range so higher-level aggs have data)
-  await recomputeHourlyAverages(db, expandedStart, expandedEnd);
-  // 2. All higher-level aggregates from hourly_averages (equal hour weighting)
-  await recomputeDailyAverages(db, expandedStart, expandedEnd);
-  await recomputeWeeklyAverages(db, expandedStart, expandedEnd);
-  await recomputeMonthlyAverages(db, expandedStart, expandedEnd);
-  await recomputeWeekdayHourAverages(db, expandedStart, expandedEnd);
+  // D1 batch limit is 100 statements per batch
+  const BATCH_SIZE = 100;
+  for (let i = 0; i < statements.length; i += BATCH_SIZE) {
+    await db.batch(statements.slice(i, i + BATCH_SIZE));
+  }
 }

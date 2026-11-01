@@ -79,34 +79,4 @@ describe("recomputeHourlyAverages", () => {
   });
 });
 
-describe("recomputeAllAggregates", () => {
-  it("expands range to full months", async () => {
-    const mockRun = vi.fn().mockResolvedValue({});
-    const mockBind = vi.fn().mockReturnValue({ run: mockRun });
-    const mockDb = {
-      prepare: vi.fn().mockReturnValue({ bind: mockBind }),
-    };
-
-    const { recomputeAllAggregates } = await import("@/lib/db");
-
-    // Mid-March 2024: 2024-03-15T12:00:00Z = 1710504000
-    const midMarch = 1710504000;
-    // Late March 2024: 2024-03-25T12:00:00Z = 1711368000
-    const lateMarch = 1711368000;
-
-    await recomputeAllAggregates(
-      mockDb as unknown as D1Database,
-      midMarch,
-      lateMarch
-    );
-
-    // Should call prepare 5 times (hourly, daily, weekly, monthly, weekday-hour)
-    expect(mockDb.prepare).toHaveBeenCalledTimes(5);
-
-    // First call (hourly) should use expanded range: March 1 to April 1
-    const [expandedStart] = mockBind.mock.calls[0];
-    const startDate = new Date(expandedStart * 1000);
-    expect(startDate.getUTCDate()).toBe(1); // Should be start of month
-    expect(startDate.getUTCMonth()).toBe(2); // March (0-indexed)
-  });
-});
+// recomputeAllAggregates runs against real SQLite in aggregates.test.ts
