@@ -8,7 +8,7 @@ import { ChevronDown, ChevronUp, Settings2, Bell, Check, CalendarClock } from 'l
 import { PILL_BASE, PILL_ACTIVE, PILL_INACTIVE } from '@/lib/styles';
 import NumericField from '@/components/ui/NumericField';
 
-/** Primary periods shown as always-visible pills */
+/** Primary periods shown as pills (inside the collapsible period card below lg); Next 24h first */
 const PRIMARY_PERIODS: { value: Period; label: string }[] = [
     { value: 'next_24h', label: 'Next 24h' },
     { value: 'yesterday', label: 'Yesterday' },

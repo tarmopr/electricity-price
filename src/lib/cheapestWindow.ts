@@ -277,10 +277,10 @@ export interface RollingWindowOptions {
 
 export interface RollingWindowResult {
   /**
-   * Best window to recommend: the cheapest one ending by the ready-by deadline or,
-   * if none fits, the cheapest full-length window over the whole horizon
-   * (see `bestIgnoresDeadline`). Null when no full-length window exists at all,
-   * or when the duration is not positive.
+   * Best window to recommend (official slots only with `excludePredicted`): the
+   * cheapest one ending by the ready-by deadline or, if none fits, the cheapest
+   * full-length window over the whole horizon (see `bestIgnoresDeadline`). Null when
+   * no full-length window exists at all, or when the duration is not positive.
    */
   best: CheapestWindow | null;
   /** True when `best` ignores the ready-by deadline because no window fits before it */
@@ -342,8 +342,8 @@ export function computeRollingWindow(
 ): RollingWindowResult {
   const nowFloorMs = Math.floor(now.getTime() / SLOT_MS) * SLOT_MS;
   const horizon = normalizeTo15MinSlots(points, horizonEndMs).filter((s) => s.startMs >= nowFloorMs);
-  // Official prices end where the trailing run of predicted slots starts. A predicted
-  // fill inside official data (one missing 15-min point) does not end them.
+  // Official prices end where the trailing run of predicted slots starts. A predicted fill
+  // inside official data (missing 15-min points within an hour) does not end them.
   let trailingStart = horizon.length;
   while (trailingStart > 0 && horizon[trailingStart - 1].isPredicted) trailingStart--;
   const predictedFrom = trailingStart < horizon.length ? new Date(horizon[trailingStart].startMs) : null;

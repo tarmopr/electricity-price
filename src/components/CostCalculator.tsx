@@ -110,7 +110,7 @@ export default function CostCalculator({
   const windowRange = cheapestWindow ? formatWindowRange(cheapestWindow, nowMs) : null;
   // Show what was actually searched (15-minute slots), not the raw typed value
   const searchedHours = cheapestWindow?.hours ?? snapDurationHours(durationHours);
-  // One-line recap shown on the settings row while the settings are collapsed
+  // Short recap shown on the settings row while the settings are collapsed
   const settingsSummary = `${activePreset} · ${formatNumber(consumptionKwh)} kWh · ${formatDuration(searchedHours)} · ${readyBy !== null ? `ready by ${readyBy}` : "no deadline"}${allowPredicted ? "" : " · official prices only"}`;
   const deadlineLabel =
     readyBy && readyByLimitMs !== null && nowMs != null
@@ -418,7 +418,7 @@ export default function CostCalculator({
                   {showMore ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                 </button>
               )}
-              {/* The stats keep the whole horizon, so predicted prices are not shown as official */}
+              {/* The stats still use the whole horizon, predictions included; say so, so they are not read as official-only */}
               {excludesKnownPredictions && (
                 <p className="text-xs text-zinc-500">
                   Starting now, average and peak include predicted prices from {officialEndLabel}.

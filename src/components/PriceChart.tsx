@@ -294,8 +294,9 @@ export default function PriceChart({
     // This hook must be before early returns to satisfy Rules of Hooks.
     const cheapestRef = useMemo(() => getVisibleWindowRange(cheapestWindow, data), [cheapestWindow, data]);
 
-    // Zoom is component state, not persisted: it survives period changes and data
-    // refreshes and resets on reload (spec ruling R8).
+    // Zoom is component state, not persisted: a zoom factor means a different time span
+    // per period. It survives period changes and data refreshes; it resets on reload and
+    // when switching to the heatmap (spec ruling R8).
     const [zoom, setZoom] = useState<ZoomLevel>(1);
     const scrollRef = useRef<HTMLDivElement>(null);
     // scrollLeft to apply once the chart has re-laid out at the new width,
@@ -441,8 +442,9 @@ export default function PriceChart({
                     {/* Inline width: the zoom factor is data, and Tailwind classes must be static */}
                     <div className="flex h-full" style={{ width: `${zoom * 100}%` }}>
                         {zoom > 1 && (
-                            // Pinned price axis while zoomed. Same height as the main chart, so the
-                            // same Y scale: its Y-axis props and series must mirror the main chart's.
+                            // Pinned price axis while zoomed. Same height, top/bottom margins and X-axis
+                            // height as the main chart, so the same Y scale: its Y-axis props and
+                            // series must mirror the main chart's.
                             <div
                                 aria-hidden="true"
                                 data-testid="y-axis-overlay"
