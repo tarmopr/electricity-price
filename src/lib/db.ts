@@ -25,8 +25,11 @@ export async function upsertPrices(
      VALUES (?, ?, ?)`
   );
 
-  // D1 batch limit is 100 statements per batch
-  const BATCH_SIZE = 100;
+  // D1 has no per-batch statement cap, but each batch counts as one query and
+  // Workers Free allows 50 D1 queries per invocation. 1,000 slots per batch keeps a
+  // 31-day manual sync (2,976 slots) at 3 queries while bounding each batch's
+  // duration (D1 limits a batch to 30 s).
+  const BATCH_SIZE = 1000;
   for (let i = 0; i < prices.length; i += BATCH_SIZE) {
     const batch = prices.slice(i, i + BATCH_SIZE);
     await db.batch(

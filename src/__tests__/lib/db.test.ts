@@ -29,17 +29,18 @@ describe("upsertPrices", () => {
     expect(mockDb.prepare).not.toHaveBeenCalled();
   });
 
-  it("batches prices in groups of 100", async () => {
+  it("upserts a 31-day sync (2,976 slots) in 3 batches of up to 1,000", async () => {
+    // Each batch is one D1 query; Workers Free allows 50 per invocation
     const { upsertPrices } = await import("@/lib/db");
-    const prices = Array.from({ length: 250 }, (_, i) => ({
+    const prices = Array.from({ length: 31 * 96 }, (_, i) => ({
       timestamp: 1704067200 + i * 900,
       priceEurMwh: 50 + i,
     }));
 
     await upsertPrices(mockDb as unknown as D1Database, prices);
 
-    // 250 items / 100 batch size = 3 batches
     expect(mockDb.batch).toHaveBeenCalledTimes(3);
+    expect(mockDb.batch.mock.calls.map(([stmts]) => stmts.length)).toEqual([1000, 1000, 976]);
   });
 
   it("binds correct values including computed cents/kWh", async () => {
