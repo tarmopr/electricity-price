@@ -347,7 +347,8 @@ export default function Controls({
                                 <NumericField
                                     value={alertConfig.threshold}
                                     onCommit={(threshold) => setAlertConfig({ ...alertConfig, threshold })}
-                                    min={0}
+                                    // Spot prices go negative; -50 ¢/kWh is the Nord Pool floor (-500 €/MWh)
+                                    min={-50}
                                     step={0.5}
                                     label="Alert threshold in cents per kWh"
                                     unit="¢/kWh"

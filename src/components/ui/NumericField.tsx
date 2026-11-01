@@ -92,9 +92,17 @@ export default function NumericField({
             ? `max ${formatNumber(max)} ${unit}`
             : evaluation.outOfRange === 'min'
                 ? `min ${formatNumber(min)} ${unit}`
-                : null;
+                : invalid && draft.trim() !== ''
+                    ? 'Enter a number'
+                    : null;
 
     function handleChange(next: string) {
+        // A fast tap-then-type can beat the deferred re-select; selecting the
+        // first typed digit would let the next keystroke overwrite it ("33" → "3").
+        if (selectTimer.current !== null) {
+            clearTimeout(selectTimer.current);
+            selectTimer.current = null;
+        }
         setDraft(next);
         const { value: committed } = evaluateDraft(next, min, max);
         onValidityChange?.(committed !== null);

@@ -198,3 +198,25 @@ describe("timezone helpers", () => {
     });
   });
 });
+
+describe("getEndOfTomorrowTallinn across DST", () => {
+  it("covers a 25 h tomorrow on the autumn fall-back day", () => {
+    // Sat 24 Oct 2026 13:00 EEST → Sun 25 Oct ends 23:59:59.999 EET = 21:59:59.999Z
+    expect(getEndOfTomorrowTallinn(new Date("2026-10-24T10:00:00Z")).toISOString()).toBe("2026-10-25T21:59:59.999Z");
+  });
+
+  it("covers a 23 h tomorrow on the spring-forward day", () => {
+    // Sat 28 Mar 2026 12:00 EET → Sun 29 Mar ends 23:59:59.999 EEST = 20:59:59.999Z
+    expect(getEndOfTomorrowTallinn(new Date("2026-03-28T10:00:00Z")).toISOString()).toBe("2026-03-29T20:59:59.999Z");
+  });
+});
+
+describe("tallinnWallTimeToUtc DST edge cases", () => {
+  it("moves a wall time inside the spring-forward gap forward", () => {
+    expect(tallinnWallTimeToUtc("2026-03-29", 3, 30).toISOString()).toBe("2026-03-29T01:30:00.000Z");
+  });
+
+  it("resolves the repeated fall-back hour to its later occurrence", () => {
+    expect(tallinnWallTimeToUtc("2026-10-25", 3, 30).toISOString()).toBe("2026-10-25T01:30:00.000Z");
+  });
+});

@@ -106,7 +106,8 @@ export function addDaysToDateStr(dateStr: string, days: number): string {
 /**
  * Converts a Tallinn wall-clock time on a Tallinn calendar date to the UTC instant.
  * DST-safe: the offset is resolved at the target instant, not at "now".
- * Non-existent wall times (spring-forward gap) resolve to the shifted-forward instant.
+ * Non-existent wall times (spring-forward gap) resolve to the shifted-forward instant;
+ * ambiguous wall times (fall-back repeated hour) resolve to the later occurrence.
  */
 export function tallinnWallTimeToUtc(dateStr: string, hour: number, minute: number): Date {
   const [y, m, d] = dateStr.split("-").map(Number);

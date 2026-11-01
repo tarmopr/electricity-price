@@ -446,4 +446,53 @@ describe("useCostCalculator", () => {
     });
     expect(getPricesWithPrediction).toHaveBeenCalledTimes(2);
   });
+
+  it("a stale request that fails after a newer success does not raise an error", async () => {
+    let rejectSlow: (e: Error) => void = () => {};
+    const slow = new Promise<ElectricityPrice[]>((_, rej) => {
+      rejectSlow = rej;
+    });
+    const fresh = hourly("2024-06-14T17:00:00.000Z", Array(14).fill(3));
+    getPricesWithPrediction.mockReturnValueOnce(slow).mockResolvedValueOnce(fresh);
+    const { result } = renderHook(() => useCostCalculator(false));
+    await waitFor(() => expect(getPricesWithPrediction).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      vi.advanceTimersByTime(15 * 60 * 1000);
+    });
+    await waitFor(() => expect(result.current.cheapestWindow?.averagePrice).toBeCloseTo(3));
+    await act(async () => {
+      rejectSlow(new Error("late failure"));
+      await slow.catch(() => {});
+    });
+    expect(result.current.costError).toBeNull();
+  });
+
+  it("clamps out-of-range persisted values to the field limits", async () => {
+    localStorage.setItem("eprice_costKwh", JSON.stringify(500));
+    localStorage.setItem("eprice_costDuration", JSON.stringify(30));
+    getPricesWithPrediction.mockResolvedValue([]);
+    const { result } = renderHook(() => useCostCalculator(false));
+    await waitFor(() => expect(result.current.costLoading).toBe(false));
+    expect(result.current.costConsumptionKwh).toBe(200);
+    expect(result.current.costDurationHours).toBe(24);
+  });
+
+  it("flags a successful load with no prices as no data (not as 'no window fits')", async () => {
+    getPricesWithPrediction.mockResolvedValue([]);
+    const { result } = renderHook(() => useCostCalculator(false));
+    await waitFor(() => expect(result.current.costLoading).toBe(false));
+    expect(result.current.costNoData).toBe(true);
+    expect(result.current.costError).toBeNull();
+  });
+
+  it("is loading again while a refetch is pending, so a long-asleep tab doesn't show 'no window fits'", async () => {
+    getPricesWithPrediction.mockResolvedValueOnce(hourly("2024-06-14T17:00:00.000Z", Array(14).fill(3)));
+    const { result } = renderHook(() => useCostCalculator(false));
+    await waitFor(() => expect(result.current.costLoading).toBe(false));
+    getPricesWithPrediction.mockReturnValueOnce(new Promise<ElectricityPrice[]>(() => {}));
+    await act(async () => {
+      vi.advanceTimersByTime(15 * 60 * 1000);
+    });
+    expect(result.current.costLoading).toBe(true);
+  });
 });

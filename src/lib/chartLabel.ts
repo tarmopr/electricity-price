@@ -2,8 +2,8 @@
  * Chart label layout helpers (pure, unit-testable).
  *
  * Recharts can't measure SVG text before render, so label widths are estimated
- * from character count. The cheapest-window label is 12px bold, so ~0.6 × font
- * size per character is used (bold glyphs are wider than the 6.5px/char pills).
+ * from character count. The cheapest-window label is 12px bold; ~0.6 × font size
+ * per character (≈ 7.2px/char at 12px) covers its digits and separators.
  */
 
 /** Width per character as a fraction of font size (bold text). */

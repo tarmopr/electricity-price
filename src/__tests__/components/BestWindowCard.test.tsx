@@ -141,7 +141,7 @@ describe("BestWindowCard", () => {
     expect(screen.getByLabelText("Finding the best window")).toBeInTheDocument();
   });
 
-  it("no-fit at 23:30 (8 h, ready by 07:00) says when starting now finishes", () => {
+  it("no-window message at 23:30 (8 h, ready by 07:00) names neither the deadline nor a finish time", () => {
     render(
       <BestWindowCard
         {...baseProps}
@@ -151,9 +151,9 @@ describe("BestWindowCard", () => {
         startingNowEndMs={new Date("2024-06-15T04:30:00.000Z").getTime()} // 07:30
       />
     );
-    expect(
-      screen.getByText("No 8 h window fits before 07:00 — starting now finishes 07:30.")
-    ).toBeInTheDocument();
+    // A null window means no full-length window exists at all (the 23:30 case falls back past the deadline)
+    expect(screen.getByText("No 8 h window fits in the available prices. Tap to adjust.")).toBeInTheDocument();
+    expect(screen.queryByText(/starting now finishes/)).not.toBeInTheDocument();
     expect(screen.getByText(byText("Ready by 07:00"))).toBeInTheDocument();
   });
 
@@ -210,13 +210,39 @@ describe("BestWindowCard", () => {
     expect(screen.queryByText(/Finishes after/)).not.toBeInTheDocument();
   });
 
-  it("explains when no window fits before the deadline", () => {
+  it("explains when no window fits even with a deadline set", () => {
     render(<BestWindowCard {...baseProps} window={null} />);
-    expect(screen.getByText(/No 8 h window fits before 07:00/)).toBeInTheDocument();
+    expect(screen.getByText(/No 8 h window fits in the available prices/)).toBeInTheDocument();
   });
 
   it("explains when no window fits without a deadline", () => {
     render(<BestWindowCard {...baseProps} window={null} readyBy={null} durationHours={2.5} />);
     expect(screen.getByText(/No 2.5 h window fits in the available prices/)).toBeInTheDocument();
+  });
+});
+
+describe("BestWindowCard failure states", () => {
+  it("flags stale data when a refresh failed but an earlier window is still shown", () => {
+    render(<BestWindowCard {...baseProps} error="Failed to fetch prices: 500" />);
+    expect(screen.getByText("Tonight 01:15–09:15")).toBeInTheDocument();
+    expect(screen.getByText(/Couldn.t refresh prices — showing the last loaded data/)).toBeInTheDocument();
+  });
+
+  it("says it retries automatically when the first load failed (no retry control exists)", () => {
+    render(<BestWindowCard {...baseProps} window={null} error="boom" />);
+    expect(screen.getByRole("alert")).toHaveTextContent(/retrying automatically/);
+    expect(screen.queryByText(/try again/i)).not.toBeInTheDocument();
+  });
+
+  it("shows a no-data state instead of blaming the settings when the load returned no prices", () => {
+    render(<BestWindowCard {...baseProps} window={null} noData />);
+    expect(screen.getByText(/No price data available yet/)).toBeInTheDocument();
+    expect(screen.queryByText(/window fits/)).not.toBeInTheDocument();
+  });
+
+  it("does not blame the ready-by time when no full-length window exists at all", () => {
+    // The hook falls back to a window ignoring the deadline, so null means no full window anywhere
+    render(<BestWindowCard {...baseProps} window={null} readyBy="07:00" />);
+    expect(screen.getByText("No 8 h window fits in the available prices. Tap to adjust.")).toBeInTheDocument();
   });
 });

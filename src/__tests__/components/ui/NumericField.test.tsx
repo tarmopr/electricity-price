@@ -247,6 +247,23 @@ describe("NumericField", () => {
     }
   });
 
+  it("does not re-select once the user has started typing (fast tap-then-type keeps every digit)", () => {
+    vi.useFakeTimers();
+    try {
+      render(<Harness />);
+      const input = getInput();
+      input.focus();
+      fireEvent.focus(input);
+      const select = vi.spyOn(input, "select");
+      // First keystroke lands before the deferred iOS re-select fires
+      fireEvent.change(input, { target: { value: "3" } });
+      vi.runOnlyPendingTimers();
+      expect(select).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("snaps to snapStep on blur (duration → 15-minute increments)", () => {
     const onCommit = vi.fn();
     render(<Harness snapStep={0.25} onCommit={onCommit} />);
@@ -263,5 +280,24 @@ describe("NumericField", () => {
     render(<Harness snapStep={0.25} initial={2.3} />);
     fireEvent.click(screen.getByRole("button", { name: "Increase Duration in hours" }));
     expect(getInput()).toHaveValue("2.5");
+  });
+});
+
+describe("NumericField unparseable input", () => {
+  it("explains why a non-numeric draft is not used", () => {
+    render(<Harness />);
+    const input = getInput();
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "abc" } });
+    expect(screen.getByText("Enter a number")).toBeInTheDocument();
+    expect(input).toHaveAttribute("aria-describedby");
+  });
+
+  it("shows no hint while the field is simply empty", () => {
+    render(<Harness />);
+    const input = getInput();
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "" } });
+    expect(screen.queryByText("Enter a number")).not.toBeInTheDocument();
   });
 });

@@ -638,3 +638,43 @@ describe("cheapestWindow", () => {
     });
   });
 });
+
+describe("computeRollingWindow across DST nights and negative prices", () => {
+  /** Flat hourly points from a UTC start */
+  function hourlyUtc(startIso: string, prices: number[]) {
+    const start = new Date(startIso).getTime();
+    return prices.map((p, i) => ({
+      timestamp: new Date(start + i * 3_600_000).toISOString(),
+      displayPrice: p,
+      isPredicted: false,
+    }));
+  }
+
+  it("fits 8 h before 07:00 on the fall-back night (9 real hours available)", () => {
+    // Sat 24 Oct 2026 23:00 EEST = 20:00Z; 07:00 EET Sun = 05:00Z
+    const points = hourlyUtc("2026-10-24T20:00:00Z", Array(30).fill(5));
+    const r = computeRollingWindow(points, { now: new Date("2026-10-24T20:00:00Z"), durationHours: 8, readyBy: "07:00" });
+    expect(r.readyByLimit!.toISOString()).toBe("2026-10-25T05:00:00.000Z");
+    expect(r.bestIgnoresDeadline).toBe(false);
+    expect(new Date(r.best!.endTimestamp).getTime()).toBeLessThanOrEqual(r.readyByLimit!.getTime());
+  });
+
+  it("flags the deadline as missed on the spring-forward night (only 7 real hours)", () => {
+    // Sat 28 Mar 2026 23:00 EET = 21:00Z; 07:00 EEST Sun = 04:00Z
+    const points = hourlyUtc("2026-03-28T21:00:00Z", Array(30).fill(5));
+    const r = computeRollingWindow(points, { now: new Date("2026-03-28T21:00:00Z"), durationHours: 8, readyBy: "07:00" });
+    expect(r.readyByLimit!.toISOString()).toBe("2026-03-29T04:00:00.000Z");
+    expect(r.readyByRolledOver).toBe(false);
+    expect(r.bestIgnoresDeadline).toBe(true);
+    expect(r.best).not.toBeNull();
+  });
+
+  it("picks a negative-price window and computes savings against a positive start", () => {
+    // 2 h window; prices 5, -2, -3, 4 → cheapest is hours 1–2, average -2.5
+    const points = hourlyUtc("2024-06-14T17:00:00Z", [5, -2, -3, 4]);
+    const r = computeRollingWindow(points, { now: new Date("2024-06-14T17:00:00Z"), durationHours: 2, readyBy: null });
+    expect(r.best!.startTimestamp).toBe("2024-06-14T18:00:00.000Z");
+    expect(r.best!.averagePrice).toBeCloseTo(-2.5);
+    expect(r.startingNowPrice).toBeCloseTo(1.5);
+  });
+});

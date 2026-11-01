@@ -4,6 +4,8 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp, Calculator, Zap, X, AlertTriangle } from "lucide-react";
 import {
   PRESETS,
+  DURATION_LIMITS,
+  KWH_LIMITS,
   buildEstimates,
   CostEstimate,
   ESTIMATE_LABELS,
@@ -41,6 +43,8 @@ interface CostCalculatorProps {
   readyByLimitMs?: number | null;
   /** Price fetch error, if the latest load failed */
   error?: string | null;
+  /** True while prices are being (re)loaded */
+  loading?: boolean;
   /** When a same-length window starting now would finish (for the no-fit hint) */
   startingNowEndMs?: number | null;
   /** True when `cheapestWindow` finishes after the ready-by time because nothing fits before it */
@@ -81,6 +85,7 @@ export default function CostCalculator({
   nowMs,
   readyByLimitMs = null,
   error = null,
+  loading = false,
   startingNowEndMs = null,
   bestIgnoresDeadline = false,
 }: CostCalculatorProps) {
@@ -156,7 +161,10 @@ export default function CostCalculator({
 
   function handleReadyByInput(value: string) {
     // Native time inputs report "" while partially filled — keep the last valid value
-    if (isValidHHMM(value)) setReadyBy(value);
+    if (!isValidHHMM(value)) return;
+    // Same as kWh/duration edits: the values no longer match the named preset
+    setActivePreset("Custom");
+    setReadyBy(value);
   }
 
   return (
@@ -239,8 +247,8 @@ export default function CostCalculator({
               <NumericField
                 value={consumptionKwh}
                 onCommit={handleKwhCommit}
-                min={0}
-                max={200}
+                min={KWH_LIMITS.min}
+                max={KWH_LIMITS.max}
                 step={0.5}
                 label="Consumption in kWh"
                 unit="kWh"
@@ -252,8 +260,8 @@ export default function CostCalculator({
               <NumericField
                 value={durationHours}
                 onCommit={handleDurationCommit}
-                min={0.25}
-                max={24}
+                min={DURATION_LIMITS.min}
+                max={DURATION_LIMITS.max}
                 step={0.25}
                 snapStep={0.25}
                 label="Duration in hours"
@@ -349,24 +357,30 @@ export default function CostCalculator({
             </div>
           ) : (
             <p className="text-zinc-500 text-sm text-center py-4">
-              {error ? "Couldn't load prices. Please try again in a moment." : "No price data available for estimation."}
+              {error
+                ? "Couldn't load prices — retrying automatically."
+                : loading
+                  ? "Loading prices…"
+                  : "No price data available for estimation."}
             </p>
           )}
 
+          {/* Null despite the deadline fallback: no full-length window exists in the loaded prices */}
           {cheapestWindow === null && currentPrice !== null && (
             <p className="text-zinc-500 text-sm">
-              No {formatDuration(searchedHours)} window fits{deadlineLabel ? ` before ${deadlineLabel}` : ""}
-              {finishLabel ? ` — starting now finishes ${finishLabel}.` : "."}
+              No {formatDuration(searchedHours)} window fits in the available prices.
             </p>
           )}
 
-          {/* Savings Highlight */}
+          {/* Stale-data notice */}
           {error && estimates.length > 0 && (
             <p role="alert" className="flex items-center gap-2 text-xs text-red-300">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
               Couldn&apos;t refresh prices — showing the last loaded data.
             </p>
           )}
+
+          {/* Savings Highlight */}
 
           {savings !== null && savings > MIN_SAVINGS_EUR && (
             <div className={`flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-2.5 transition-opacity duration-200 ${hasInvalidDraft ? "opacity-50" : ""}`}>

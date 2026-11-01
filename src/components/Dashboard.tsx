@@ -20,7 +20,7 @@ import Controls from './Controls';
 import DashboardSkeleton from './DashboardSkeleton';
 import PriceAlertBanner from './PriceAlertBanner';
 import CostCalculator from './CostCalculator';
-import BestWindowCard from './BestWindowCard';
+import BestWindowCard from '@/components/BestWindowCard';
 import PriceHeatmap from './PriceHeatmap';
 import ShareButton from './ShareButton';
 import { decodeParamsToState } from '@/lib/shareState';
@@ -119,6 +119,7 @@ export default function Dashboard() {
         costNowMs,
         costLoading,
         costError,
+        costNoData,
         readyByLimitMs,
         startingNowEndMs,
         bestIgnoresDeadline,
@@ -146,6 +147,7 @@ export default function Dashboard() {
             isPredicted={cheapestIsPredicted}
             loading={costLoading}
             error={costError}
+            noData={costNoData}
             nowMs={costNowMs}
             onOpen={openCostCalculator}
         />
@@ -332,6 +334,7 @@ export default function Dashboard() {
                 startingNowEndMs={startingNowEndMs}
                 bestIgnoresDeadline={bestIgnoresDeadline}
                 error={costError}
+                loading={costLoading}
             />
 
         </div>

@@ -253,9 +253,9 @@ describe("CostCalculator", () => {
     expect(screen.getByText("Predicted")).toBeInTheDocument();
   });
 
-  it("explains when no window fits before the ready-by time", () => {
+  it("explains when no window fits even with a ready-by time set", () => {
     render(<CostCalculator {...openProps} cheapestWindow={null} readyBy="07:00" />);
-    expect(screen.getByText("No 8 h window fits before 07:00.")).toBeInTheDocument();
+    expect(screen.getByText("No 8 h window fits in the available prices.")).toBeInTheDocument();
   });
 
   it("shows the resolved ready-by deadline, with a day label when rolled over", () => {
@@ -278,7 +278,7 @@ describe("CostCalculator", () => {
     expect(screen.getByText("Ready by tomorrow 07:00")).toBeInTheDocument();
   });
 
-  it("no-fit message says when starting now would finish (23:30, 8 h, ready by 07:00)", () => {
+  it("no-window message at 23:30 (8 h, ready by 07:00) names neither the deadline nor a finish time", () => {
     render(
       <CostCalculator
         {...openProps}
@@ -288,9 +288,9 @@ describe("CostCalculator", () => {
         startingNowEndMs={new Date("2024-06-05T04:30:00.000Z").getTime()} // 07:30
       />
     );
-    expect(
-      screen.getByText("No 8 h window fits before 07:00 — starting now finishes 07:30.")
-    ).toBeInTheDocument();
+    // A null window means no full-length window exists at all (the 23:30 case falls back past the deadline)
+    expect(screen.getByText("No 8 h window fits in the available prices.")).toBeInTheDocument();
+    expect(screen.queryByText(/starting now finishes 07:30\./)).not.toBeInTheDocument();
   });
 
   it("flags a fallback best window that finishes after ready-by (amber warning + card caveat)", () => {
@@ -338,7 +338,7 @@ describe("CostCalculator", () => {
 
   it("uses the searched (snapped) duration in the no-window message", () => {
     render(<CostCalculator {...openProps} cheapestWindow={null} durationHours={2.3} />);
-    expect(screen.getByText("No 2.25 h window fits before 07:00.")).toBeInTheDocument();
+    expect(screen.getByText("No 2.25 h window fits in the available prices.")).toBeInTheDocument();
   });
 
   it("shows a load error instead of 'no price data' when the fetch failed", () => {
@@ -399,5 +399,48 @@ describe("CostCalculator", () => {
     expect(container.querySelector(".opacity-50")).not.toBeNull();
     fireEvent.blur(input);
     expect(container.querySelector(".opacity-50")).toBeNull();
+  });
+});
+
+describe("CostCalculator loading and state sync", () => {
+  const base = {
+    isOpen: true,
+    setIsOpen: vi.fn(),
+    currentPrice: null as number | null,
+    cheapestWindow: null as CheapestWindow | null,
+    meanPrice: null as number | null,
+    maxPrice: null as number | null,
+    consumptionKwh: 40,
+    setConsumptionKwh: vi.fn(),
+    durationHours: 8,
+    setDurationHours: vi.fn(),
+    readyBy: "07:00" as string | null,
+    setReadyBy: vi.fn(),
+    activePreset: "EV Charge",
+    setActivePreset: vi.fn(),
+    nowMs: new Date("2024-06-04T17:00:00.000Z").getTime(),
+  };
+
+  it("shows a loading state, not 'no price data', while the first load is pending", () => {
+    render(<CostCalculator {...base} loading />);
+    expect(screen.getByText(/Loading prices/)).toBeInTheDocument();
+    expect(screen.queryByText(/No price data available/)).not.toBeInTheDocument();
+  });
+
+  it("switches the preset to Custom when the ready-by time is edited", () => {
+    const setActivePreset = vi.fn();
+    const setReadyBy = vi.fn();
+    const { container } = render(
+      <CostCalculator {...base} setActivePreset={setActivePreset} setReadyBy={setReadyBy} />
+    );
+    const time = container.querySelector('input[type="time"]')!;
+    fireEvent.change(time, { target: { value: "06:30" } });
+    expect(setReadyBy).toHaveBeenCalledWith("06:30");
+    expect(setActivePreset).toHaveBeenCalledWith("Custom");
+  });
+
+  it("does not blame the ready-by time when no full-length window exists at all", () => {
+    render(<CostCalculator {...base} currentPrice={10} meanPrice={8} maxPrice={20} />);
+    expect(screen.getByText("No 8 h window fits in the available prices.")).toBeInTheDocument();
   });
 });

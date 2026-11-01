@@ -8,6 +8,7 @@
 import { ElectricityPrice } from "@/lib/api";
 import { applyVat } from "@/lib/price";
 import { Period } from "@/lib/types";
+import { addDaysToDateStr, getTallinnDateStr } from "@/lib/timezone";
 import {
   startOfWeek,
   endOfWeek,
@@ -370,10 +371,12 @@ export function getHeatmapWeekRange(
     const weekEndOfStart = endOfWeek(periodStart, { weekStartsOn: 1 });
     const weekEnd = periodEnd > weekEndOfStart ? endOfDay(periodEnd) : weekEndOfStart;
 
-    const highlightedDates = eachDayOfInterval({
-      start: startOfDay(periodStart),
-      end: startOfDay(periodEnd),
-    }).map((d) => format(d, "yyyy-MM-dd"));
+    // Rows are keyed by Tallinn date, so walk Tallinn dates (not browser-local days)
+    const highlightedDates: string[] = [];
+    const lastDate = getTallinnDateStr(periodEnd);
+    for (let d = getTallinnDateStr(periodStart); d <= lastDate; d = addDaysToDateStr(d, 1)) {
+      highlightedDates.push(d);
+    }
 
     return {
       weekStart: startOfDay(weekStart),

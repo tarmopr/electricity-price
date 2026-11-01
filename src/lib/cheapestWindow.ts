@@ -24,9 +24,9 @@ export interface CheapestWindow {
   hours: number;
   /** Average price (cents/kWh) across the window */
   averagePrice: number;
-  /** Start index in the source slot array */
+  /** Start index in the searched slot array (for computeRollingWindow: its internal horizon, not the caller's points) */
   startIndex: number;
-  /** End index in the source slot array (inclusive) */
+  /** End index in the searched slot array (inclusive) */
   endIndex: number;
   /** True if any price in the window is a prediction (official prices not yet published) */
   isPredicted?: boolean;
@@ -267,7 +267,7 @@ export interface RollingWindowOptions {
   now: Date;
   /** Requested window length in hours (rounded to the nearest 15 minutes) */
   durationHours: number;
-  /** "HH:MM" Tallinn wall-clock deadline (next occurrence after now), or null for no limit */
+  /** "HH:MM" Tallinn wall-clock deadline, resolved via resolveReadyByLimit (may roll to the following day), or null for no limit */
   readyBy: string | null;
   /** Exclusive end of the horizon (e.g. end of tomorrow); slots beyond it are ignored */
   horizonEndMs?: number;
@@ -277,12 +277,13 @@ export interface RollingWindowResult {
   /**
    * Best window to recommend: the cheapest one ending by the ready-by deadline or,
    * if none fits, the cheapest full-length window over the whole horizon
-   * (see `bestIgnoresDeadline`). Null only when no full-length window exists at all.
+   * (see `bestIgnoresDeadline`). Null when no full-length window exists at all,
+   * or when the duration is not positive.
    */
   best: CheapestWindow | null;
   /** True when `best` ignores the ready-by deadline because no window fits before it */
   bestIgnoresDeadline: boolean;
-  /** Average price of a same-length window starting now */
+  /** Average price of a same-length window starting now (over the available slots; may be shorter near the horizon end or across data gaps) */
   startingNowPrice: number | null;
   /** Mean price across the whole horizon */
   horizonAvgPrice: number | null;
@@ -326,8 +327,8 @@ export function resolveReadyByLimit(
 }
 
 /**
- * Rolling-horizon cheapest window: scans from now (floored to 15 min) through
- * all supplied data, independent of the chart period, so windows can cross midnight.
+ * Rolling-horizon cheapest window: scans from now (floored to 15 min) through the
+ * supplied data up to `horizonEndMs`, independent of the chart period, so windows can cross midnight.
  */
 export function computeRollingWindow(
   points: SlotSourcePoint[],

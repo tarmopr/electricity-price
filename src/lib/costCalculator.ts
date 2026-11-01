@@ -25,6 +25,10 @@ export const PRESETS: ConsumptionPreset[] = [
 /** Default calculator state = EV Charge preset. */
 export const DEFAULT_PRESET = PRESETS[0];
 
+
+/** Input limits for the cost calculator fields (also applied to persisted values). */
+export const KWH_LIMITS = { min: 0, max: 200 } as const;
+export const DURATION_LIMITS = { min: 0.25, max: 24 } as const;
 /**
  * Minimum savings (€) worth showing — below half a cent the "save" message
  * would just display €0.00. Shared by the best-window card and the calculator.

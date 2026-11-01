@@ -185,4 +185,19 @@ describe("Controls", () => {
         fireEvent.click(screen.getByRole("button", { name: /increase alert threshold/i }));
         expect(setAlertConfig).toHaveBeenLastCalledWith({ enabled: true, threshold: 10.5, direction: "below" });
     });
+
+    it("alert threshold accepts negative prices (spot prices go below zero)", () => {
+        const setAlertConfig = vi.fn();
+        render(
+            <Controls
+                {...defaultProps}
+                alertConfig={{ ...defaultAlertConfig, enabled: true }}
+                setAlertConfig={setAlertConfig}
+            />
+        );
+        const input = screen.getByLabelText(/^alert threshold/i);
+        fireEvent.focus(input);
+        fireEvent.change(input, { target: { value: "-1,5" } });
+        expect(setAlertConfig).toHaveBeenLastCalledWith({ enabled: true, threshold: -1.5, direction: "below" });
+    });
 });

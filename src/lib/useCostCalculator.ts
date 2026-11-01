@@ -5,7 +5,8 @@ import { usePersistedState } from '@/lib/usePersistedState';
 import { getPricesWithPrediction } from '@/lib/api';
 import { applyVat } from '@/lib/price';
 import { computeRollingWindow, SLOT_MS } from '@/lib/cheapestWindow';
-import { DEFAULT_PRESET } from '@/lib/costCalculator';
+import { DEFAULT_PRESET, DURATION_LIMITS, KWH_LIMITS } from '@/lib/costCalculator';
+import { clampNumber } from '@/lib/numericInput';
 import { floorToHour, getEndOfTomorrowTallinn, isValidHHMM } from '@/lib/timezone';
 import type { ElectricityPrice } from '@/lib/api';
 
@@ -66,13 +67,16 @@ export function useCostCalculator(includeVat: boolean) {
         migrateLegacyReadyBy(window.localStorage);
     }, []);
 
-    const [costConsumptionKwh, setCostConsumptionKwh] = usePersistedState<number>('costKwh', DEFAULT_PRESET.kWh);
-    const [costDurationHours, setCostDurationHours] = usePersistedState<number>('costDuration', DEFAULT_PRESET.durationHours);
+    const [storedKwh, setCostConsumptionKwh] = usePersistedState<number>('costKwh', DEFAULT_PRESET.kWh);
+    const [storedDuration, setCostDurationHours] = usePersistedState<number>('costDuration', DEFAULT_PRESET.durationHours);
     const [storedReadyBy, setCostReadyBy] = usePersistedState<string | null>('costReadyBy', DEFAULT_PRESET.readyBy);
     const [costActivePreset, setCostActivePreset] = usePersistedState<string>('costPreset', DEFAULT_PRESET.label);
     const [costCalcOpen, setCostCalcOpen] = usePersistedState<boolean>('costCalcOpen', false);
 
-    // Guard against malformed persisted values
+    // Guard against malformed persisted values. The old inputs had no upper bound,
+    // so a stored value can exceed the new field limits.
+    const costConsumptionKwh = clampNumber(storedKwh, KWH_LIMITS.min, KWH_LIMITS.max);
+    const costDurationHours = clampNumber(storedDuration, DURATION_LIMITS.min, DURATION_LIMITS.max);
     const costReadyBy = storedReadyBy === null || isValidHHMM(storedReadyBy) ? storedReadyBy : DEFAULT_PRESET.readyBy;
 
     const [horizonPrices, setHorizonPrices] = useState<ElectricityPrice[]>([]);
@@ -107,6 +111,9 @@ export function useCostCalculator(includeVat: boolean) {
         async function load() {
             const requestId = ++latestRequest;
             inFlight = true;
+            // Loading on every fetch: after a long sleep the cached prices may no longer
+            // cover "now", and the UI must not present that as "no window fits".
+            setLoading(true);
             const now = new Date();
             const isCurrent = () => !cancelled && requestId === latestRequest;
             try {
@@ -129,8 +136,8 @@ export function useCostCalculator(includeVat: boolean) {
         }
 
         // Phone tabs resumed hours later: refetch as soon as the tab is visible again.
-        // Quick app switches skip the refetch (it pulls 8+ days of history for predictions),
-        // but "now" is always advanced — cheap, and correct after a long sleep.
+        // Resumes within 60 s of the last successful load skip the refetch (it pulls 8+ days
+        // of history for predictions); "now" is always advanced — cheap, and correct after a long sleep.
         function handleVisibility() {
             if (document.visibilityState !== 'visible') return;
             advanceNow(Date.now());
@@ -191,5 +198,7 @@ export function useCostCalculator(includeVat: boolean) {
         costNowMs: nowMs,
         costLoading: loading,
         costError: error,
+        /** The latest load succeeded but returned no prices for the horizon */
+        costNoData: !loading && error === null && rolling !== null && rolling.horizonAvgPrice === null,
     };
 }

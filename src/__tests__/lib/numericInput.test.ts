@@ -93,3 +93,12 @@ describe("numericInput", () => {
     });
   });
 });
+
+describe("snapDurationHours", () => {
+  it("rounds to the nearest 15 minutes like the window search (Math.round(h * 4))", async () => {
+    const { snapDurationHours } = await import("@/lib/numericInput");
+    expect(snapDurationHours(0.1)).toBe(0.25);
+    expect(snapDurationHours(1.13)).toBe(1.25);
+    expect(snapDurationHours(1.12)).toBe(1);
+  });
+});

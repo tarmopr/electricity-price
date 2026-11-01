@@ -24,6 +24,8 @@ interface BestWindowCardProps {
     loading: boolean;
     /** Price fetch error, if the latest load failed */
     error?: string | null;
+    /** True when the price load succeeded but returned no prices for the horizon */
+    noData?: boolean;
     /** Reference "now" used for day labels (Today / Tomorrow) */
     nowMs: number | null;
     onOpen: () => void;
@@ -48,6 +50,7 @@ function BestWindowCard({
     isPredicted,
     loading,
     error = null,
+    noData = false,
     nowMs,
     onOpen,
 }: BestWindowCardProps) {
@@ -75,15 +78,21 @@ function BestWindowCard({
         body = (
             <span className="flex items-center gap-2 text-sm text-red-300" role="alert">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
-                Couldn&apos;t load prices. Please try again in a moment.
+                Couldn&apos;t load prices — retrying automatically.
+            </span>
+        );
+    } else if (!window && noData) {
+        body = (
+            <span className="block text-sm text-zinc-400">
+                No price data available yet — retrying automatically.
             </span>
         );
     } else if (!window) {
+        // The hook already falls back to a window ignoring the deadline, so a null window
+        // means no full-length window exists in the loaded prices at all (e.g. a data gap).
         body = (
             <span className="block text-sm text-zinc-400">
-                No {searchedDuration} window fits
-                {deadlineLabel ? ` before ${deadlineLabel}` : ' in the available prices'}
-                {finishLabel ? ` — starting now finishes ${finishLabel}.` : '. Tap to adjust.'}
+                No {searchedDuration} window fits in the available prices. Tap to adjust.
             </span>
         );
     } else {
@@ -120,6 +129,18 @@ function BestWindowCard({
                 </span>
             </span>
         );
+        if (error) {
+            // A refresh failed after an earlier load: the window above is from stale prices
+            body = (
+                <>
+                    {body}
+                    <span className="mt-2 flex items-center gap-2 text-xs text-amber-200" role="status">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                        Couldn&apos;t refresh prices — showing the last loaded data.
+                    </span>
+                </>
+            );
+        }
         if (ignoresDeadline && deadlineLabel) {
             body = (
                 <>
