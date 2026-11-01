@@ -147,22 +147,20 @@ The sync also recomputes all aggregate tables (hourly, daily, weekly, monthly, w
 
 #### Upgrading an existing database
 
-Run the one-off scripts in `db/migrations/` once each, in this order:
+`npm run deploy` deploys the Worker and then applies any new scripts in `db/migrations/` to the remote database (`wrangler d1 migrations apply`, tracked in the `d1_migrations` table). They run after the code deploy on purpose, so the old cron cannot write rows in the old format afterwards. If your deploy uses a different command (e.g. a Workers Builds deploy command), run `npx wrangler d1 migrations apply electricity-prices --remote` right after it.
 
-1. Deploy the new code (`npm run deploy`). Do this first, or the old cron keeps writing aggregates in the old format.
-2. `npx wrangler d1 execute electricity-prices --remote --file=db/migrations/0001_drop_duplicate_indexes.sql`
-3. `npx wrangler d1 execute electricity-prices --remote --file=db/migrations/0002_reset_weekly_averages.sql` (weekly averages stay empty or partial until step 4 is done)
-4. Recompute every stored month (below). `curl https://your-domain.com/api/sync` shows `earliestTimestamp`, the first month to recompute.
+When a migration resets an aggregate table (e.g. `0002_reset_weekly_averages.sql`), recompute every stored month afterwards (below); until then that table is empty or partial.
 
 #### Recompute aggregates without refetching
 
-After a change to how aggregates are bucketed, rewrite the calendar tables from the hourly averages already stored, one Tallinn month per call, for every stored month. If the change also changed a table's keys, run its migration first (see the upgrade steps above). A month with no stored hourly averages returns 404. It does not call Elering or rewrite prices, so each call stays inside the Workers Free limits:
+After a change to how aggregates are bucketed, rewrite the calendar tables from the hourly averages already stored, one Tallinn month per request. It does not call Elering or rewrite prices, so each request stays inside the Workers Free limits. The script finds the stored range via `GET /api/sync` and calls `POST /api/sync/recompute?month=YYYY-MM` for every month:
 
 ```bash
-for m in 2025-01 2025-02 2025-03; do
-  curl -X POST -H "Authorization: Bearer $SYNC_SECRET" "https://your-domain.com/api/sync/recompute?month=$m"
-done
+SYNC_SECRET=... npm run recompute -- --url https://your-domain.com
+# or a range: ... --from 2025-01 --to 2025-06
 ```
+
+Months without stored data (404) are skipped; any other failure stops the run and prints the `--from` value to resume with.
 
 ### 6. CI and Deployments
 
