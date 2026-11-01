@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import Controls from "@/components/Controls";
 import type { AlertConfig } from "@/lib/priceAlerts";
 
@@ -44,6 +44,12 @@ describe("Controls", () => {
         expect(screen.getByRole("button", { name: /yesterday/i })).toBeInTheDocument();
         expect(screen.getByRole("button", { name: /today/i })).toBeInTheDocument();
         expect(screen.getByRole("button", { name: /tomorrow/i })).toBeInTheDocument();
+    });
+
+    it("lists Next 24h as the first period pill", () => {
+        render(<Controls {...defaultProps} />);
+        const pills = within(screen.getByRole("group", { name: /period selection/i })).getAllByRole("button");
+        expect(pills[0]).toHaveAccessibleName("Next 24h");
     });
 
     it("calls setPeriod when a period button is clicked", () => {

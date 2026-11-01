@@ -413,6 +413,12 @@ describe("Dashboard", () => {
         expect(within(bestWindowCopies(container).mobile).getByText(/Finishes after 07:00/)).toBeInTheDocument();
     });
 
+    it("defaults to the Next 24h period", () => {
+        render(<Dashboard />);
+        expect(useDashboardPrices).toHaveBeenCalledWith("next_24h", expect.any(String), expect.any(String));
+        expect(screen.getByRole("button", { name: /next 24h/i })).toHaveAttribute("aria-pressed", "true");
+    });
+
     it("renders the Next 24h period pill", () => {
         render(<Dashboard />);
         expect(screen.getByRole("button", { name: /next 24h/i })).toBeInTheDocument();

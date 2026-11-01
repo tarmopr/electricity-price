@@ -38,7 +38,7 @@ export default function Dashboard() {
     const [showP95, setShowP95] = usePersistedState<boolean>('showP95', false);
 
     // Period Settings (persisted, except custom dates which reset daily)
-    const [period, setPeriod, periodHydrated] = usePersistedState<Period>('period', 'today');
+    const [period, setPeriod, periodHydrated] = usePersistedState<Period>('period', 'next_24h');
     const [customStart, setCustomStart] = useState<string>(format(startOfToday(), 'yyyy-MM-dd'));
     const [customEnd, setCustomEnd] = useState<string>(format(endOfToday(), 'yyyy-MM-dd'));
 

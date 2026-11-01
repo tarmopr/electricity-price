@@ -10,10 +10,10 @@ import NumericField from '@/components/ui/NumericField';
 
 /** Primary periods shown as always-visible pills */
 const PRIMARY_PERIODS: { value: Period; label: string }[] = [
+    { value: 'next_24h', label: 'Next 24h' },
     { value: 'yesterday', label: 'Yesterday' },
     { value: 'today', label: 'Today' },
     { value: 'tomorrow', label: 'Tomorrow' },
-    { value: 'next_24h', label: 'Next 24h' },
 ];
 
 /** Secondary periods hidden behind "More" dropdown */
