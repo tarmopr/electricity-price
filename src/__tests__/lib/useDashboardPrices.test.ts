@@ -457,6 +457,91 @@ describe("useDashboardPrices", () => {
         expect(result.current.prices.map(p => p.priceEurMwh)).toEqual([40, 50]);
     });
 
+    it("ignores a stale heatmap response that resolves after the new period has loaded", async () => {
+        // Run 1 gets its main prices at once but its heatmap week fetch stays pending; run 2
+        // (no heatmap week range) loads fully. The late heatmap must not overwrite run 2.
+        const { getHeatmapPricesWithPredictions } = vi.mocked(await import("@/lib/api"));
+        const { getHeatmapWeekRange } = vi.mocked(await import("@/lib/heatmapData"));
+        let resolveHeatmap: (data: ElectricityPrice[]) => void = () => {};
+        getHeatmapWeekRange.mockReturnValueOnce({
+            weekStart: new Date("2024-06-09T21:00:00.000Z"), // Mon 10 Jun 00:00 Tallinn
+            weekEnd: new Date("2024-06-16T20:59:59.000Z"), // Sun 16 Jun 23:59 Tallinn
+            highlightedDates: ["2024-06-15"],
+        });
+        getHeatmapPricesWithPredictions.mockImplementationOnce(
+            () => new Promise(r => { resolveHeatmap = r; }),
+        );
+
+        const { result, rerender } = renderHook(
+            ({ period }: { period: "next_24h" | "today" }) => useDashboardPrices(period, "", ""),
+            { initialProps: { period: "next_24h" } },
+        );
+        await waitFor(() => expect(getHeatmapPricesWithPredictions).toHaveBeenCalledTimes(1));
+        rerender({ period: "today" });
+        await waitFor(() => expect(result.current.loading).toBe(false));
+        expect(result.current.heatmapPrices).toHaveLength(4);
+
+        await act(async () => {
+            resolveHeatmap([makePrice("2024-06-15T10:00:00.000Z", 999)]); // 13:00 Tallinn
+        });
+
+        expect(result.current.heatmapPrices.map(p => p.priceEurMwh)).toEqual([100, 110, 120, 130]);
+        expect(result.current.highlightedDates).toBeUndefined();
+    });
+
+    it("ignores a stale current price that resolves after the new period has loaded", async () => {
+        let resolveCurrent: (p: ElectricityPrice | null) => void = () => {};
+        getCurrentPrice.mockImplementationOnce(() => new Promise(r => { resolveCurrent = r; }));
+
+        const { result, rerender } = renderHook(
+            ({ period }: { period: "next_24h" | "today" }) => useDashboardPrices(period, "", ""),
+            { initialProps: { period: "next_24h" } },
+        );
+        await waitFor(() => expect(getCurrentPrice).toHaveBeenCalledTimes(1));
+        rerender({ period: "today" });
+        await waitFor(() => expect(result.current.loading).toBe(false));
+        expect(result.current.currentPrice?.priceEurMwh).toBe(120);
+
+        await act(async () => {
+            resolveCurrent(makePrice("2024-06-15T10:00:00.000Z", 999)); // 13:00 Tallinn
+        });
+
+        expect(result.current.currentPrice?.priceEurMwh).toBe(120);
+        expect(result.current.previousPrice?.priceEurMwh).toBe(110);
+        expect(result.current.nextPrice?.priceEurMwh).toBe(130);
+    });
+
+    it("ignores stale previous/next prices that resolve after the new period has loaded", async () => {
+        // Run 1: current is first in its data, so a context-window fetch is needed and stays
+        // pending. Run 2 finds its neighbours in the chart data. The late context must not win.
+        let resolveContext: (data: ElectricityPrice[]) => void = () => {};
+        const staleCurrent = makePrice("2024-06-15T10:00:00.000Z", 100); // 13:00 Tallinn
+        getPricesWithPrediction
+            .mockResolvedValueOnce([staleCurrent])
+            .mockImplementationOnce(() => new Promise(r => { resolveContext = r; }));
+        getCurrentPrice.mockResolvedValueOnce(staleCurrent);
+
+        const { result, rerender } = renderHook(
+            ({ period }: { period: "next_24h" | "today" }) => useDashboardPrices(period, "", ""),
+            { initialProps: { period: "next_24h" } },
+        );
+        await waitFor(() => expect(getPricesWithPrediction).toHaveBeenCalledTimes(2));
+        rerender({ period: "today" });
+        await waitFor(() => expect(result.current.loading).toBe(false));
+        expect(result.current.previousPrice?.priceEurMwh).toBe(110);
+
+        await act(async () => {
+            resolveContext([
+                makePrice("2024-06-15T09:00:00.000Z", 555),
+                staleCurrent,
+                makePrice("2024-06-15T11:00:00.000Z", 777),
+            ]);
+        });
+
+        expect(result.current.previousPrice?.priceEurMwh).toBe(110);
+        expect(result.current.nextPrice?.priceEurMwh).toBe(130);
+    });
+
     it("returns null previousPrice when current is first in chart data (boundary case)", async () => {
         // currentPrice is index 0 → fetchCurrentPriceContext falls back to a context window fetch
         const contextPrices = [

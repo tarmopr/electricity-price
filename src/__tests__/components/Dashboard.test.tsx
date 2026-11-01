@@ -413,6 +413,63 @@ describe("Dashboard", () => {
         expect(summary.textContent).toMatch(/· official prices only$/);
     });
 
+    it("passes the end of official prices to the open calculator", () => {
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({
+                costCalcOpen: true,
+                costAllowPredicted: false,
+                startingNowPrice: 10,
+                // 14:00 Tallinn (EET, UTC+2) on 2024-01-01; "now" is 11:00 Tallinn
+                predictedFromMs: new Date("2024-01-01T12:00:00.000Z").getTime(),
+            }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        render(<Dashboard />);
+        expect(
+            screen.getByText("Starting now, average and peak include predicted prices from 14:00.")
+        ).toBeInTheDocument();
+    });
+
+    it("wires the open settings panel and the predicted-price toggle to the calculator state", () => {
+        const setCostSettingsOpen = vi.fn();
+        const setCostAllowPredicted = vi.fn();
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({
+                costCalcOpen: true,
+                costSettingsOpen: true,
+                costAllowPredicted: false,
+                setCostSettingsOpen,
+                setCostAllowPredicted,
+            }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        render(<Dashboard />);
+        const toggle = screen.getByRole("button", { name: "Toggle calculator settings" });
+        expect(toggle).toHaveAttribute("aria-expanded", "true");
+        fireEvent.click(toggle);
+        expect(setCostSettingsOpen).toHaveBeenCalledWith(false);
+        fireEvent.click(screen.getByRole("button", { name: "Use predicted prices" }));
+        expect(setCostAllowPredicted).toHaveBeenCalledWith(true);
+    });
+
+    it("tapping the card uses the latest window once it disappears (no stale callback)", () => {
+        const setCostSettingsOpen = vi.fn();
+        const withWindow = makeCostCalc({ cheapestWindow, setCostSettingsOpen });
+        useCostCalculator.mockReturnValue(withWindow as unknown as ReturnType<typeof useCostCalculator>);
+        const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+            cb(0);
+            return 0;
+        });
+        const { container, rerender } = render(<Dashboard />);
+        // Same setters and flags; only the window changes to "none fits"
+        useCostCalculator.mockReturnValue(
+            { ...withWindow, cheapestWindow: null } as unknown as ReturnType<typeof useCostCalculator>
+        );
+        rerender(<Dashboard />);
+        const { mobile } = bestWindowCopies(container);
+        fireEvent.click(within(mobile).getByRole("button", { name: /open cost calculator/i }));
+        expect(setCostSettingsOpen).toHaveBeenCalledWith(true);
+        raf.mockRestore();
+    });
+
     it("passes the cheapest window to the chart even when the calculator is closed", () => {
         useCostCalculator.mockReturnValue(
             makeCostCalc({ cheapestWindow, costCalcOpen: false }) as unknown as ReturnType<typeof useCostCalculator>

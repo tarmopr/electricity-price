@@ -548,6 +548,23 @@ describe("CostCalculator", () => {
     expect(screen.queryByText(/Official prices end/)).not.toBeInTheDocument();
   });
 
+  it("the prices toggle reports aria-pressed=false when predictions are excluded", () => {
+    render(<CostCalculator {...openProps} allowPredicted={false} />);
+    expect(screen.getByRole("button", { name: "Use predicted prices" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("hides the official-end hint when ready-by equals the end of official prices", () => {
+    render(
+      <CostCalculator
+        {...openProps}
+        allowPredicted={false}
+        predictedFromMs={predictedFromMs}
+        readyByLimitMs={predictedFromMs} // 01:00 Tallinn, exactly where official prices end
+      />
+    );
+    expect(screen.queryByText(/Official prices end/)).not.toBeInTheDocument();
+  });
+
   it("dims the estimates while a field draft is empty", () => {
     const { container } = render(<CostCalculator {...openProps} />);
     const input = screen.getByLabelText("Duration in hours");
