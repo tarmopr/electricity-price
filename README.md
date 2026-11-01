@@ -120,7 +120,7 @@ Copy the `database_id` from the output and update `wrangler.jsonc`:
 npx wrangler d1 execute electricity-prices --remote --file=db/schema.sql
 ```
 
-`db/schema.sql` creates a fresh database. An existing database also needs the one-off scripts in `db/migrations/`, run once each in order with the same command and `--file=db/migrations/<file>.sql`.
+`db/schema.sql` creates a fresh database. To upgrade an existing database, see [Upgrading an existing database](#upgrading-an-existing-database).
 
 ### 4. Deploy
 
@@ -145,9 +145,18 @@ curl "https://your-domain.com/api/sync"
 
 The sync also recomputes all aggregate tables (hourly, daily, weekly, monthly, weekday-hour averages).
 
+#### Upgrading an existing database
+
+Run the one-off scripts in `db/migrations/` once each, in this order:
+
+1. Deploy the new code (`npm run deploy`). Do this first, or the old cron keeps writing aggregates in the old format.
+2. `npx wrangler d1 execute electricity-prices --remote --file=db/migrations/0001_drop_duplicate_indexes.sql`
+3. `npx wrangler d1 execute electricity-prices --remote --file=db/migrations/0002_reset_weekly_averages.sql` (weekly averages stay empty or partial until step 4 is done)
+4. Recompute every stored month (below). `curl https://your-domain.com/api/sync` shows `earliestTimestamp`, the first month to recompute.
+
 #### Recompute aggregates without refetching
 
-After a change to how aggregates are bucketed, rewrite the calendar tables from the hourly averages already stored, one Tallinn month per call, for every stored month. If the change also changed a table's keys (for example `db/migrations/0002_reset_weekly_averages.sql`), run that migration first so no rows with old keys remain (after deploying the new code, or the old cron writes old keys again). A month with no stored hourly averages returns 404. It does not call Elering or rewrite prices, so each call stays inside the Workers Free limits:
+After a change to how aggregates are bucketed, rewrite the calendar tables from the hourly averages already stored, one Tallinn month per call, for every stored month. If the change also changed a table's keys, run its migration first (see the upgrade steps above). A month with no stored hourly averages returns 404. It does not call Elering or rewrite prices, so each call stays inside the Workers Free limits:
 
 ```bash
 for m in 2025-01 2025-02 2025-03; do

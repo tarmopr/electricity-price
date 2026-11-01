@@ -35,7 +35,8 @@ function mergeRanges(ranges: [number, number][]): [number, number][] {
  * POST /api/sync — Sync prices from Elering to D1.
  *
  * Automatic mode (no params or just end):
- *   Checks the latest timestamp in DB and fetches from there to 48h from now.
+ *   Checks the latest timestamp in DB and fetches from there to 48h from now,
+ *   at most 31 days per run (a longer gap is filled over the following runs).
  *   This means missed syncs are automatically recovered on the next run.
  *   If DB is empty, defaults to fetching the last 2 days.
  *
