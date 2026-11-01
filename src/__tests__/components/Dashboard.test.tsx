@@ -118,6 +118,9 @@ function makeCostCalc(overrides: Record<string, unknown> = {}) {
         setCostActivePreset: vi.fn(),
         costCalcOpen: false,
         setCostCalcOpen: vi.fn(),
+        costAllowPredicted: true,
+        setCostAllowPredicted: vi.fn(),
+        predictedFromMs: null,
         cheapestWindow: null,
         startingNowPrice: null,
         horizonAvgPrice: null,
@@ -411,6 +414,22 @@ describe("Dashboard", () => {
         const { container } = render(<Dashboard />);
         expect(screen.getByTestId("cheapest-area")).toBeInTheDocument();
         expect(within(bestWindowCopies(container).mobile).getByText(/Finishes after 07:00/)).toBeInTheDocument();
+    });
+
+    it("passes the excluded-predictions state to the card", () => {
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({
+                costAllowPredicted: false,
+                predictedFromMs: Date.parse("2024-01-01T22:00:00.000Z"), // 00:00 Tallinn, 2 Jan (now is 11:00)
+                cheapestWindow: null,
+            }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        const { container } = render(<Dashboard />);
+        expect(
+            within(bestWindowCopies(container).mobile).getByText(
+                "No 8 h window fits before predicted prices start (00:00). Tap to adjust."
+            )
+        ).toBeInTheDocument();
     });
 
     it("defaults to the Next 24h period", () => {

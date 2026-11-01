@@ -35,6 +35,8 @@ describe("CostCalculator", () => {
     setReadyBy: noopReadyBy,
     activePreset: "EV Charge",
     setActivePreset: noopStr,
+    allowPredicted: true,
+    setAllowPredicted: vi.fn(),
     // 2024-06-04 20:00 Tallinn
     nowMs: new Date("2024-06-04T17:00:00.000Z").getTime(),
   };
@@ -405,6 +407,68 @@ describe("CostCalculator", () => {
     expect(setActivePreset).toHaveBeenCalledWith("Custom");
   });
 
+  // ─── Predicted prices option ───────────────────────────────────────────────
+  // Official prices end 01:00 Tallinn on 2024-06-05
+  const predictedFromMs = new Date("2024-06-04T22:00:00.000Z").getTime();
+
+  it("the prices toggle flips the predicted-price option without changing the preset", () => {
+    const setAllowPredicted = vi.fn(), setActivePreset = vi.fn();
+    render(<CostCalculator {...openProps} setAllowPredicted={setAllowPredicted} setActivePreset={setActivePreset} />);
+    const toggle = screen.getByRole("button", { name: "Use predicted prices" });
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(toggle);
+    expect(setAllowPredicted).toHaveBeenCalledWith(false);
+    expect(setActivePreset).not.toHaveBeenCalled();
+  });
+
+  it("names where official prices end when predictions are excluded", () => {
+    render(
+      <CostCalculator
+        {...openProps}
+        allowPredicted={false}
+        predictedFromMs={predictedFromMs}
+        readyByLimitMs={new Date("2024-06-05T04:00:00.000Z").getTime()} // 07:00 Tallinn
+      />
+    );
+    expect(screen.getByText("Official prices end 01:00 — the search stops there")).toBeInTheDocument();
+  });
+
+  it("no-window line blames predicted prices when they are excluded", () => {
+    render(
+      <CostCalculator
+        {...openProps}
+        allowPredicted={false}
+        predictedFromMs={predictedFromMs}
+        readyByLimitMs={new Date("2024-06-05T04:00:00.000Z").getTime()} // 07:00 Tallinn
+        cheapestWindow={null}
+      />
+    );
+    expect(screen.getByText("No 8 h window fits before predicted prices start (01:00).")).toBeInTheDocument();
+  });
+
+  it("notes that the stats still include predicted prices", () => {
+    const { rerender } = render(
+      <CostCalculator {...openProps} allowPredicted={false} predictedFromMs={predictedFromMs} />
+    );
+    expect(
+      screen.getByText("Starting now, average and peak include predicted prices from 01:00.")
+    ).toBeInTheDocument();
+    rerender(<CostCalculator {...openProps} allowPredicted predictedFromMs={predictedFromMs} />);
+    expect(screen.queryByText(/include predicted prices from/)).not.toBeInTheDocument();
+  });
+
+  it("hides the official-end hint when ready-by comes first", () => {
+    render(
+      <CostCalculator
+        {...openProps}
+        allowPredicted={false}
+        predictedFromMs={predictedFromMs}
+        readyByLimitMs={new Date("2024-06-04T21:00:00.000Z").getTime()} // 00:00 Tallinn, before 01:00
+      />
+    );
+    expect(screen.queryByText(/Official prices end/)).not.toBeInTheDocument();
+  });
+
   it("dims the estimates while a field draft is empty", () => {
     const { container } = render(<CostCalculator {...openProps} />);
     const input = screen.getByLabelText("Duration in hours");
@@ -432,6 +496,8 @@ describe("CostCalculator loading and state sync", () => {
     setReadyBy: vi.fn(),
     activePreset: "EV Charge",
     setActivePreset: vi.fn(),
+    allowPredicted: true,
+    setAllowPredicted: vi.fn(),
     nowMs: new Date("2024-06-04T17:00:00.000Z").getTime(),
   };
 

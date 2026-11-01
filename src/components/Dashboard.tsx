@@ -111,6 +111,8 @@ export default function Dashboard() {
         costReadyBy, setCostReadyBy,
         costActivePreset, setCostActivePreset,
         costCalcOpen, setCostCalcOpen,
+        costAllowPredicted, setCostAllowPredicted,
+        predictedFromMs,
         cheapestWindow,
         startingNowPrice,
         horizonAvgPrice,
@@ -149,6 +151,8 @@ export default function Dashboard() {
             error={costError}
             noData={costNoData}
             nowMs={costNowMs}
+            excludesPredicted={!costAllowPredicted}
+            predictedFromMs={predictedFromMs}
             onOpen={openCostCalculator}
         />
     );
@@ -328,6 +332,9 @@ export default function Dashboard() {
                 setReadyBy={setCostReadyBy}
                 activePreset={costActivePreset}
                 setActivePreset={setCostActivePreset}
+                allowPredicted={costAllowPredicted}
+                setAllowPredicted={setCostAllowPredicted}
+                predictedFromMs={predictedFromMs}
                 isPredicted={cheapestIsPredicted}
                 nowMs={costNowMs}
                 readyByLimitMs={readyByLimitMs}

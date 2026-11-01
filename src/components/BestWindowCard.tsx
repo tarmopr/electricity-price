@@ -28,6 +28,10 @@ interface BestWindowCardProps {
     noData?: boolean;
     /** Reference "now" used for day labels (Today / Tomorrow) */
     nowMs: number | null;
+    /** True when predicted prices are excluded from the search */
+    excludesPredicted?: boolean;
+    /** Where official prices end (start of the trailing predicted slots), or null */
+    predictedFromMs?: number | null;
     onOpen: () => void;
 }
 
@@ -55,6 +59,8 @@ function BestWindowCard({
     error = null,
     noData = false,
     nowMs,
+    excludesPredicted = false,
+    predictedFromMs = null,
     onOpen,
 }: BestWindowCardProps) {
     // nowMs is set once the first load completes; the window-start fallback is defensive
@@ -101,9 +107,12 @@ function BestWindowCard({
     } else if (!window) {
         // The hook already falls back to a window ignoring the deadline, so a null window
         // means no full-length window exists in the loaded prices at all (e.g. a data gap).
+        // With predictions excluded, the search stops where official prices end.
         body = (
             <span className="block text-sm text-zinc-400">
-                No {searchedDuration} window fits in the available prices. Tap to adjust.
+                {excludesPredicted && predictedFromMs !== null && nowMs !== null
+                    ? `No ${searchedDuration} window fits before predicted prices start (${formatTallinnDeadline(new Date(predictedFromMs), now)}). Tap to adjust.`
+                    : `No ${searchedDuration} window fits in the available prices. Tap to adjust.`}
             </span>
         );
     } else {

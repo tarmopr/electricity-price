@@ -14,7 +14,7 @@ import {
 import { CheapestWindow } from "@/lib/cheapestWindow";
 import { formatDuration, formatNumber, snapDurationHours } from "@/lib/numericInput";
 import { formatTallinnDeadline, formatTallinnRange, isValidHHMM } from "@/lib/timezone";
-import { PILL_BASE, pillClass } from "@/lib/styles";
+import { PILL_BASE, PILL_INACTIVE, PILL_ACTIVE_INDIGO, pillClass } from "@/lib/styles";
 import NumericField from "@/components/ui/NumericField";
 
 interface CostCalculatorProps {
@@ -35,6 +35,10 @@ interface CostCalculatorProps {
   setReadyBy: (val: string | null) => void;
   activePreset: string;
   setActivePreset: (val: string) => void;
+  allowPredicted: boolean;
+  setAllowPredicted: (val: boolean) => void;
+  /** Where official prices end (start of the trailing predicted slots), or null */
+  predictedFromMs?: number | null;
   /** True if any slot of the best window is a prediction */
   isPredicted?: boolean;
   /** Reference "now" for day labels (Today / Tomorrow) */
@@ -81,6 +85,9 @@ export default function CostCalculator({
   setReadyBy,
   activePreset,
   setActivePreset,
+  allowPredicted,
+  setAllowPredicted,
+  predictedFromMs = null,
   isPredicted = false,
   nowMs,
   readyByLimitMs = null,
@@ -106,6 +113,15 @@ export default function CostCalculator({
       ? formatTallinnDeadline(new Date(startingNowEndMs), new Date(nowMs))
       : null;
   const showDeadlineWarning = bestIgnoresDeadline && cheapestWindow !== null && !!deadlineLabel;
+  const officialEndLabel =
+    predictedFromMs !== null && nowMs != null
+      ? formatTallinnDeadline(new Date(predictedFromMs), new Date(nowMs))
+      : null;
+  // Predictions excluded and the horizon has them: the search stops where official prices end
+  const excludesKnownPredictions = !allowPredicted && predictedFromMs !== null && nowMs != null;
+  // Only worth naming when official prices end before the ready-by deadline
+  const officialEndHint =
+    excludesKnownPredictions && (readyByLimitMs === null || predictedFromMs < readyByLimitMs);
 
   const estimates = buildEstimates(
     consumptionKwh,
@@ -305,6 +321,14 @@ export default function CostCalculator({
                 <p className="text-xs text-zinc-500">Ready by {deadlineLabel}</p>
               )}
             </div>
+            <div className="flex flex-col gap-1.5">
+              <span className={LABEL_CLASS}>Prices</span>
+              <button type="button" onClick={() => setAllowPredicted(!allowPredicted)} aria-pressed={allowPredicted}
+                className={`${PILL_BASE} self-start ${allowPredicted ? PILL_ACTIVE_INDIGO : PILL_INACTIVE}`}>
+                Use predicted prices
+              </button>
+              {officialEndHint && <p className="text-xs text-zinc-500">Official prices end {officialEndLabel} — the search stops there</p>}
+            </div>
           </div>
 
           {isPredicted && cheapestWindow && (
@@ -359,6 +383,12 @@ export default function CostCalculator({
                   {showMore ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                 </button>
               )}
+              {/* The stats keep the whole horizon, so predicted prices are not shown as official */}
+              {excludesKnownPredictions && (
+                <p className="text-xs text-zinc-500">
+                  Starting now, average and peak include predicted prices from {officialEndLabel}.
+                </p>
+              )}
             </div>
           ) : (
             <p className="text-zinc-500 text-sm text-center py-4">
@@ -374,7 +404,9 @@ export default function CostCalculator({
           {/* Not while reloading: after a long sleep the cached prices may no longer cover "now" */}
           {cheapestWindow === null && currentPrice !== null && !loading && (
             <p className="text-zinc-500 text-sm">
-              No {formatDuration(searchedHours)} window fits in the available prices.
+              {excludesKnownPredictions
+                ? `No ${formatDuration(searchedHours)} window fits before predicted prices start (${officialEndLabel}).`
+                : `No ${formatDuration(searchedHours)} window fits in the available prices.`}
             </p>
           )}
 

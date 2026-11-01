@@ -168,6 +168,40 @@ describe("useCostCalculator", () => {
     expect(result.current.isPredicted).toBe(true);
   });
 
+  it("allows predicted prices by default", () => {
+    getPricesWithPrediction.mockResolvedValue([]);
+    const { result } = renderHook(() => useCostCalculator(false));
+    expect(result.current.costAllowPredicted).toBe(true);
+  });
+
+  it("excluding predicted prices keeps the window on official prices", async () => {
+    // Official 20:00–02:59 Tallinn, predicted from 03:00 (00:00Z)
+    const cents = [20, 20, 20, 2, 2, 2, 2, 2, 2, 2, 2, 9, 9, 9];
+    getPricesWithPrediction.mockResolvedValue(hourly("2024-06-14T17:00:00.000Z", cents, 7));
+    const { result } = renderHook(() => useCostCalculator(false));
+    await waitFor(() => expect(result.current.cheapestWindow).not.toBeNull());
+
+    act(() => result.current.setCostAllowPredicted(false));
+    // 8 h does not fit before 03:00 Tallinn
+    await waitFor(() => expect(result.current.cheapestWindow).toBeNull());
+    expect(result.current.costNoData).toBe(false);
+    expect(result.current.predictedFromMs).toBe(Date.parse("2024-06-15T00:00:00.000Z")); // 03:00 Tallinn
+
+    act(() => result.current.setCostDurationHours(2));
+    await waitFor(() => expect(result.current.cheapestWindow).not.toBeNull());
+    const w = result.current.cheapestWindow!;
+    expect(w.startTimestamp).toBe("2024-06-14T20:00:00.000Z"); // 23:00 Tallinn
+    expect(w.endTimestamp).toBe("2024-06-14T22:00:00.000Z"); // 01:00 Tallinn
+    expect(w.isPredicted).toBe(false);
+  });
+
+  it("persists the predicted-price choice", async () => {
+    getPricesWithPrediction.mockResolvedValue([]);
+    const { result } = renderHook(() => useCostCalculator(false));
+    act(() => result.current.setCostAllowPredicted(false));
+    await waitFor(() => expect(localStorage.getItem("eprice_costAllowPredicted")).toBe("false"));
+  });
+
   it("migrates a legacy 'costUntil' setting into costReadyBy", async () => {
     localStorage.setItem("eprice_costUntil", "6");
     getPricesWithPrediction.mockResolvedValue([]);

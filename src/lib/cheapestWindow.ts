@@ -271,6 +271,8 @@ export interface RollingWindowOptions {
   readyBy: string | null;
   /** Exclusive end of the horizon (e.g. end of tomorrow); slots beyond it are ignored */
   horizonEndMs?: number;
+  /** Search official prices only: predicted slots are skipped and windows end where official prices end. Horizon stats still use every slot. */
+  excludePredicted?: boolean;
 }
 
 export interface RollingWindowResult {
@@ -297,6 +299,8 @@ export interface RollingWindowResult {
   readyByRolledOver: boolean;
   /** When a same-length window starting now (floored to 15 min) would finish, or null */
   startingNowEnd: Date | null;
+  /** Where official prices end: start of the trailing run of predicted slots, or null when the horizon ends on an official slot */
+  predictedFrom: Date | null;
 }
 
 /**
@@ -329,13 +333,25 @@ export function resolveReadyByLimit(
 /**
  * Rolling-horizon cheapest window: scans from now (floored to 15 min) through the
  * supplied data up to `horizonEndMs`, independent of the chart period, so windows can cross midnight.
+ * With `excludePredicted`, the window search (not the horizon stats) uses official slots only
+ * and windows end where official prices end (`predictedFrom`).
  */
 export function computeRollingWindow(
   points: SlotSourcePoint[],
-  { now, durationHours, readyBy, horizonEndMs }: RollingWindowOptions
+  { now, durationHours, readyBy, horizonEndMs, excludePredicted = false }: RollingWindowOptions
 ): RollingWindowResult {
   const nowFloorMs = Math.floor(now.getTime() / SLOT_MS) * SLOT_MS;
   const horizon = normalizeTo15MinSlots(points, horizonEndMs).filter((s) => s.startMs >= nowFloorMs);
+  // Official prices end where the trailing run of predicted slots starts. A predicted
+  // fill inside official data (one missing 15-min point) does not end them.
+  let trailingStart = horizon.length;
+  while (trailingStart > 0 && horizon[trailingStart - 1].isPredicted) trailingStart--;
+  const predictedFrom = trailingStart < horizon.length ? new Date(horizon[trailingStart].startMs) : null;
+  // Predictions excluded: the search (not the horizon stats) uses official slots only;
+  // a skipped fill is a hole that findCheapestSlotWindow never spans
+  const searchSlots = excludePredicted
+    ? horizon.slice(0, trailingStart).filter((s) => !s.isPredicted)
+    : horizon;
   const { limit: readyByLimit, rolledOver: readyByRolledOver } = resolveReadyByLimit(
     readyBy,
     now,
@@ -352,6 +368,7 @@ export function computeRollingWindow(
     readyByLimit,
     readyByRolledOver,
     startingNowEnd: null,
+    predictedFrom,
   };
   if (horizon.length === 0) return empty;
 
@@ -383,7 +400,7 @@ export function computeRollingWindow(
   result.startingNowPrice = nowCount > 0 ? nowSum / nowCount : null;
 
   let best = findCheapestSlotWindow(
-    horizon,
+    searchSlots,
     slotCount,
     nowFloorMs,
     readyByLimit ? readyByLimit.getTime() : null
@@ -391,7 +408,7 @@ export function computeRollingWindow(
   // Nothing fits before the deadline (e.g. 00:16, 8 h, ready by 07:00): still recommend
   // the cheapest full-length window rather than nothing — the UI flags that it finishes late.
   if (best === null && readyByLimit !== null) {
-    best = findCheapestSlotWindow(horizon, slotCount, nowFloorMs, null);
+    best = findCheapestSlotWindow(searchSlots, slotCount, nowFloorMs, null);
     result.bestIgnoresDeadline = best !== null;
   }
   result.best = best;

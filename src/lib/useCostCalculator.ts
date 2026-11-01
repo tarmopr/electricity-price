@@ -72,6 +72,7 @@ export function useCostCalculator(includeVat: boolean) {
     const [storedReadyBy, setCostReadyBy] = usePersistedState<string | null>('costReadyBy', DEFAULT_PRESET.readyBy);
     const [costActivePreset, setCostActivePreset] = usePersistedState<string>('costPreset', DEFAULT_PRESET.label);
     const [costCalcOpen, setCostCalcOpen] = usePersistedState<boolean>('costCalcOpen', false);
+    const [costAllowPredicted, setCostAllowPredicted] = usePersistedState<boolean>('costAllowPredicted', true);
 
     // Guard against malformed persisted values. The old inputs had no upper bound,
     // so a stored value can exceed the new field limits.
@@ -185,8 +186,9 @@ export function useCostCalculator(includeVat: boolean) {
             readyBy: costReadyBy,
             // Exclusive end: predictions must not expand past the end of tomorrow
             horizonEndMs: getEndOfTomorrowTallinn(now).getTime() + 1,
+            excludePredicted: !costAllowPredicted,
         });
-    }, [points, nowMs, costDurationHours, costReadyBy]);
+    }, [points, nowMs, costDurationHours, costReadyBy, costAllowPredicted]);
 
     return {
         costConsumptionKwh, setCostConsumptionKwh,
@@ -194,6 +196,7 @@ export function useCostCalculator(includeVat: boolean) {
         costReadyBy, setCostReadyBy,
         costActivePreset, setCostActivePreset,
         costCalcOpen, setCostCalcOpen,
+        costAllowPredicted, setCostAllowPredicted,
         /** Recommended window — may finish after the ready-by time, see bestIgnoresDeadline */
         cheapestWindow: rolling?.best ?? null,
         bestIgnoresDeadline: rolling?.bestIgnoresDeadline ?? false,
@@ -203,6 +206,8 @@ export function useCostCalculator(includeVat: boolean) {
         isPredicted: rolling?.isPredicted ?? false,
         readyByLimitMs: rolling?.readyByLimit?.getTime() ?? null,
         startingNowEndMs: rolling?.startingNowEnd?.getTime() ?? null,
+        /** Where official prices end (start of the trailing predicted slots), or null */
+        predictedFromMs: rolling?.predictedFrom?.getTime() ?? null,
         costNowMs: nowMs,
         costLoading: loading,
         costError: error,
