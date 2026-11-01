@@ -97,7 +97,7 @@ export function useCostCalculator(includeVat: boolean) {
         let currentSlot: number | null = null;
         // When the last successful load finished (throttles on-visible refetches)
         let lastSuccessMs: number | null = null;
-        // True while the latest request is pending (on-visible must not stack another fetch)
+        // True while the latest request is pending (on-visible / online must not stack another fetch)
         let inFlight = false;
 
         /** Advance "now" to the slot of `ms`; never backwards, no-op within the same slot. */
@@ -146,7 +146,8 @@ export function useCostCalculator(includeVat: boolean) {
             load();
         }
 
-        // Retry as soon as the network returns instead of waiting for the next interval
+        // Refetch as soon as the network returns (recovers a failed load without waiting
+        // for the next interval; also runs after successful loads, e.g. on network handoffs)
         function handleOnline() {
             if (!inFlight) load();
         }

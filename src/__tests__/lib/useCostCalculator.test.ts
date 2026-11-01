@@ -527,4 +527,14 @@ describe("useCostCalculator", () => {
     expect(result.current.cheapestWindow).toBeNull();
     expect(result.current.costNoData).toBe(false);
   });
+
+  it("an online event does not start a second fetch while one is pending", async () => {
+    getPricesWithPrediction.mockReturnValueOnce(new Promise<ElectricityPrice[]>(() => {}));
+    renderHook(() => useCostCalculator(false));
+    await waitFor(() => expect(getPricesWithPrediction).toHaveBeenCalledTimes(1));
+    act(() => {
+      window.dispatchEvent(new Event("online"));
+    });
+    expect(getPricesWithPrediction).toHaveBeenCalledTimes(1);
+  });
 });

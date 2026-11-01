@@ -366,6 +366,40 @@ describe("Dashboard", () => {
         expect(screen.queryByText("No price data available for estimation.")).not.toBeInTheDocument();
     });
 
+    it("passes prices, the deadline fallback and a refresh error to the open calculator", () => {
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({
+                costCalcOpen: true,
+                cheapestWindow,
+                bestIgnoresDeadline: true,
+                readyByLimitMs: new Date("2024-01-02T05:00:00.000Z").getTime(),
+                startingNowPrice: 10,
+                horizonAvgPrice: 8,
+                horizonMaxPrice: 20,
+                costError: "boom",
+            }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        const { container } = render(<Dashboard />);
+        const calc = container.querySelector("#cost-calculator") as HTMLElement;
+        // Header summary and the amber warning both name the late finish
+        expect(within(calc).getAllByText(/Finishes after/).length).toBeGreaterThan(0);
+        expect(
+            within(calc).getAllByRole("status").some((el) => /Couldn't refresh prices/.test(el.textContent ?? ""))
+        ).toBe(true);
+        expect(within(calc).getByText("Starting Now")).toBeInTheDocument();
+        expect(within(calc).getByText("Peak")).toBeInTheDocument();
+    });
+
+    it("passes a first-load error to the open calculator", () => {
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({ costCalcOpen: true, costError: "boom" }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        const { container } = render(<Dashboard />);
+        const calc = container.querySelector("#cost-calculator") as HTMLElement;
+        expect(within(calc).getByText(/Couldn't load prices/)).toBeInTheDocument();
+        expect(within(calc).queryByText("No price data available for estimation.")).not.toBeInTheDocument();
+    });
+
     it("highlights a deadline-ignoring fallback window on the chart and flags it on the card", () => {
         useCostCalculator.mockReturnValue(
             makeCostCalc({

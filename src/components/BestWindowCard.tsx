@@ -57,7 +57,7 @@ function BestWindowCard({
     nowMs,
     onOpen,
 }: BestWindowCardProps) {
-    // nowMs is null until the hook's first slot tick; the window-start fallback is defensive
+    // nowMs is set once the first load completes; the window-start fallback is defensive
     // (the hook never yields a window without nowMs)
     const now = new Date(nowMs ?? (window ? new Date(window.startTimestamp).getTime() : 0));
     const deadlineLabel =
@@ -71,8 +71,9 @@ function BestWindowCard({
             : null;
 
     let body: React.ReactNode;
-    // Announced from a live region outside the button: content inside a button is
-    // flattened into its accessible name and not announced on change.
+    // Live regions sit outside the button: content inside a button is flattened into
+    // its accessible name. The alert is announced on insertion; the status region is
+    // mounted with its text, which some screen readers may not announce.
     let liveAlert: string | null = null;
     let liveStatus: string | null = null;
     // While a retry is in flight keep showing the error (no error → skeleton → error flicker)

@@ -458,4 +458,19 @@ describe("CostCalculator loading and state sync", () => {
     expect(setReadyBy).toHaveBeenCalledWith(null);
     expect(setActivePreset).toHaveBeenCalledWith("Custom");
   });
+
+  it("keeps the load error (not 'Loading prices…') while a retry is in flight", () => {
+    render(<CostCalculator {...base} error="boom" loading />);
+    expect(screen.getByText(/Couldn't load prices/)).toBeInTheDocument();
+    expect(screen.queryByText(/Loading prices/)).not.toBeInTheDocument();
+  });
+
+  it("switches the preset to Custom when the duration is edited", () => {
+    const setActivePreset = vi.fn();
+    render(<CostCalculator {...base} setActivePreset={setActivePreset} />);
+    const input = screen.getByRole("textbox", { name: "Duration in hours" });
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "3" } });
+    expect(setActivePreset).toHaveBeenCalledWith("Custom");
+  });
 });

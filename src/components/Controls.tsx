@@ -347,7 +347,8 @@ export default function Controls({
                                 <NumericField
                                     value={alertConfig.threshold}
                                     onCommit={(threshold) => setAlertConfig({ ...alertConfig, threshold })}
-                                    // Spot prices go negative; -50 ¢/kWh is the ex-VAT Nord Pool floor (-500 €/MWh), close enough with VAT
+                                    // Spot prices go negative; -50 ¢/kWh is the ex-VAT Nord Pool floor (-500 €/MWh). With VAT
+                                    // prices can reach about -61 ¢; thresholds below -50 are deliberately not offered.
                                     min={-50}
                                     step={0.5}
                                     label="Alert threshold in cents per kWh"

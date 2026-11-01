@@ -42,6 +42,11 @@ const INPUT_BASE =
 const RING_EMERALD = 'focus:ring-emerald-500/50';
 const RING_YELLOW = 'focus:ring-yellow-500/50';
 
+/** Empty or just a sign / decimal separator: the user is still typing, not wrong. */
+function isIncompleteDraft(draft: string): boolean {
+    return /^[-+]?[.,]?$/.test(draft.trim());
+}
+
 /**
  * Mobile-friendly numeric input with − / + steppers.
  *
@@ -49,10 +54,6 @@ const RING_YELLOW = 'focus:ring-yellow-500/50';
  * the value being coerced; valid drafts are committed live, and the draft is
  * normalized to the committed value on blur.
  */
-/** Empty or just a sign / decimal separator: the user is still typing, not wrong. */
-function isIncompleteDraft(draft: string): boolean {
-    return /^[-+]?[.,]?$/.test(draft.trim());
-}
 
 export default function NumericField({
     value,
