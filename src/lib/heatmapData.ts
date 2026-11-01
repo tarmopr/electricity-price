@@ -8,6 +8,7 @@
 import { ElectricityPrice } from "@/lib/api";
 import { applyVat } from "@/lib/price";
 import { Period } from "@/lib/types";
+import { addDaysToDateStr, getTallinnDateStr } from "@/lib/timezone";
 import {
   startOfWeek,
   endOfWeek,
@@ -340,7 +341,7 @@ export interface HeatmapWeekRange {
 export function getHeatmapWeekRange(
   period: Period,
   periodStart: Date,
-  _periodEnd: Date
+  periodEnd: Date
 ): HeatmapWeekRange | null {
   const SINGLE_DAY_TIMEFRAMES: Period[] = [
     "yesterday",
@@ -360,6 +361,27 @@ export function getHeatmapWeekRange(
       weekStart: startOfDay(weekStart),
       weekEnd: endOfDay(weekEnd),
       highlightedDates: [selectedDate],
+    };
+  }
+
+  if (period === "next_24h") {
+    // Week containing the start, extended if the 24h window spills into next week;
+    // highlight every date the window touches (today and usually tomorrow).
+    const weekStart = startOfWeek(periodStart, { weekStartsOn: 1 });
+    const weekEndOfStart = endOfWeek(periodStart, { weekStartsOn: 1 });
+    const weekEnd = periodEnd > weekEndOfStart ? endOfDay(periodEnd) : weekEndOfStart;
+
+    // Rows are keyed by Tallinn date, so walk Tallinn dates (not browser-local days)
+    const highlightedDates: string[] = [];
+    const lastDate = getTallinnDateStr(periodEnd);
+    for (let d = getTallinnDateStr(periodStart); d <= lastDate; d = addDaysToDateStr(d, 1)) {
+      highlightedDates.push(d);
+    }
+
+    return {
+      weekStart: startOfDay(weekStart),
+      weekEnd: endOfDay(weekEnd),
+      highlightedDates,
     };
   }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
     calculateStatistics,
 } from '@/lib/api';
@@ -20,6 +20,7 @@ import Controls from './Controls';
 import DashboardSkeleton from './DashboardSkeleton';
 import PriceAlertBanner from './PriceAlertBanner';
 import CostCalculator from './CostCalculator';
+import BestWindowCard from '@/components/BestWindowCard';
 import PriceHeatmap from './PriceHeatmap';
 import ShareButton from './ShareButton';
 import { decodeParamsToState } from '@/lib/shareState';
@@ -103,16 +104,54 @@ export default function Dashboard() {
     // Calculate statistics only once when prices or VAT settings change
     const stats = calculateStatistics(prices, includeVat);
 
-    // Cost calculator state and derived values
+    // Cost calculator state + rolling-horizon cheapest window (independent of chart period)
     const {
         costConsumptionKwh, setCostConsumptionKwh,
         costDurationHours, setCostDurationHours,
-        costUntilHour, setCostUntilHour,
+        costReadyBy, setCostReadyBy,
         costActivePreset, setCostActivePreset,
         costCalcOpen, setCostCalcOpen,
         cheapestWindow,
-        currentWindowAvgPrice,
-    } = useCostCalculator(prices, includeVat, period);
+        startingNowPrice,
+        horizonAvgPrice,
+        horizonMaxPrice,
+        isPredicted: cheapestIsPredicted,
+        costNowMs,
+        costLoading,
+        costError,
+        costNoData,
+        readyByLimitMs,
+        startingNowEndMs,
+        bestIgnoresDeadline,
+    } = useCostCalculator(includeVat);
+
+    // Best-window card tap: expand the calculator, then scroll it into view after it renders
+    const openCostCalculator = useCallback(() => {
+        setCostCalcOpen(true);
+        requestAnimationFrame(() => {
+            document.getElementById('cost-calculator')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+        });
+    }, [setCostCalcOpen]);
+
+    const bestWindowCard = (
+        <BestWindowCard
+            presetLabel={costActivePreset}
+            window={cheapestWindow}
+            consumptionKwh={costConsumptionKwh}
+            durationHours={costDurationHours}
+            startingNowPrice={startingNowPrice}
+            readyBy={costReadyBy}
+            readyByLimitMs={readyByLimitMs}
+            startingNowEndMs={startingNowEndMs}
+            ignoresDeadline={bestIgnoresDeadline}
+            isPredicted={cheapestIsPredicted}
+            loading={costLoading}
+            error={costError}
+            noData={costNoData}
+            nowMs={costNowMs}
+            onOpen={openCostCalculator}
+        />
+    );
 
     // Show info banner when tomorrow is selected but official prices aren't published yet
     const allPredicted = useMemo(() => {
@@ -150,9 +189,12 @@ export default function Dashboard() {
                 />
             )}
 
-            {/* Top Row: Current Price & Controls */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-1 border-b border-zinc-800 pb-4 lg:border-none lg:pb-0 h-full">
+            {/* Top Row: Current Price & Controls. The Best Window card is rendered in two DOM
+                positions so DOM (Tab) order matches visual order at each breakpoint (WCAG 2.4.3):
+                under the price on mobile, full-width under the top row from lg up. display:none
+                keeps the inactive copy out of the accessibility tree and Tab order. */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+                <div className="lg:col-span-1 h-full">
                     <CurrentPriceCard
                         currentPrice={currentPrice}
                         previousPrice={previousPrice}
@@ -160,6 +202,9 @@ export default function Dashboard() {
                         medianPrice={stats?.median}
                         includeVat={includeVat}
                     />
+                </div>
+                <div className="lg:hidden">
+                    {bestWindowCard}
                 </div>
                 <div className="lg:col-span-2 h-full">
                     <Controls
@@ -190,6 +235,9 @@ export default function Dashboard() {
                         alertConfig={alertConfig}
                         setAlertConfig={setAlertConfig}
                     />
+                </div>
+                <div className="hidden lg:block lg:col-span-3">
+                    {bestWindowCard}
                 </div>
             </div>
 
@@ -248,7 +296,7 @@ export default function Dashboard() {
                         showP90={showP90}
                         showP95={showP95}
                         stats={stats}
-                        cheapestWindow={costCalcOpen ? cheapestWindow : null}
+                        cheapestWindow={cheapestWindow}
                         avg7dPattern={avg7dPattern}
                         avg30dPattern={avg30dPattern}
                         showAvg7d={showAvg7d}
@@ -259,7 +307,7 @@ export default function Dashboard() {
                         data={heatmapPrices}
                         includeVat={includeVat}
                         highlightedDates={highlightedDates}
-                        cheapestWindow={costCalcOpen ? cheapestWindow : null}
+                        cheapestWindow={cheapestWindow}
                     />
                 )}
             </div>
@@ -268,18 +316,25 @@ export default function Dashboard() {
             <CostCalculator
                 isOpen={costCalcOpen}
                 setIsOpen={setCostCalcOpen}
-                currentPrice={currentWindowAvgPrice}
+                currentPrice={startingNowPrice}
                 cheapestWindow={cheapestWindow}
-                meanPrice={stats?.mean ?? null}
-                maxPrice={stats?.max ?? null}
+                meanPrice={horizonAvgPrice}
+                maxPrice={horizonMaxPrice}
                 consumptionKwh={costConsumptionKwh}
                 setConsumptionKwh={setCostConsumptionKwh}
                 durationHours={costDurationHours}
                 setDurationHours={setCostDurationHours}
-                untilHour={costUntilHour}
-                setUntilHour={setCostUntilHour}
+                readyBy={costReadyBy}
+                setReadyBy={setCostReadyBy}
                 activePreset={costActivePreset}
                 setActivePreset={setCostActivePreset}
+                isPredicted={cheapestIsPredicted}
+                nowMs={costNowMs}
+                readyByLimitMs={readyByLimitMs}
+                startingNowEndMs={startingNowEndMs}
+                bestIgnoresDeadline={bestIgnoresDeadline}
+                error={costError}
+                loading={costLoading}
             />
 
         </div>

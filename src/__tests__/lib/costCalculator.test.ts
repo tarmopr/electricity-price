@@ -3,6 +3,7 @@ import {
   calcCostEur,
   buildEstimates,
   PRESETS,
+  DEFAULT_PRESET,
 } from "@/lib/costCalculator";
 
 describe("costCalculator", () => {
@@ -32,6 +33,23 @@ describe("costCalculator", () => {
       expect(sauna).toBeDefined();
       expect(sauna!.kWh).toBe(15);
       expect(sauna!.durationHours).toBe(3);
+    });
+  });
+
+  describe("preset readyBy defaults", () => {
+    it("EV Charge and Dishwasher default to ready by 07:00", () => {
+      expect(PRESETS.find((p) => p.label === "EV Charge")!.readyBy).toBe("07:00");
+      expect(PRESETS.find((p) => p.label === "Dishwasher")!.readyBy).toBe("07:00");
+    });
+
+    it("Washing Machine, Dryer and Sauna have no deadline", () => {
+      for (const label of ["Washing Machine", "Dryer", "Sauna"]) {
+        expect(PRESETS.find((p) => p.label === label)!.readyBy).toBeNull();
+      }
+    });
+
+    it("default preset is EV Charge (40 kWh, 8 h, 07:00)", () => {
+      expect(DEFAULT_PRESET).toEqual({ label: "EV Charge", kWh: 40, durationHours: 8, readyBy: "07:00" });
     });
   });
 
@@ -67,9 +85,9 @@ describe("costCalculator", () => {
 
       const labels = result.map((e) => e.label);
       expect(labels).toContain("Starting Now");
-      expect(labels).toContain("Cheapest Window");
-      expect(labels).toContain("Day Average");
-      expect(labels).toContain("Peak Price");
+      expect(labels).toContain("Best Window");
+      expect(labels).toContain("Next-hours average");
+      expect(labels).toContain("Peak");
     });
 
     it("computes correct cost values", () => {
@@ -79,13 +97,13 @@ describe("costCalculator", () => {
       expect(current.costEur).toBe(4); // 10 * 40 / 100
       expect(current.priceCentsKwh).toBe(10);
 
-      const cheapest = result.find((e) => e.label === "Cheapest Window")!;
+      const cheapest = result.find((e) => e.label === "Best Window")!;
       expect(cheapest.costEur).toBe(1.2); // 3 * 40 / 100
 
-      const mean = result.find((e) => e.label === "Day Average")!;
+      const mean = result.find((e) => e.label === "Next-hours average")!;
       expect(mean.costEur).toBe(3.2); // 8 * 40 / 100
 
-      const peak = result.find((e) => e.label === "Peak Price")!;
+      const peak = result.find((e) => e.label === "Peak")!;
       expect(peak.costEur).toBe(8); // 20 * 40 / 100
     });
 
@@ -95,9 +113,9 @@ describe("costCalculator", () => {
 
       const labels = result.map((e) => e.label);
       expect(labels).not.toContain("Starting Now");
-      expect(labels).not.toContain("Day Average");
-      expect(labels).toContain("Cheapest Window");
-      expect(labels).toContain("Peak Price");
+      expect(labels).not.toContain("Next-hours average");
+      expect(labels).toContain("Best Window");
+      expect(labels).toContain("Peak");
     });
 
     it("returns empty array when all prices are null", () => {

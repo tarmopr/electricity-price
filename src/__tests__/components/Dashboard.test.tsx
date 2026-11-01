@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import Dashboard from "@/components/Dashboard";
 import type { ElectricityPrice } from "@/lib/api";
 
@@ -49,22 +49,7 @@ vi.mock("@/lib/shareState", () => ({
 }));
 
 vi.mock("@/lib/useCostCalculator", () => ({
-    useCostCalculator: vi.fn(() => ({
-        costConsumptionKwh: 40,
-        setCostConsumptionKwh: vi.fn(),
-        costDurationHours: 8,
-        setCostDurationHours: vi.fn(),
-        costUntilHour: 22,
-        setCostUntilHour: vi.fn(),
-        costActivePreset: 'EV Charge',
-        setCostActivePreset: vi.fn(),
-        costCalcOpen: false,
-        setCostCalcOpen: vi.fn(),
-        costChartData: [],
-        costScanFrom: new Date(),
-        cheapestWindow: null,
-        currentWindowAvgPrice: null,
-    })),
+    useCostCalculator: vi.fn(),
 }));
 
 vi.mock("recharts", () => ({
@@ -76,7 +61,7 @@ vi.mock("recharts", () => ({
     Tooltip: () => null,
     ReferenceDot: () => null,
     ReferenceLine: () => null,
-    ReferenceArea: () => null,
+    ReferenceArea: () => <g data-testid="cheapest-area" />,
     Line: () => null,
     ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -110,12 +95,63 @@ const samplePrices = [
     makePrice("2024-01-01T12:00:00.000Z", 90),
 ];
 
+const cheapestWindow = {
+    startTimestamp: "2024-01-01T10:00:00.000Z",
+    endTimestamp: "2024-01-01T12:00:00.000Z",
+    startHour: 12,
+    hours: 2,
+    averagePrice: 8.5,
+    startIndex: 0,
+    endIndex: 7,
+    isPredicted: false,
+};
+
+function makeCostCalc(overrides: Record<string, unknown> = {}) {
+    return {
+        costConsumptionKwh: 40,
+        setCostConsumptionKwh: vi.fn(),
+        costDurationHours: 8,
+        setCostDurationHours: vi.fn(),
+        costReadyBy: "07:00",
+        setCostReadyBy: vi.fn(),
+        costActivePreset: "EV Charge",
+        setCostActivePreset: vi.fn(),
+        costCalcOpen: false,
+        setCostCalcOpen: vi.fn(),
+        cheapestWindow: null,
+        startingNowPrice: null,
+        horizonAvgPrice: null,
+        horizonMaxPrice: null,
+        isPredicted: false,
+        costNowMs: new Date("2024-01-01T09:00:00.000Z").getTime(),
+        costLoading: false,
+        costError: null,
+        costNoData: false,
+        readyByLimitMs: null,
+        startingNowEndMs: null,
+        bestIgnoresDeadline: false,
+        ...overrides,
+    };
+}
+
+/**
+ * The Best Window card is rendered twice (mobile: `lg:hidden`, desktop: `hidden lg:block`);
+ * jsdom ignores CSS, so tests scope queries to one copy.
+ */
+function bestWindowCopies(container: HTMLElement) {
+    const mobile = container.querySelector<HTMLElement>(".lg\\:hidden")!;
+    const desktop = container.querySelector<HTMLElement>(".hidden.lg\\:block")!;
+    return { mobile, desktop };
+}
+
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 const { useDashboardPrices } = vi.mocked(await import("@/lib/useDashboardPrices"));
+const { useCostCalculator } = vi.mocked(await import("@/lib/useCostCalculator"));
 
 describe("Dashboard", () => {
     beforeEach(() => {
+        useCostCalculator.mockReturnValue(makeCostCalc() as unknown as ReturnType<typeof useCostCalculator>);
         useDashboardPrices.mockReturnValue({
             prices: samplePrices,
             currentPrice: makePrice("2024-01-01T12:00:00.000Z", 90),
@@ -210,5 +246,175 @@ describe("Dashboard", () => {
         // Chart button should no longer be active
         const chartButton = screen.getByRole("button", { name: /^chart$/i });
         expect(chartButton.getAttribute("aria-pressed")).toBe("false");
+    });
+
+    it("calls useCostCalculator with VAT only (independent of chart period)", () => {
+        render(<Dashboard />);
+        expect(useCostCalculator).toHaveBeenCalledWith(true);
+    });
+
+    it("renders the Best Window card", () => {
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({ cheapestWindow, startingNowPrice: 10 }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        const { container } = render(<Dashboard />);
+        const { mobile, desktop } = bestWindowCopies(container);
+        for (const copy of [mobile, desktop]) {
+            expect(within(copy).getByRole("button", { name: /best time ·\s*ev charge/i })).toBeInTheDocument();
+            // 8.5 ¢ × 40 kWh = €3.40
+            expect(within(copy).getByText("€3.40")).toBeInTheDocument();
+        }
+    });
+
+    it("renders one card copy per breakpoint so DOM order matches visual order (no order-* classes)", () => {
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({ cheapestWindow }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        const { container } = render(<Dashboard />);
+        const { mobile, desktop } = bestWindowCopies(container);
+        // Mobile copy: hidden from lg up; desktop copy: hidden below lg, full width
+        expect(mobile.className).toContain("lg:hidden");
+        expect(desktop.className).toContain("hidden lg:block lg:col-span-3");
+
+        // Grid order: price card → mobile card → controls → desktop card
+        const grid = mobile.parentElement!;
+        const children = Array.from(grid.children) as HTMLElement[];
+        expect(children.indexOf(mobile)).toBe(1);
+        expect(within(children[2]).getByRole("group", { name: /period selection/i })).toBeInTheDocument();
+        expect(children.indexOf(desktop)).toBe(3);
+        const orderTokens = Array.from(container.querySelectorAll<HTMLElement>("[class]"))
+            .flatMap((el) => Array.from(el.classList))
+            .filter((c) => /^([a-z]+:)?order-/.test(c));
+        expect(orderTokens).toEqual([]);
+        // No duplicate ids introduced by the two copies
+        const ids = Array.from(container.querySelectorAll("[id]")).map((el) => el.id);
+        expect(new Set(ids).size).toBe(ids.length);
+    });
+
+    it("tapping the Best Window card opens the cost calculator", () => {
+        const setCostCalcOpen = vi.fn();
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({ cheapestWindow, setCostCalcOpen }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        const scrollIntoView = vi.fn();
+        const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+            cb(0);
+            return 0;
+        });
+        const { container } = render(<Dashboard />);
+        document.getElementById("cost-calculator")!.scrollIntoView = scrollIntoView;
+        const { mobile, desktop } = bestWindowCopies(container);
+        // Works from both copies: opens the calculator and scrolls to it
+        fireEvent.click(within(mobile).getByRole("button", { name: /open cost calculator/i }));
+        fireEvent.click(within(desktop).getByRole("button", { name: /open cost calculator/i }));
+        expect(setCostCalcOpen).toHaveBeenCalledTimes(2);
+        expect(setCostCalcOpen).toHaveBeenCalledWith(true);
+        expect(scrollIntoView).toHaveBeenCalledTimes(2);
+        raf.mockRestore();
+    });
+
+    it("passes the cheapest window to the chart even when the calculator is closed", () => {
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({ cheapestWindow, costCalcOpen: false }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        render(<Dashboard />);
+        expect(screen.getByTestId("cheapest-area")).toBeInTheDocument();
+    });
+
+    it("does not render the chart highlight when the window is outside the chart range", () => {
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({
+                cheapestWindow: {
+                    ...cheapestWindow,
+                    startTimestamp: "2024-01-02T01:00:00.000Z",
+                    endTimestamp: "2024-01-02T03:00:00.000Z",
+                },
+            }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        render(<Dashboard />);
+        expect(screen.queryByTestId("cheapest-area")).not.toBeInTheDocument();
+    });
+
+    it("shows a load error on the Best Window card when the cost calculator fetch failed", () => {
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({ costError: "boom" }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        const { container } = render(<Dashboard />);
+        const { mobile, desktop } = bestWindowCopies(container);
+        expect(within(mobile).getByRole("alert")).toHaveTextContent("Couldn't load prices");
+        expect(within(desktop).getByRole("alert")).toHaveTextContent("Couldn't load prices");
+    });
+
+    it("passes no-data to the Best Window card (not 'no window fits')", () => {
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({ costNoData: true }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        const { container } = render(<Dashboard />);
+        const { mobile } = bestWindowCopies(container);
+        expect(within(mobile).getByText(/No price data available yet/)).toBeInTheDocument();
+        expect(within(mobile).queryByText(/window fits/)).not.toBeInTheDocument();
+    });
+
+    it("passes loading to the card and the open calculator", () => {
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({ costLoading: true, costCalcOpen: true }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        const { container } = render(<Dashboard />);
+        const { mobile } = bestWindowCopies(container);
+        expect(within(mobile).getByLabelText("Finding the best window")).toBeInTheDocument();
+        expect(screen.getByText("Loading prices…")).toBeInTheDocument();
+        expect(screen.queryByText("No price data available for estimation.")).not.toBeInTheDocument();
+    });
+
+    it("passes prices, the deadline fallback and a refresh error to the open calculator", () => {
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({
+                costCalcOpen: true,
+                cheapestWindow,
+                bestIgnoresDeadline: true,
+                readyByLimitMs: new Date("2024-01-02T05:00:00.000Z").getTime(),
+                startingNowPrice: 10,
+                horizonAvgPrice: 8,
+                horizonMaxPrice: 20,
+                costError: "boom",
+            }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        const { container } = render(<Dashboard />);
+        const calc = container.querySelector("#cost-calculator") as HTMLElement;
+        // Header summary and the amber warning both name the late finish
+        expect(within(calc).getAllByText(/Finishes after/).length).toBeGreaterThan(0);
+        expect(
+            within(calc).getAllByRole("status").some((el) => /Couldn't refresh prices/.test(el.textContent ?? ""))
+        ).toBe(true);
+        expect(within(calc).getByText("Starting Now")).toBeInTheDocument();
+        expect(within(calc).getByText("Peak")).toBeInTheDocument();
+    });
+
+    it("passes a first-load error to the open calculator", () => {
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({ costCalcOpen: true, costError: "boom" }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        const { container } = render(<Dashboard />);
+        const calc = container.querySelector("#cost-calculator") as HTMLElement;
+        expect(within(calc).getByText(/Couldn't load prices/)).toBeInTheDocument();
+        expect(within(calc).queryByText("No price data available for estimation.")).not.toBeInTheDocument();
+    });
+
+    it("highlights a deadline-ignoring fallback window on the chart and flags it on the card", () => {
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({
+                cheapestWindow,
+                bestIgnoresDeadline: true,
+                readyByLimitMs: new Date("2024-01-02T05:00:00.000Z").getTime(), // next 07:00 Tallinn
+            }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        const { container } = render(<Dashboard />);
+        expect(screen.getByTestId("cheapest-area")).toBeInTheDocument();
+        expect(within(bestWindowCopies(container).mobile).getByText(/Finishes after 07:00/)).toBeInTheDocument();
+    });
+
+    it("renders the Next 24h period pill", () => {
+        render(<Dashboard />);
+        expect(screen.getByRole("button", { name: /next 24h/i })).toBeInTheDocument();
     });
 });

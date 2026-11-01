@@ -60,7 +60,7 @@ describe("ShareButton", () => {
         fireEvent.click(screen.getByRole("button", { name: /share/i }));
 
         await waitFor(() => {
-            expect(screen.getByText(/copied/i)).toBeInTheDocument();
+            expect(screen.getByText("Copied!")).toBeInTheDocument();
         });
     });
 
@@ -79,5 +79,25 @@ describe("ShareButton", () => {
         });
         // Should NOT fall through to clipboard
         expect(copyToClipboard).not.toHaveBeenCalled();
+    });
+
+    it("has an accessible name and a 44px mobile touch target", () => {
+        render(<ShareButton state={defaultState} />);
+        const btn = screen.getByRole("button", { name: "Share current view" });
+        expect(btn.className).toContain("min-h-11");
+        expect(btn.className).toContain("sm:min-h-0");
+    });
+
+    it("announces the copied state", async () => {
+        render(<ShareButton state={defaultState} />);
+        fireEvent.click(screen.getByRole("button", { name: "Share current view" }));
+        await waitFor(() => {
+            expect(screen.getByRole("button", { name: "Link copied" })).toBeInTheDocument();
+        });
+        // Live region outside the button announces the result
+        const status = screen.getByRole("status");
+        expect(status).toHaveTextContent("Link copied");
+        expect(status.className).toContain("sr-only");
+        expect(status.closest("button")).toBeNull();
     });
 });

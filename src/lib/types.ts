@@ -84,5 +84,5 @@ export interface SyncStatus {
 }
 
 // --- Dashboard view types ---
-export type Period = 'yesterday' | 'today' | 'tomorrow' | 'this_week' | 'last_7_days' | 'next_7_days' | 'last_30_days' | 'custom';
+export type Period = 'yesterday' | 'today' | 'tomorrow' | 'next_24h' | 'this_week' | 'last_7_days' | 'next_7_days' | 'last_30_days' | 'custom';
 export type ViewMode = 'chart' | 'heatmap';

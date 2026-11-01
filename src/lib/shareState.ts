@@ -72,6 +72,7 @@ export function decodeParamsToState(
     "yesterday",
     "today",
     "tomorrow",
+    "next_24h",
     "this_week",
     "last_7_days",
     "next_7_days",

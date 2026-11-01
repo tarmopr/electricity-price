@@ -17,8 +17,10 @@ import {
 import { format, isSameHour } from 'date-fns';
 import { ElectricityPrice, HourlyAveragePattern } from '@/lib/api';
 import { applyVat } from '@/lib/price';
-import { CheapestWindow } from '@/lib/cheapestWindow';
+import { CheapestWindow, getVisibleWindowRange } from '@/lib/cheapestWindow';
 import { getTallinnHour } from '@/lib/timezone';
+import { formatDuration } from '@/lib/numericInput';
+import { computeWindowLabelLayout } from '@/lib/chartLabel';
 
 // ─── Sub-component interfaces ────────────────────────────────────────────────
 
@@ -177,6 +179,44 @@ const MinMaxLabel = ({ viewBox, value, type, isHovering = false }: MinMaxLabelPr
     );
 };
 
+interface WindowBandLabelProps {
+    /** Injected by Recharts: the ReferenceArea's pixel rect */
+    viewBox?: { x?: number; y?: number; width?: number; height?: number };
+    text: string;
+    /** Category indices of the band edges */
+    x1Index: number;
+    x2Index: number;
+    /** Index and text of the "Now" pill, if shown (shares the top strip) */
+    nowIndex: number | null;
+    nowText: string | null;
+}
+
+const WINDOW_LABEL_FONT_SIZE = 12;
+
+// Cheapest-window label: drawn at the top of the band only when it fits (inside the
+// band, clear of the Now pill); on narrow phones it would be cut off or overlap.
+const WindowBandLabel = ({ viewBox, text, x1Index, x2Index, nowIndex, nowText }: WindowBandLabelProps) => {
+    const layout = computeWindowLabelLayout({
+        viewBox, x1Index, x2Index, nowIndex, nowText, text, fontSize: WINDOW_LABEL_FONT_SIZE,
+    });
+    if (!layout || !layout.show) return null;
+
+    // Same placement as Recharts' position="insideTop" (top-anchored)
+    return (
+        <text
+            x={layout.x}
+            y={layout.y}
+            dy="0.71em"
+            textAnchor="middle"
+            fill="#4ade80"
+            fontSize={WINDOW_LABEL_FONT_SIZE}
+            fontWeight="bold"
+        >
+            {text}
+        </text>
+    );
+};
+
 // Custom Cursor for Tooltip (Glowing Band)
 const CustomCursor = (props: { points?: Array<{ x: number }>; height?: number }) => {
     const { points, height } = props;
@@ -245,33 +285,11 @@ export default function PriceChart({
     useEffect(() => setMounted(true), []);
 
     // Map cheapest window timestamps to actual chart data timestamps.
-    // The cheapest window is computed from hourly-aggregated data, but the chart
-    // may display higher-resolution data (e.g. 15-min intervals). Recharts'
-    // categorical X axis requires exact string matches for ReferenceArea x1/x2.
+    // The cheapest window is computed on a rolling horizon independent of the chart
+    // period (15-min slots), while the chart may show a different range/resolution.
+    // Recharts' categorical X axis requires exact string matches for ReferenceArea x1/x2.
     // This hook must be before early returns to satisfy Rules of Hooks.
-    const cheapestRef = useMemo(() => {
-        if (!cheapestWindow || !data || data.length === 0) return null;
-
-        const startMs = new Date(cheapestWindow.startTimestamp).getTime();
-        const endMs = new Date(cheapestWindow.endTimestamp).getTime();
-
-        let x1: string | null = null;
-        let x2: string | null = null;
-
-        for (const d of data) {
-            const t = new Date(d.timestamp).getTime();
-            if (!x1 && t >= startMs) x1 = d.timestamp;
-            if (!x2 && t >= endMs) x2 = d.timestamp;
-            if (x1 && x2) break;
-        }
-
-        // If end timestamp is past chart data, use the last data point
-        if (!x2 && data.length > 0) {
-            x2 = data[data.length - 1].timestamp;
-        }
-
-        return x1 && x2 ? { x1, x2 } : null;
-    }, [cheapestWindow, data]);
+    const cheapestRef = useMemo(() => getVisibleWindowRange(cheapestWindow, data), [cheapestWindow, data]);
 
     if (!mounted) {
         return <div className="w-full h-[300px] sm:h-[400px] mt-4 relative bg-zinc-900/10 animate-pulse rounded-xl flex items-center justify-center text-zinc-600 border border-zinc-800/50">Loading chart...</div>;
@@ -358,6 +376,10 @@ export default function PriceChart({
     const nowDisplayPrice = activeCurrentTimestamp
         ? chartData.find(d => d.timestamp === activeCurrentTimestamp)?.displayPrice ?? null
         : null;
+
+    const nowLabelText = nowDisplayPrice !== null ? `Now ${nowDisplayPrice} ¢` : 'Now';
+    // Timestamp → category index, for pixel math in the window label
+    const chartIndex = new Map(chartData.map((d, i) => [d.timestamp, i]));
 
     const gridOpacity = isHovering ? 0.1 : 0.4;
     const lineOpacity = isHovering ? 0.3 : 0.5;
@@ -467,13 +489,16 @@ export default function PriceChart({
                             fill="#86efac" // subtle green fill
                             fillOpacity={0.15}
                             strokeOpacity={0}
-                            label={{
-                                value: `Cheapest ${cheapestWindow.hours}h: ${cheapestWindow.averagePrice.toFixed(2)} ¢/kWh`,
-                                position: 'insideTop',
-                                fill: '#4ade80',
-                                fontSize: 12,
-                                fontWeight: 'bold'
-                            }}
+                            // Window stats describe the whole window — hide the label when only part is visible
+                            label={cheapestRef.clipped ? undefined : (
+                                <WindowBandLabel
+                                    text={`Cheapest ${formatDuration(cheapestWindow.hours)}: ${cheapestWindow.averagePrice.toFixed(2)} ¢/kWh`}
+                                    x1Index={chartIndex.get(cheapestRef.x1) ?? 0}
+                                    x2Index={chartIndex.get(cheapestRef.x2) ?? 0}
+                                    nowIndex={showNow && currentTimestamp ? chartIndex.get(currentTimestamp) ?? null : null}
+                                    nowText={nowLabelText}
+                                />
+                            )}
                         />
                     )}
 
@@ -485,7 +510,7 @@ export default function PriceChart({
                             strokeDasharray="3 3"
                             strokeOpacity={lineOpacity}
                             style={{ transition: 'opacity 0.3s' }}
-                            label={<ChartReferenceLabel orientation="vertical" value={nowDisplayPrice !== null ? `Now ${nowDisplayPrice} ¢` : 'Now'} fill="#38bdf8" isHovering={isHovering} />}
+                            label={<ChartReferenceLabel orientation="vertical" value={nowLabelText} fill="#38bdf8" isHovering={isHovering} />}
                         />
                     )}
 

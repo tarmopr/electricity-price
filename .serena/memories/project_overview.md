@@ -28,7 +28,8 @@ src/
     api/
       prices/       # Price data endpoints (proxy, current, daily, hourly, weekly, monthly, weekday-pattern)
       sync/         # Elering → D1 sync endpoint
-  components/       # React components (Dashboard, PriceChart, Controls, etc.)
+  components/       # React components (Dashboard, PriceChart, PriceHeatmap, Controls, BestWindowCard, CostCalculator, etc.)
+    ui/             # Shared inputs (NumericField with steppers)
   lib/              # Shared utilities, hooks, types
     api.ts          # Client-side API functions
     db.ts           # D1 database operations
@@ -39,7 +40,14 @@ src/
     priceAlerts.ts  # Price alert threshold logic
     heatmapData.ts  # Heatmap data transformations
     shareState.ts   # URL share/export utilities
-    cheapestWindow.ts # Cheapest window calculation
+    cheapestWindow.ts # Rolling-horizon cheapest window search (15-min slots, ready-by deadline)
+    timezone.ts     # DST-safe Europe/Tallinn helpers (ready-by occurrence, end of tomorrow, labels)
+    numericInput.ts # Draft-string numeric parsing (comma decimals, clamping, 15-min snapping)
+    chartLabel.ts   # Chart window-label layout helpers
+    costCalculator.ts # Presets (with readyBy), limits, cost estimates
+    prediction.ts   # Predicted prices (same hour yesterday + 7 days ago)
+    useCostCalculator.ts # Cost calculator state + own rolling-horizon fetch
+    useDashboardPrices.ts # Dashboard price fetching per period (incl. next_24h)
     usePersistedState.ts # localStorage-backed state hook
   __tests__/        # Tests mirroring source structure
 ```

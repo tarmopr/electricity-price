@@ -11,7 +11,9 @@ description: >
 # Codebase Review Skill
 
 You are performing a comprehensive review of the electricity price dashboard codebase.
+Read `AGENTS.md` first: it holds the domain rules and conventions this review checks against.
 Work through each category systematically. Use symbolic tools to explore efficiently — do NOT read every file in full.
+For reviewing a single diff or PR instead, use the `domain-reviewer` agent (or verify-and-fix), not this skill.
 
 ## Review Categories
 
@@ -24,8 +26,9 @@ Work through each category systematically. Use symbolic tools to explore efficie
 ### 2. Domain Correctness
 - Price conversion: Elering returns EUR/MWh. Display must be cents/kWh (divide by 10). Verify every conversion site.
 - VAT (22%): applied correctly and toggleable. No double-application or missed spots.
-- Timezone handling: UTC in DB, `Europe/Tallinn` in UI. Check every Date operation for correctness.
+- Timezone handling: UTC in DB, `Europe/Tallinn` in UI via `@/lib/timezone`. Flag date-fns `startOfDay`/`startOfWeek`/`format`, `getHours()`/`getDate()` and `new Date(y, m, d)` in Tallinn-facing logic (browser/server zone; CI runs in UTC). Check DST days.
 - DB aggregation: above hourly level must use `hourly_averages` table, NOT raw prices.
+- Predicted prices: `isPredicted` respected in statistics, labels and the cheapest-window search (`computeRollingWindow`).
 
 ### 3. Code Quality
 - TypeScript strictness: any usage of `any`, missing return types, loose generics.
@@ -48,12 +51,13 @@ Work through each category systematically. Use symbolic tools to explore efficie
 
 ### 6. Testing
 - Coverage gaps: which `lib/` or component files lack corresponding tests?
-- Are edge cases covered (empty data, API errors, timezone boundaries, DST transitions)?
+- Are edge cases covered (empty data, API errors, timezone boundaries, DST transitions)? Do timezone tests pass under `TZ=UTC npx vitest run`?
 - Are mocks realistic (especially D1 and Elering API)?
 
 ### 7. Styling & UX
 - Consistent glassmorphism aesthetic (`bg-zinc-900/50`, `backdrop-blur`, etc.).
-- Responsive design — does it work on mobile?
+- Responsive design — does it work on mobile (390px)? 44px touch targets, 16px inputs, hover styles only on hover-capable devices.
+- No dynamic Tailwind class construction (`bg-${color}-500`).
 - Accessibility: aria labels, keyboard navigation, color contrast.
 - Shared styles from `lib/styles.ts` used consistently (no one-off duplicates).
 

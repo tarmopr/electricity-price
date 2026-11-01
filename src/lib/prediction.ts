@@ -1,5 +1,5 @@
 import { eurMwhToCentsKwh } from "@/lib/price";
-import { getTallinnHour, getTallinnDateStr, getTallinnWeekday } from "@/lib/timezone";
+import { getTallinnHour, getTallinnDateStr, getTallinnWeekday, floorToHour } from "@/lib/timezone";
 import type { ElectricityPrice } from "@/lib/api";
 
 /**
@@ -12,9 +12,10 @@ function generatePredictedPrices(historicalData: ElectricityPrice[], targetEndDa
     const lastActualDataPoint = historicalData[historicalData.length - 1];
     const predictedPrices: ElectricityPrice[] = [];
 
-    // Start predicting from the hour after the last actual data point.
+    // Start predicting from the hour after the last actual data point, aligned to the
+    // hour boundary so 15-minute actuals (e.g. last at :45) leave no gap or offset.
     // Use UTC millisecond arithmetic to avoid DST-related hour skips/duplicates.
-    const currentPredictionDate = new Date(lastActualDataPoint.date.getTime() + 3_600_000);
+    const currentPredictionDate = new Date(floorToHour(lastActualDataPoint.date).getTime() + 3_600_000);
 
     while (currentPredictionDate < targetEndDate) {
         // Find same hour yesterday — subtract exactly 24 UTC hours so that

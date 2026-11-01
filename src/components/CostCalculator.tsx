@@ -1,37 +1,69 @@
 "use client";
 
-import { ChevronDown, ChevronUp, Calculator, Zap } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, ChevronUp, Calculator, Zap, X, AlertTriangle } from "lucide-react";
 import {
   PRESETS,
+  DURATION_LIMITS,
+  KWH_LIMITS,
   buildEstimates,
   CostEstimate,
+  ESTIMATE_LABELS,
+  MIN_SAVINGS_EUR,
 } from "@/lib/costCalculator";
 import { CheapestWindow } from "@/lib/cheapestWindow";
-import { format } from "date-fns";
+import { formatDuration, formatNumber, snapDurationHours } from "@/lib/numericInput";
+import { formatTallinnDeadline, formatTallinnRange, isValidHHMM } from "@/lib/timezone";
 import { PILL_BASE, pillClass } from "@/lib/styles";
+import NumericField from "@/components/ui/NumericField";
 
 interface CostCalculatorProps {
   isOpen: boolean;
   setIsOpen: (val: boolean) => void;
+  /** Average price (¢/kWh) of a same-length window starting now */
   currentPrice: number | null;
   cheapestWindow: CheapestWindow | null;
+  /** Mean price across the rolling horizon */
   meanPrice: number | null;
+  /** Max price across the rolling horizon */
   maxPrice: number | null;
   consumptionKwh: number;
   setConsumptionKwh: (val: number) => void;
   durationHours: number;
   setDurationHours: (val: number) => void;
-  untilHour: number | null;
-  setUntilHour: (val: number | null) => void;
+  readyBy: string | null;
+  setReadyBy: (val: string | null) => void;
   activePreset: string;
   setActivePreset: (val: string) => void;
+  /** True if any slot of the best window is a prediction */
+  isPredicted?: boolean;
+  /** Reference "now" for day labels (Today / Tomorrow) */
+  nowMs?: number | null;
+  /** Resolved ready-by deadline (may be the following day's occurrence) */
+  readyByLimitMs?: number | null;
+  /** Price fetch error, if the latest load failed */
+  error?: string | null;
+  /** True while prices are being (re)loaded */
+  loading?: boolean;
+  /** When a same-length window starting now would finish (for the "starting now finishes …" line in the finishes-after-deadline warning) */
+  startingNowEndMs?: number | null;
+  /** True when `cheapestWindow` finishes after the ready-by time because nothing fits before it */
+  bestIgnoresDeadline?: boolean;
 }
 
-/** Format cheapest window time range as "HH:mm–HH:mm" */
-function formatWindowRange(w: CheapestWindow): string {
-  const start = format(new Date(w.startTimestamp), "HH:mm");
-  const end = format(new Date(w.endTimestamp), "HH:mm");
-  return `${start}–${end}`;
+const LABEL_CLASS =
+  "text-xs text-zinc-500 uppercase tracking-wider font-semibold whitespace-nowrap";
+
+const TIME_INPUT =
+  "bg-zinc-800/50 border border-zinc-700/80 text-zinc-200 text-base sm:text-sm rounded-lg px-3 h-11 sm:h-8 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 [color-scheme:dark]";
+
+const SECONDARY_BUTTON =
+  "flex items-center gap-1 px-3 h-11 sm:h-8 rounded-lg border text-sm transition-all";
+
+/** Format cheapest window time range with Tallinn day context */
+function formatWindowRange(w: CheapestWindow, nowMs: number | null | undefined): string {
+  const start = new Date(w.startTimestamp);
+  return formatTallinnRange(start, new Date(w.endTimestamp), new Date(nowMs ?? start.getTime()));
 }
 
 export default function CostCalculator({
@@ -45,13 +77,35 @@ export default function CostCalculator({
   setConsumptionKwh,
   durationHours,
   setDurationHours,
-  untilHour,
-  setUntilHour,
+  readyBy,
+  setReadyBy,
   activePreset,
   setActivePreset,
+  isPredicted = false,
+  nowMs,
+  readyByLimitMs = null,
+  error = null,
+  loading = false,
+  startingNowEndMs = null,
+  bestIgnoresDeadline = false,
 }: CostCalculatorProps) {
+  const [invalidFields, setInvalidFields] = useState<Record<string, boolean>>({});
+  const [showMore, setShowMore] = useState(false);
+  const hasInvalidDraft = Object.values(invalidFields).some(Boolean);
+
   const cheapestWindowPrice = cheapestWindow?.averagePrice ?? null;
-  const windowRange = cheapestWindow ? formatWindowRange(cheapestWindow) : null;
+  const windowRange = cheapestWindow ? formatWindowRange(cheapestWindow, nowMs) : null;
+  // Show what was actually searched (15-minute slots), not the raw typed value
+  const searchedHours = cheapestWindow?.hours ?? snapDurationHours(durationHours);
+  const deadlineLabel =
+    readyBy && readyByLimitMs !== null && nowMs != null
+      ? formatTallinnDeadline(new Date(readyByLimitMs), new Date(nowMs))
+      : readyBy;
+  const finishLabel =
+    deadlineLabel && startingNowEndMs !== null && nowMs != null
+      ? formatTallinnDeadline(new Date(startingNowEndMs), new Date(nowMs))
+      : null;
+  const showDeadlineWarning = bestIgnoresDeadline && cheapestWindow !== null && !!deadlineLabel;
 
   const estimates = buildEstimates(
     consumptionKwh,
@@ -72,71 +126,97 @@ export default function CostCalculator({
       : null;
 
   // Calculate savings between current and cheapest
-  const currentEstimate = estimates.find((e) => e.label === "Starting Now");
-  const cheapestEstimate = estimates.find((e) => e.label === "Cheapest Window");
+  const currentEstimate = estimates.find((e) => e.label === ESTIMATE_LABELS.now);
+  const cheapestEstimate = estimates.find((e) => e.label === ESTIMATE_LABELS.best);
   const savings =
     currentEstimate && cheapestEstimate
       ? currentEstimate.costEur - cheapestEstimate.costEur
       : null;
 
-  function selectPreset(label: string, kWh: number, duration: number) {
-    setActivePreset(label);
-    setConsumptionKwh(kWh);
-    setDurationHours(duration);
+  const hasSecondary = estimates.some(
+    (e) => e.label === ESTIMATE_LABELS.average || e.label === ESTIMATE_LABELS.peak
+  );
+
+  function markValidity(field: string) {
+    return (valid: boolean) =>
+      setInvalidFields((prev) => (prev[field] === !valid ? prev : { ...prev, [field]: !valid }));
   }
 
-  function handleCustomKwhInput(value: string) {
-    const num = parseFloat(value);
+  function selectPreset(preset: (typeof PRESETS)[number]) {
+    setActivePreset(preset.label);
+    setConsumptionKwh(preset.kWh);
+    setDurationHours(preset.durationHours);
+    setReadyBy(preset.readyBy);
+  }
+
+  function handleKwhCommit(value: number) {
     setActivePreset("Custom");
-    setConsumptionKwh(isNaN(num) || num < 0 ? 0 : num);
+    setConsumptionKwh(value);
   }
 
-  function handleDurationInput(value: string) {
-    const num = parseInt(value, 10);
+  function handleDurationCommit(value: number) {
     setActivePreset("Custom");
-    setDurationHours(isNaN(num) || num < 1 ? 1 : Math.min(num, 24));
+    setDurationHours(value);
   }
 
-  function handleUntilInput(value: string) {
-    if (value === "" || value === undefined) {
-      setUntilHour(null);
-      return;
-    }
-    const num = parseInt(value, 10);
-    if (isNaN(num)) {
-      setUntilHour(null);
-    } else {
-      setUntilHour(Math.max(0, Math.min(23, num)));
-    }
+  function handleReadyByInput(value: string) {
+    // Native time inputs report "" while partially filled — keep the last valid value
+    if (!isValidHHMM(value)) return;
+    // Same as kWh/duration edits: the values no longer match the named preset
+    setActivePreset("Custom");
+    setReadyBy(value);
+  }
+
+  function handleClearReadyBy() {
+    setActivePreset("Custom");
+    setReadyBy(null);
   }
 
   return (
-    <div className="bg-zinc-900/40 rounded-2xl border border-zinc-800/50 hover:border-zinc-700/80 backdrop-blur-2xl transition-all duration-500 hover:shadow-[0_8px_30px_rgba(0,0,0,0.4)] overflow-hidden">
+    <div
+      id="cost-calculator"
+      className="scroll-mt-4 bg-zinc-900/40 rounded-2xl border border-zinc-800/50 hover:border-zinc-700/80 backdrop-blur-2xl transition-all duration-500 hover:shadow-[0_8px_30px_rgba(0,0,0,0.4)] overflow-hidden"
+    >
       {/* Header / Toggle */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         aria-expanded={isOpen}
         aria-label="Toggle cost calculator"
-        className="w-full flex items-center justify-between p-4 md:p-5 text-zinc-300 hover:text-zinc-100 transition-colors"
+        className="w-full flex items-center justify-between gap-2 p-4 md:p-5 text-zinc-300 hover:text-zinc-100 transition-colors"
       >
-        <div className="flex items-center space-x-2.5">
-          <Calculator className="w-4 h-4 text-emerald-400" />
-          <span className="text-sm font-semibold tracking-wide uppercase">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <Calculator className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span className="text-sm font-semibold tracking-wide uppercase whitespace-nowrap">
             Cost Calculator
           </span>
           {!isOpen && consumptionKwh > 0 && currentEstimate && (
-            <span className="text-xs text-zinc-500 ml-2 hidden sm:inline">
-              {consumptionKwh} kWh · {durationHours}h ≈ €{currentEstimate.costEur.toFixed(2)} now
-              {windowRange && (
-                <span className="text-emerald-400/70"> · cheapest {windowRange}</span>
-              )}
-            </span>
+            <>
+              {/* Compact summary on mobile */}
+              <span className="text-xs text-zinc-500 truncate sm:hidden">
+                €{currentEstimate.costEur.toFixed(2)} now
+                {cheapestEstimate && (
+                  <span className="text-emerald-400/80"> · €{cheapestEstimate.costEur.toFixed(2)} best</span>
+                )}
+                {showDeadlineWarning && (
+                  <span className="text-amber-400"> · after {deadlineLabel}</span>
+                )}
+              </span>
+              <span className="text-xs text-zinc-500 ml-2 hidden sm:inline truncate">
+                {formatNumber(consumptionKwh)} kWh · {formatDuration(searchedHours)} ≈ €{currentEstimate.costEur.toFixed(2)} now
+                {windowRange && (
+                  <span className="text-emerald-400/70"> · best {windowRange}</span>
+                )}
+                {showDeadlineWarning && (
+                  <span className="text-amber-400"> · after {deadlineLabel}</span>
+                )}
+              </span>
+            </>
           )}
         </div>
         {isOpen ? (
-          <ChevronUp className="w-5 h-5 text-zinc-500" />
+          <ChevronUp className="w-5 h-5 text-zinc-500 shrink-0" />
         ) : (
-          <ChevronDown className="w-5 h-5 text-zinc-500" />
+          <ChevronDown className="w-5 h-5 text-zinc-500 shrink-0" />
         )}
       </button>
 
@@ -152,101 +232,167 @@ export default function CostCalculator({
               {PRESETS.map((p) => (
                 <button
                   key={p.label}
-                  onClick={() => selectPreset(p.label, p.kWh, p.durationHours)}
+                  onClick={() => selectPreset(p)}
                   aria-pressed={activePreset === p.label}
                   className={`${PILL_BASE} ${pillClass(activePreset === p.label)}`}
                 >
                   {p.label}
                   <span className="ml-1.5 text-zinc-500 text-xs">
-                    {p.kWh} kWh · {p.durationHours}h
+                    {p.kWh} kWh · {formatDuration(p.durationHours)}
                   </span>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Consumption, Duration & Until inputs */}
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="text-xs text-zinc-500 uppercase tracking-wider font-semibold whitespace-nowrap">
-              Consumption
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min="0"
-                step="0.5"
+          {/* Consumption, Duration & Ready-by inputs */}
+          <div className="grid grid-cols-1 sm:flex sm:flex-wrap sm:items-start gap-4 sm:gap-6">
+            <div className="flex flex-col gap-1.5">
+              <span className={LABEL_CLASS}>Consumption</span>
+              <NumericField
                 value={consumptionKwh}
-                onChange={(e) => handleCustomKwhInput(e.target.value)}
-                aria-label="Consumption in kWh"
-                className="w-24 bg-zinc-800/50 border border-zinc-700/80 text-zinc-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 text-center"
+                onCommit={handleKwhCommit}
+                min={KWH_LIMITS.min}
+                max={KWH_LIMITS.max}
+                step={0.5}
+                label="Consumption in kWh"
+                unit="kWh"
+                onValidityChange={markValidity("kwh")}
               />
-              <span className="text-zinc-500 text-sm">kWh</span>
             </div>
-            <label className="text-xs text-zinc-500 uppercase tracking-wider font-semibold whitespace-nowrap ml-2">
-              Duration
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min="1"
-                max="24"
-                step="1"
+            <div className="flex flex-col gap-1.5">
+              <span className={LABEL_CLASS}>Duration</span>
+              <NumericField
                 value={durationHours}
-                onChange={(e) => handleDurationInput(e.target.value)}
-                aria-label="Duration in hours"
-                className="w-20 bg-zinc-800/50 border border-zinc-700/80 text-zinc-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 text-center"
+                onCommit={handleDurationCommit}
+                min={DURATION_LIMITS.min}
+                max={DURATION_LIMITS.max}
+                step={0.25}
+                snapStep={0.25}
+                label="Duration in hours"
+                unit="h"
+                onValidityChange={markValidity("duration")}
               />
-              <span className="text-zinc-500 text-sm">h</span>
             </div>
-            <label className="text-xs text-zinc-500 uppercase tracking-wider font-semibold whitespace-nowrap ml-2">
-              Until
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min="0"
-                max="23"
-                step="1"
-                value={untilHour ?? ""}
-                onChange={(e) => handleUntilInput(e.target.value)}
-                placeholder="—"
-                aria-label="Until hour"
-                className="w-20 bg-zinc-800/50 border border-zinc-700/80 text-zinc-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 text-center"
-              />
-              <span className="text-zinc-500 text-sm">
-                {untilHour !== null
-                  ? `${untilHour.toString().padStart(2, "0")}:00`
-                  : "No limit"}
-              </span>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="cost-ready-by" className={LABEL_CLASS}>
+                Ready by
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="cost-ready-by"
+                  type="time"
+                  step={900}
+                  value={readyBy ?? ""}
+                  onChange={(e) => handleReadyByInput(e.target.value)}
+                  className={`${TIME_INPUT} w-32`}
+                />
+                {readyBy !== null ? (
+                  <button
+                    type="button"
+                    onClick={handleClearReadyBy}
+                    aria-label="Clear ready-by time"
+                    className={`${SECONDARY_BUTTON} border-zinc-700/80 bg-zinc-800/50 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/60`}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    Clear
+                  </button>
+                ) : (
+                  <span className="text-zinc-500 text-sm">No limit</span>
+                )}
+              </div>
+              {readyBy !== null && readyByLimitMs !== null && deadlineLabel && (
+                <p className="text-xs text-zinc-500">Ready by {deadlineLabel}</p>
+              )}
             </div>
           </div>
 
+          {isPredicted && cheapestWindow && (
+            <p className="text-xs text-indigo-300/90 flex items-center gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-indigo-300 bg-indigo-500/15 border border-indigo-400/30 rounded-full px-2 py-0.5">
+                Predicted
+              </span>
+              Best window uses predicted prices — official prices are published around 14:00 CET.
+            </p>
+          )}
+
+          {showDeadlineWarning && (
+            <div role="status" className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-200">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+              <div>
+                <p className="font-medium">
+                  Finishes after {deadlineLabel} — no {formatDuration(searchedHours)} window fits before your ready-by time
+                </p>
+                {finishLabel && <p className="text-xs text-amber-200/70">Starting now finishes {finishLabel}</p>}
+              </div>
+            </div>
+          )}
+
           {/* Estimates Grid */}
           {estimates.length > 0 ? (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              {estimates.map((est) => (
-                <EstimateCard
-                  key={est.label}
-                  estimate={est}
-                  isCheapest={cheapest?.label === est.label}
-                  isMostExpensive={expensive?.label === est.label}
-                  timeRange={est.label === "Cheapest Window" ? windowRange : null}
-                />
-              ))}
+            <div className={`space-y-2 transition-opacity duration-200 ${hasInvalidDraft ? "opacity-50" : ""}`}>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {estimates.map((est) => {
+                  const secondary =
+                    est.label === ESTIMATE_LABELS.average || est.label === ESTIMATE_LABELS.peak;
+                  return (
+                    <EstimateCard
+                      key={est.label}
+                      estimate={est}
+                      isCheapest={cheapest?.label === est.label}
+                      isMostExpensive={expensive?.label === est.label}
+                      timeRange={est.label === ESTIMATE_LABELS.best ? windowRange : null}
+                      warning={est.label === ESTIMATE_LABELS.best && showDeadlineWarning ? `Finishes after ${deadlineLabel}` : null}
+                      visibilityClass={secondary && !showMore ? "hidden sm:flex" : "flex"}
+                    />
+                  );
+                })}
+              </div>
+              {hasSecondary && (
+                <button
+                  type="button"
+                  onClick={() => setShowMore((v) => !v)}
+                  aria-expanded={showMore}
+                  className="sm:hidden flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200 min-h-11 px-1"
+                >
+                  {showMore ? "Show less" : "Show more"}
+                  {showMore ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
+              )}
             </div>
           ) : (
             <p className="text-zinc-500 text-sm text-center py-4">
-              No price data available for estimation.
+              {error
+                ? "Couldn't load prices — retrying automatically."
+                : loading
+                  ? "Loading prices…"
+                  : "No price data available for estimation."}
+            </p>
+          )}
+
+          {/* Null despite the deadline fallback: no full-length window exists in the loaded prices */}
+          {/* Not while reloading: after a long sleep the cached prices may no longer cover "now" */}
+          {cheapestWindow === null && currentPrice !== null && !loading && (
+            <p className="text-zinc-500 text-sm">
+              No {formatDuration(searchedHours)} window fits in the available prices.
+            </p>
+          )}
+
+          {/* Stale-data notice (same amber status as the best-window card) */}
+          {error && estimates.length > 0 && (
+            <p role="status" className="flex items-center gap-2 text-xs text-amber-200">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+              Couldn&apos;t refresh prices — showing the last loaded data.
             </p>
           )}
 
           {/* Savings Highlight */}
-          {savings !== null && savings > 0 && (
-            <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-2.5">
+          {savings !== null && savings > MIN_SAVINGS_EUR && (
+            <div className={`flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-2.5 transition-opacity duration-200 ${hasInvalidDraft ? "opacity-50" : ""}`}>
               <Zap className="w-4 h-4 text-emerald-400 shrink-0" />
               <p className="text-emerald-300 text-sm font-medium">
-                Save €{savings.toFixed(2)} by using the cheapest window instead
-                of the current price
+                Save €{savings.toFixed(2)} by using the best window instead
+                of starting now
               </p>
             </div>
           )}
@@ -261,11 +407,17 @@ function EstimateCard({
   isCheapest,
   isMostExpensive,
   timeRange,
+  visibilityClass,
+  warning = null,
 }: {
   estimate: CostEstimate;
   isCheapest: boolean;
   isMostExpensive: boolean;
   timeRange: string | null;
+  /** Static display classes, e.g. "flex" or "hidden sm:flex" */
+  visibilityClass: string;
+  /** Amber caveat, e.g. "Finishes after 07:00" */
+  warning?: string | null;
 }) {
   let borderClass = "border-zinc-800/50";
   let badgeClass = "";
@@ -283,7 +435,7 @@ function EstimateCard({
 
   return (
     <div
-      className={`rounded-xl border ${borderClass} ${badgeClass} p-3 flex flex-col gap-1 transition-all`}
+      className={`rounded-xl border ${borderClass} ${badgeClass} p-3 ${visibilityClass} flex-col gap-1 transition-all`}
     >
       <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">
         {estimate.label}
@@ -297,6 +449,12 @@ function EstimateCard({
       {timeRange && (
         <p className="text-xs text-emerald-400/70 font-medium">
           {timeRange}
+        </p>
+      )}
+      {warning && (
+        <p className="text-xs text-amber-300 font-medium flex items-center gap-1">
+          <AlertTriangle className="w-3 h-3 shrink-0" />
+          {warning}
         </p>
       )}
     </div>
