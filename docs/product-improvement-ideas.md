@@ -151,27 +151,29 @@ The dashboard is a polished, dark-themed Next.js app displaying real-time Estoni
 
 ## Priority Ranking (Impact vs. Effort)
 
-| # | Proposal | Impact | Effort |
-|---|----------|--------|--------|
-| 1 | **1.4** Persistent User Preferences | High | Low |
-| 2 | **2.1** Fix "15min" Label Bug | High | Trivial |
-| 3 | **4.2** Memoize Chart Computations | High | Low |
-| 4 | **2.2** Quick-Access Timeframe Buttons | High | Low |
-| 5 | **3.1** Animated Number Transitions | Medium | Low |
-| 6 | **2.3** Tooltip with Relative Context | Medium | Low |
-| 7 | **3.4** Entry Animations (Framer Motion) | Medium | Low |
-| 8 | **1.1** Price Alert Thresholds | High | Medium |
-| 9 | **1.2** Cost Calculator | High | Medium |
-| 10 | **2.4** Tomorrow Empty State Banner | Medium | Low |
-| 11 | **3.3** Skeleton Loading | Medium | Low |
-| 12 | **2.5** Cheapest Period in Controls | Medium | Low–Med |
-| 13 | **4.3** Data Fetch Caching | Medium | Low–Med |
-| 14 | **4.4** Retry Logic | Medium | Low |
-| 15 | **3.5** Color-Coded Price Zones | Medium | Low–Med |
-| 16 | **3.2** Min/Max Chart Annotations | Medium | Medium |
-| 17 | **4.5** Timezone Clarity | Low–Med | Low |
-| 18 | **2.6** Accessibility (a11y) | High | Medium |
-| 19 | **1.3** Multi-Region Comparison | High | Medium |
-| 20 | **1.5** Price Heatmap View | High | High |
-| 21 | **1.6** Share/Export | Medium | Medium |
-| 22 | **4.1** Replace CORS Proxy | High | Med–High |
+Status as of 2026-11-01 (branch `feat/mobile-ux-charging`).
+
+| # | Proposal | Impact | Effort | Status |
+|---|----------|--------|--------|--------|
+| 1 | **1.4** Persistent User Preferences | High | Low | Done (`usePersistedState`) |
+| 2 | **2.1** Fix "15min" Label Bug | High | Trivial | Not a bug (15-min data) |
+| 3 | **4.2** Memoize Chart Computations | High | Low | Done |
+| 4 | **2.2** Quick-Access Timeframe Buttons | High | Low | Done (pills + More) |
+| 5 | **3.1** Animated Number Transitions | Medium | Low | Done (`AnimatedPrice`) |
+| 6 | **2.3** Tooltip with Relative Context | Medium | Low | Done (% vs median in tooltip) |
+| 7 | **3.4** Entry Animations (Framer Motion) | Medium | Low | Not done |
+| 8 | **1.1** Price Alert Thresholds | High | Medium | Done (banner + browser notification) |
+| 9 | **1.2** Cost Calculator | High | Medium | Done (rolling horizon, Ready by, Best time card) |
+| 10 | **2.4** Tomorrow Empty State Banner | Medium | Low | Done |
+| 11 | **3.3** Skeleton Loading | Medium | Low | Done (`DashboardSkeleton`) |
+| 12 | **2.5** Cheapest Period in Controls | Medium | Low–Med | Done differently (Best time card) |
+| 13 | **4.3** Data Fetch Caching | Medium | Low–Med | Not done |
+| 14 | **4.4** Retry Logic | Medium | Low | Partly (cost calculator retries on interval, resume, reconnect) |
+| 15 | **3.5** Color-Coded Price Zones | Medium | Low–Med | Not done |
+| 16 | **3.2** Min/Max Chart Annotations | Medium | Medium | Done |
+| 17 | **4.5** Timezone Clarity | Low–Med | Low | Done (footer: Estonian time) |
+| 18 | **2.6** Accessibility (a11y) | High | Medium | Partly (aria-pressed, labels, live regions) |
+| 19 | **1.3** Multi-Region Comparison | High | Medium | Won't do |
+| 20 | **1.5** Price Heatmap View | High | High | Done (calendar + weekly pattern) |
+| 21 | **1.6** Share/Export | Medium | Medium | Partly (share link; no PNG export) |
+| 22 | **4.1** Replace CORS Proxy | High | Med–High | Done (server-side `/api/prices`) |

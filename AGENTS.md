@@ -21,8 +21,8 @@ Welcome to the `electricity-price` project. This file contains instructions and 
 ## Directory Structure
 - `/src/app`: Next.js App Router pages and global layouts.
 - `/src/app/api`: Server-side API routes (Elering proxy, D1 queries, sync).
-- `/src/components`: UI components (e.g., Dashboard, PriceChart, Controls, CurrentPriceCard).
-- `/src/lib`: Utility functions (e.g., `api.ts` for data fetching, `db.ts` for D1 operations, `usePersistedState.ts` for localStorage persistence).
+- `/src/components`: UI components (e.g., Dashboard, PriceChart, PriceHeatmap, Controls, CurrentPriceCard, BestWindowCard, CostCalculator); `/src/components/ui` for shared inputs (`NumericField`).
+- `/src/lib`: Utility functions and hooks (e.g., `api.ts` for data fetching, `db.ts` for D1 operations, `cheapestWindow.ts` for the window search, `timezone.ts` for Tallinn time, `useCostCalculator.ts`, `useDashboardPrices.ts`, `usePersistedState.ts` for localStorage persistence).
 - `/src/__tests__`: Test files mirroring the source structure.
 - `/db`: Database schema (`schema.sql`).
 - `/scripts`: Build scripts (e.g., `add-scheduled-handler.js` for Cron Triggers).
@@ -32,7 +32,7 @@ Welcome to the `electricity-price` project. This file contains instructions and 
 2. **Components:** Use Server Components by default in App Router, and `'use client'` explicitly for interactive elements (charts, toggles).
 3. **Data Processing:** Handle timezone conversions (UTC to Europe/Tallinn) robustly using `date-fns` or native `Intl`.
 4. **Calculations:** Electricity prices should be displayed in cents/kWh (the API provides €/MWh). VAT (22%) toggle must be respected in all displayed price metrics and charts.
-5. **Cost Calculator:** The "Starting Now" estimate uses the average price over the next `durationHours` from now (via `computeWindowAverage` in `cheapestWindow.ts`), not a single-hour spot price. Shared `costChartData`/`costScanFrom` useMemo in `Dashboard.tsx` prepares hourly data for both this and the cheapest window calculation.
+5. **Cost Calculator:** `useCostCalculator` (`src/lib/useCostCalculator.ts`) fetches its own prices — now (floored to 15 min) → end of tomorrow in Tallinn, via `getPricesWithPrediction` — independent of the chart period, so windows can cross midnight. `computeRollingWindow` in `cheapestWindow.ts` searches 15-minute slots (`normalizeTo15MinSlots` expands hourly points), honours the "Ready by" deadline (`resolveReadyByLimit`: next occurrence, rolled to the following day only when less than half the duration remains) and falls back to the best full-length window with `bestIgnoresDeadline` when nothing fits. "Starting Now" is the average of a same-length window from now. Timezone math lives in `src/lib/timezone.ts` (DST-safe Intl helpers — never browser-local time). Numeric inputs use `NumericField` (`src/components/ui/`) with parsing in `src/lib/numericInput.ts`.
 6. **Database:** All aggregate tables above hourly level are computed from `hourly_averages` (not raw prices) to ensure equal hour weighting regardless of data granularity (15-min vs 1-hour).
 
 ## Git Rules

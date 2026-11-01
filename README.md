@@ -4,6 +4,27 @@ Live Nord Pool spot market electricity price dashboard for Estonia. Monitor curr
 
 Built with Next.js (App Router), deployed on Cloudflare Workers with D1 database for historical price storage.
 
+## Features
+
+All prices are shown in ¢/kWh (Elering publishes €/MWh) and in Estonian time (Europe/Tallinn), with or without 22% VAT.
+
+- **Current price card** — the current 15-minute price, the change vs. the previous and next slot, and the median of the selected period.
+- **Price chart** — area chart of the selected period with official prices and predictions (dashed, indigo) shown apart, min/max annotations and optional overlays: mean, median, 75th/90th/95th percentile, 7-day and 30-day hourly averages. The cheapest window from the cost calculator is always highlighted.
+- **Periods** — quick pills for Yesterday, Today, Tomorrow and Next 24h (always visible, also on phones), plus This Week, Last 7 Days, Next 7 Days, Last 30 Days and a custom date range under "More". Multi-day periods are aggregated to keep the chart fast: hourly for week periods, 6-hour buckets for Last 30 Days, and 1/6/12/24-hour buckets for custom ranges depending on length.
+- **Best time card** — shown at the top of the page: when to run the selected appliance (e.g. "Tonight 23:00 – Tomorrow 07:00"), the cost, and the saving vs. starting now. Tap it to open the cost calculator.
+- **Cost calculator** — presets (EV Charge 40 kWh / 8 h ready by 07:00, Washing Machine, Dryer, Dishwasher, Sauna) or custom consumption, duration and "Ready by" time.
+  - Searches its own rolling horizon, **from now to the end of tomorrow**, independent of the chart period, so overnight windows across midnight are found.
+  - 15-minute resolution: duration in 0.25 h steps (e.g. 2.5 h), "Ready by" in 15-minute steps, or no deadline.
+  - "Ready by" means the next occurrence of that time; it rolls over to the following day only when less than half the duration remains. If no window fits before the deadline, the best full-length window is shown with a "finishes after …" warning.
+  - Estimates: Starting now, Best window, Next-hours average and Peak; a "Predicted" badge when the window uses predicted prices.
+  - Number fields accept decimals with a comma or a dot (12,5), can be cleared while typing, select their content on tap and have − / + steppers.
+- **Heatmap** — Calendar (day × hour) and Weekly Pattern (weekday × hour) views; on phones the grid is transposed (hours as rows) and a tap shows the cell's price.
+- **Price alerts** — notify when the current price goes below or above a threshold (negative thresholds allowed); in-page banner plus an optional browser notification.
+- **Predictions** — before Elering publishes tomorrow's prices (around 14:00 CET), missing hours are predicted from the same hour yesterday and 7 days ago, with a banner on the Tomorrow view.
+- **Share** — copies a link with the period, VAT setting, view mode and custom range (native share sheet on phones).
+- **Persistence and refresh** — settings are kept in `localStorage`; prices refresh every 15 minutes, when a sleeping phone tab becomes visible again, and when the network comes back.
+- **Mobile** — 44 px touch targets, 16 px inputs (no iOS zoom), hover effects only on hover-capable devices, compact header.
+
 ## Tech Stack
 
 - **Framework:** Next.js 16 (App Router, React 19, Turbopack)
@@ -124,12 +145,11 @@ curl "https://your-domain.com/api/sync"
 
 The sync also recomputes all aggregate tables (hourly, daily, weekly, monthly, weekday-hour averages).
 
-### 6. GitHub Actions CI/CD
+### 6. CI and Deployments
 
-For automated deployments on push to `main`, add these GitHub repository secrets:
+GitHub Actions (`.github/workflows/deploy.yml`, job "Build & Validate") runs on every pull request and push to `main`: `npm ci`, lint, tests, the Next.js build, the OpenNext build and the scheduled-handler patch. Despite the file name it **does not deploy** and needs no secrets.
 
-- `CLOUDFLARE_API_TOKEN` — [Create an API token](https://dash.cloudflare.com/profile/api-tokens) with "Workers Scripts: Edit" permission
-- `CLOUDFLARE_ACCOUNT_ID` — Found in your Cloudflare dashboard sidebar
+Deploy with `npm run deploy`, or connect the repository to [Cloudflare Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/) (this repository's PRs show a "Workers Builds" check).
 
 ## Scheduled Sync
 
@@ -157,14 +177,13 @@ Tests are located in `src/__tests__/` mirroring the source structure:
 
 ```
 src/__tests__/
-├── setup.ts                    # Test setup (jest-dom matchers)
-├── api/
-│   └── prices.test.ts          # API route parameter validation and behavior
-└── lib/
-    ├── api.test.ts             # Client-side utilities (conversion, statistics, aggregation)
-    ├── db.test.ts              # Database utilities (upsert batching, aggregate computation)
-    ├── elering.test.ts         # Server-side Elering API helpers (fetch, response helpers)
-    └── usePersistedState.test.ts  # localStorage persistence hook
+├── setup.ts        # Test setup (jest-dom matchers)
+├── api/            # API routes: price proxy and sync (parameter validation, behaviour)
+├── components/     # React components (Dashboard, PriceChart, PriceHeatmap, CostCalculator,
+│                   #   BestWindowCard, Controls, ShareButton, ui/NumericField, …)
+└── lib/            # Utilities and hooks: cheapest window search, Tallinn timezone helpers,
+                    #   numeric input parsing, predictions, statistics, share state, D1 and
+                    #   Elering helpers, useCostCalculator, useDashboardPrices, usePersistedState, …
 ```
 
 ### Test Setup
