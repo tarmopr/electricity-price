@@ -279,7 +279,7 @@ export interface RollingWindowResult {
   /**
    * Best window to recommend (official slots only with `excludePredicted`): the
    * cheapest one ending by the ready-by deadline or, if none fits, the cheapest
-   * full-length window over the whole horizon (see `bestIgnoresDeadline`). Null when
+   * full-length window anywhere in the searched slots (see `bestIgnoresDeadline`). Null when
    * no full-length window exists at all, or when the duration is not positive.
    */
   best: CheapestWindow | null;
@@ -299,7 +299,7 @@ export interface RollingWindowResult {
   readyByRolledOver: boolean;
   /** When a same-length window starting now (floored to 15 min) would finish, or null */
   startingNowEnd: Date | null;
-  /** Where official prices end: start of the trailing run of predicted slots, or null when the horizon ends on an official slot */
+  /** Where official prices end: start of the trailing run of predicted slots, or null when the horizon is empty or ends on an official slot */
   predictedFrom: Date | null;
 }
 

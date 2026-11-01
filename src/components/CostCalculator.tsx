@@ -127,7 +127,7 @@ export default function CostCalculator({
       : null;
   // Predictions excluded and the horizon has them: the search stops where official prices end
   const excludesKnownPredictions = !allowPredicted && predictedFromMs !== null && nowMs != null;
-  // Only worth naming when official prices end before the ready-by deadline
+  // Only worth naming when official prices end before the ready-by deadline, or there is no deadline
   const officialEndHint =
     excludesKnownPredictions && (readyByLimitMs === null || predictedFromMs < readyByLimitMs);
 
@@ -260,7 +260,7 @@ export default function CostCalculator({
             aria-expanded={settingsOpen}
             aria-label="Toggle calculator settings"
             aria-describedby={settingsOpen ? undefined : settingsSummaryId}
-            className="w-full flex items-center justify-between gap-2 min-h-11 rounded-xl border border-zinc-800/60 bg-zinc-800/20 px-3 text-left text-zinc-400 hover:text-zinc-200 transition-colors"
+            className="w-full flex items-center justify-between gap-2 min-h-11 rounded-xl border border-zinc-800/60 bg-zinc-800/20 px-3 py-2 text-left text-zinc-400 hover:text-zinc-200 transition-colors"
           >
             <span className="flex items-center gap-2 min-w-0">
               <SlidersHorizontal className="w-4 h-4 shrink-0" />
@@ -435,7 +435,7 @@ export default function CostCalculator({
             </p>
           )}
 
-          {/* Null despite the deadline fallback: no full-length window exists in the loaded prices */}
+          {/* Null despite the deadline fallback: no full-length window exists in the searched prices (official only when predictions are excluded) */}
           {/* Not while reloading: after a long sleep the cached prices may no longer cover "now" */}
           {cheapestWindow === null && currentPrice !== null && !loading && (
             <p className="text-zinc-500 text-sm">
