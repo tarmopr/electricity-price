@@ -68,7 +68,7 @@ Reference this file before making structural changes.
 - Run locally: `npm run dev` (port 3000)
 - Build for production: `npm run build`
 - Preview as Cloudflare Worker: `npm run preview`
-- Deploy to Cloudflare Workers: `npm run deploy` (OpenNext + wrangler, then applies new `db/migrations/` to the remote D1)
+- Deploy to Cloudflare Workers: `npm run deploy` (OpenNext + wrangler, then applies new `db/migrations/` to the remote D1). Production deploys via Workers Builds, whose deploy command must be `npm run deploy:ci` (same, without the build).
 - Rebuild calendar aggregates on a deployed app: `SYNC_SECRET=… npm run recompute -- --url https://… [--from YYYY-MM] [--to YYYY-MM]`
 - Regenerate Cloudflare types after binding changes: `npm run cf-typegen`
 
