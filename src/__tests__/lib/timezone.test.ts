@@ -48,6 +48,20 @@ describe("timezone helpers", () => {
         spy.mockRestore();
       }
     });
+
+    it("throws when Intl returns an empty date part (Number('') would be 0)", () => {
+      const real = Intl.DateTimeFormat.prototype.formatToParts;
+      const spy = vi
+        .spyOn(Intl.DateTimeFormat.prototype, "formatToParts")
+        .mockImplementation(function (this: Intl.DateTimeFormat, date) {
+          return real.call(this, date).map((p) => (p.type === "day" ? { ...p, value: "" } : p));
+        });
+      try {
+        expect(() => getTallinnOffsetMs(new Date("2024-01-15T12:00:00Z"))).toThrow(/day/);
+      } finally {
+        spy.mockRestore();
+      }
+    });
   });
 
   describe("tallinnWallTimeToUtc", () => {
