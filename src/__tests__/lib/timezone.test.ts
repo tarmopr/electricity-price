@@ -34,6 +34,20 @@ describe("timezone helpers", () => {
         spy.mockRestore();
       }
     });
+
+    it("throws when Intl returns a non-numeric date part", () => {
+      const real = Intl.DateTimeFormat.prototype.formatToParts;
+      const spy = vi
+        .spyOn(Intl.DateTimeFormat.prototype, "formatToParts")
+        .mockImplementation(function (this: Intl.DateTimeFormat, date) {
+          return real.call(this, date).map((p) => (p.type === "hour" ? { ...p, value: "x" } : p));
+        });
+      try {
+        expect(() => getTallinnOffsetMs(new Date("2024-01-15T12:00:00Z"))).toThrow(/hour/);
+      } finally {
+        spy.mockRestore();
+      }
+    });
   });
 
   describe("tallinnWallTimeToUtc", () => {

@@ -84,12 +84,12 @@ const TALLINN_WEEKDAY_FORMATTER = new Intl.DateTimeFormat("en-GB", {
 export function getTallinnOffsetMs(date: Date): number {
   const parts = TALLINN_PARTS_FORMATTER.formatToParts(date);
   const get = (type: Intl.DateTimeFormatPartTypes) => {
-    const value = parts.find((p) => p.type === type)?.value;
-    // Defaulting a missing part to 0 would silently shift every Tallinn date
-    if (value === undefined) {
-      throw new Error(`Intl.DateTimeFormat returned no "${type}" part for Europe/Tallinn`);
+    const value = Number(parts.find((p) => p.type === type)?.value);
+    // Defaulting a missing or garbled part (0 / NaN) would silently shift every Tallinn date
+    if (!Number.isFinite(value)) {
+      throw new Error(`Intl.DateTimeFormat returned no numeric "${type}" part for Europe/Tallinn`);
     }
-    return Number(value);
+    return value;
   };
   const wallAsUtc = Date.UTC(
     get("year"),
