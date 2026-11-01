@@ -22,6 +22,8 @@
 |---|---|---|---|
 | Lint | npm run lint | | |
 | Test | npm test | | |
+| Test (UTC) | TZ=UTC npx vitest run | | |
+| Typecheck | npx tsc --noEmit -p . | | |
 | Build | npm run build | | |
 | OpenNext build | npx opennextjs-cloudflare build | | 30 |
 | Scheduled handler patch | node scripts/add-scheduled-handler.js | | |
