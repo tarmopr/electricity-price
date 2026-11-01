@@ -6,14 +6,6 @@ Project context, conventions, commands and validation live in `AGENTS.md` (share
 
 ## Claude Code only
 
-### Review loop (after the `AGENTS.md` validation steps pass)
-
-Run the **review** agent (`.claude/agents/review.md`) on changed files. Max 3 iterations:
-- **Iter 1:** Fix all issues (critical, major, minor) → re-validate.
-- **Iter 2:** Only if iter 1 changed logic. Fix critical/major only → re-validate.
-- **Iter 3:** Hard stop. Report remaining issues with file paths, line numbers, severity. Let user decide.
-- Skip re-review for trivial fixes (formatting, naming, imports).
-
-### Repo tooling
-- Subagents: `.claude/agents/` (`code`, `review`, `test`, `utility`). Skills: `.claude/skills/` (`implement`, `safe-ship`, `pr`, `review-codebase`).
-- `.claude/ship-plan.md` is the gate/UI-testing config for the ship-plan and verify-and-fix skills; `.claude/ship-plan/blockers.md` lists past blockers and their fixes — read both before running those skills.
+- **Which skill or agent to use:** see `docs/agent-tooling.md`. Shipping work goes through the global `ship-issue` / `ship-plan` / `verify-and-fix` skills; they read `.claude/ship-plan.md` (gates, UI testing, reviewers) and `.claude/ship-plan/blockers.md` (past blockers and fixes).
+- **Small change outside those skills:** after the `AGENTS.md` validation steps pass, run the `domain-reviewer` agent on the diff once. Fix Critical/Major findings, re-validate; re-review only if a fix changed logic. Report anything left with file, line and severity.
+- **Full-repo audit:** the `review-codebase` skill.

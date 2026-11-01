@@ -58,7 +58,10 @@ Reference this file before making structural changes.
 - **Test location:** `src/__tests__/` mirrors the source structure
 - **Run tests:** `npm test` (single run), `npm run test:watch` (watch mode), `npx vitest run <path>` (single file)
 - **Timezone check:** `TZ=UTC npx vitest run` — CI (ubuntu-latest) runs in UTC while dev machines are usually Europe/Tallinn, so timezone bugs can pass locally and fail in CI.
-- **Mocking:** Use `vi.mock()` for modules, `vi.stubGlobal()` for `fetch`. Mock `@opennextjs/cloudflare` in any test that imports from `@/lib/db`.
+- **Naming:** `src/lib/api.ts` → `src/__tests__/lib/api.test.ts`; `.test.tsx` for components. `src/__tests__/setup.ts` loads jest-dom matchers; vitest globals are on.
+- **Mocking:** Use `vi.mock()` for modules, `vi.stubGlobal()` for `fetch` (restore in `beforeEach`). Mock `@opennextjs/cloudflare` (`getCloudflareContext: vi.fn()`) in any test that imports from `@/lib/db`.
+- **Patterns:** Build data with local factories (e.g. `makePrice(eurMwh, isPredicted)`); use `toBeCloseTo` for price math; pin "now" with fixed UTC instants and state the Tallinn wall time in a comment. Components: `@testing-library/react`, query by role/label, test behaviour not implementation.
+- **Cover:** empty input, null, zero and negative prices, missing data, Tallinn day boundaries and DST days.
 
 ## Setup and Run
 - Setup: `npm install`

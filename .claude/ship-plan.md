@@ -21,6 +21,11 @@
 | OpenNext build | npx opennextjs-cloudflare build | | 30 |
 | Scheduled handler patch | node scripts/add-scheduled-handler.js | | |
 
+## Reviewers by path
+| Paths | Agent |
+|---|---|
+| src/**, db/**, scripts/** | domain-reviewer |
+
 ## Fix rules
 - Never use dynamic Tailwind class construction (e.g. `bg-${color}-500`); only complete static class strings.
 - Preserve comments that describe intent or business logic.
