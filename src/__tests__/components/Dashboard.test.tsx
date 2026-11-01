@@ -141,11 +141,12 @@ function makeCostCalc(overrides: Record<string, unknown> = {}) {
 
 /**
  * The Best Window card is rendered twice (mobile: `lg:hidden`, desktop: `hidden lg:block`);
- * jsdom ignores CSS, so tests scope queries to one copy.
+ * jsdom ignores CSS, so tests scope queries to one copy. The desktop selector includes
+ * `lg:col-span-3` because the Controls "Period" label is also `hidden lg:block`.
  */
 function bestWindowCopies(container: HTMLElement) {
     const mobile = container.querySelector<HTMLElement>(".lg\\:hidden")!;
-    const desktop = container.querySelector<HTMLElement>(".hidden.lg\\:block")!;
+    const desktop = container.querySelector<HTMLElement>(".hidden.lg\\:block.lg\\:col-span-3")!;
     return { mobile, desktop };
 }
 
@@ -481,6 +482,11 @@ describe("Dashboard", () => {
         render(<Dashboard />);
         expect(useDashboardPrices).toHaveBeenCalledWith("next_24h", expect.any(String), expect.any(String));
         expect(screen.getByRole("button", { name: /next 24h/i })).toHaveAttribute("aria-pressed", "true");
+    });
+
+    it("the period card starts expanded", () => {
+        render(<Dashboard />);
+        expect(screen.getByRole("button", { name: "Toggle period controls" })).toHaveAttribute("aria-expanded", "true");
     });
 
     it("renders the Next 24h period pill", () => {

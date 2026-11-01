@@ -42,6 +42,9 @@ export default function Dashboard() {
     const [customStart, setCustomStart] = useState<string>(format(startOfToday(), 'yyyy-MM-dd'));
     const [customEnd, setCustomEnd] = useState<string>(format(endOfToday(), 'yyyy-MM-dd'));
 
+    // Period card open state (persisted; collapses below lg only)
+    const [controlsOpen, setControlsOpen] = usePersistedState<boolean>('controlsOpen', true);
+
     // View Mode (persisted)
     const [viewMode, setViewMode, viewModeHydrated] = usePersistedState<ViewMode>('viewMode', 'chart');
 
@@ -243,6 +246,8 @@ export default function Dashboard() {
                         setCustomEnd={setCustomEnd}
                         alertConfig={alertConfig}
                         setAlertConfig={setAlertConfig}
+                        isOpen={controlsOpen}
+                        setIsOpen={setControlsOpen}
                     />
                 </div>
                 <div className="hidden lg:block lg:col-span-3">
