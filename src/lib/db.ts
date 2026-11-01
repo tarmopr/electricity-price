@@ -1,5 +1,6 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { eurMwhToCentsKwh } from "@/lib/price";
+import { getTallinnDateStr, tallinnWallTimeToUtc } from "@/lib/timezone";
 import {
   bucketTallinnAggregates,
   getTallinnAggregateRange,
@@ -38,6 +39,39 @@ export async function upsertPrices(
       )
     );
   }
+}
+
+/**
+ * Latest stored price, and the range whose aggregates a failed sync left behind.
+ *
+ * Automatic sync resumes fetching from the latest stored price, so prices a failed
+ * run stored without its aggregates are never fetched again. The aggregate write is
+ * atomic, so the latest daily row marks the last Tallinn day it covered. That day is
+ * usually partial (Elering's day ends at 00:00 CET = 01:00 in Tallinn), so catch-up
+ * starts at its beginning (incl. the previous month at a boundary).
+ */
+export async function getSyncState(db: D1Database): Promise<{
+  latest: number | null;
+  catchUp: { start: number; end: number } | null;
+}> {
+  const state = await db
+    .prepare(
+      `SELECT (SELECT MAX(timestamp) FROM prices) AS latest,
+              (SELECT MAX(date) FROM daily_averages) AS aggregatedThrough`
+    )
+    .first<{ latest: number | null; aggregatedThrough: string | null }>();
+
+  const latest = state?.latest ?? null;
+  const aggregatedThrough = state?.aggregatedThrough ?? null;
+  if (latest === null || aggregatedThrough === null) return { latest, catchUp: null };
+  if (getTallinnDateStr(new Date(latest * 1000)) <= aggregatedThrough) return { latest, catchUp: null };
+  return {
+    latest,
+    catchUp: {
+      start: tallinnWallTimeToUtc(aggregatedThrough, 0, 0).getTime() / 1000,
+      end: latest + 900,
+    },
+  };
 }
 
 /**

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import {
   getDB,
+  getSyncState,
   upsertPrices,
   recomputeAllAggregates,
 } from "@/lib/db";
@@ -10,13 +11,31 @@ import {
   successResponse,
 } from "@/lib/elering";
 import { isSyncAuthorized } from "@/lib/syncAuth";
-import { addDaysToDateStr, getTallinnDateStr, tallinnWallTimeToUtc } from "@/lib/timezone";
+
+/**
+ * Most a single sync fetches, sized for Workers Free (10 ms CPU, 50 D1 queries per
+ * invocation, 100k rows written per day): 31 days is ~3k price slots. The extra hour
+ * lets a whole Tallinn October (fall-back day) through. Rebuild aggregates only
+ * with /api/sync/recompute.
+ */
+const MAX_SYNC_RANGE_MS = (31 * 24 + 1) * 60 * 60 * 1000;
+
+/** Sorts [start, end) ranges and merges the ones that overlap or touch. */
+function mergeRanges(ranges: [number, number][]): [number, number][] {
+  const merged: [number, number][] = [];
+  for (const [a, b] of [...ranges].sort((x, y) => x[0] - y[0])) {
+    const last = merged[merged.length - 1];
+    if (last && a <= last[1]) last[1] = Math.max(last[1], b);
+    else merged.push([a, b]);
+  }
+  return merged;
+}
 
 /**
  * POST /api/sync — Sync prices from Elering to D1.
  *
  * Automatic mode (no params or just end):
- *   Checks the latest timestamp in DB and fetches from there to tomorrow end-of-day.
+ *   Checks the latest timestamp in DB and fetches from there to 48h from now.
  *   This means missed syncs are automatically recovered on the next run.
  *   If DB is empty, defaults to fetching the last 2 days.
  *
@@ -26,7 +45,7 @@ import { addDaysToDateStr, getTallinnDateStr, tallinnWallTimeToUtc } from "@/lib
  *
  * Query params:
  *   - start: ISO date string for sync start (optional, enables manual mode)
- *   - end:   ISO date string for sync end (optional, defaults to tomorrow 23:59:59)
+ *   - end:   ISO date string for sync end (optional, defaults to 48h from now)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -43,15 +62,11 @@ export async function POST(request: NextRequest) {
     // Default end: 48h from now (covers tomorrow's prices + buffer for data published after ~01:00 EET)
     const defaultEnd = new Date(now.getTime() + 48 * 60 * 60 * 1000);
 
-    let start: Date;
-    let end: Date;
-    // Automatic mode only: stored prices whose aggregates a failed run did not write
-    let catchUp: { start: number; end: number } | null = null;
-
     // --- Input validation (before any DB or API calls) ---
+    let manualRange: { start: Date; end: Date } | null = null;
     if (manualStart) {
-      start = new Date(manualStart);
-      end = manualEnd ? new Date(manualEnd) : defaultEnd;
+      const start = new Date(manualStart);
+      const end = manualEnd ? new Date(manualEnd) : defaultEnd;
 
       if (isNaN(start.getTime())) {
         return errorResponse(
@@ -69,60 +84,58 @@ export async function POST(request: NextRequest) {
         return errorResponse("Start date must be before end date", 400);
       }
 
-      // Sized for Workers Free (10 ms CPU, 50 D1 queries per invocation, 100k rows
-      // written per day): 31 days is ~3k price slots. Backfill longer ranges in
-      // 31-day calls; to rebuild aggregates only, use /api/sync/recompute.
-      const maxRangeMs = 31 * 24 * 60 * 60 * 1000;
-      if (end.getTime() - start.getTime() > maxRangeMs) {
+      if (end.getTime() - start.getTime() > MAX_SYNC_RANGE_MS) {
         return errorResponse(
           "Date range exceeds maximum of 31 days",
           400
         );
       }
+      manualRange = { start, end };
+    }
+
+    // --- DB + fetch ---
+    const db = await getDB();
+    const { latest, catchUp } = await getSyncState(db);
+
+    let start: Date;
+    let end: Date;
+    if (manualRange) {
+      ({ start, end } = manualRange);
     } else {
       // Automatic mode: resume from latest timestamp in DB
-      const db = await getDB();
-      const state = await db
-        .prepare(
-          `SELECT (SELECT MAX(timestamp) FROM prices) AS latest,
-                  (SELECT MAX(date) FROM daily_averages) AS aggregatedThrough`
-        )
-        .first<{ latest: number | null; aggregatedThrough: string | null }>();
-
-      if (state?.latest) {
-        start = new Date(state.latest * 1000);
-        // Fetching resumes from the latest stored price, so prices a failed run
-        // stored without its aggregates are never fetched again. The aggregate write
-        // is atomic, so the latest daily row marks the last Tallinn day it covered:
-        // recompute from the day after it (incl. the previous month at a boundary).
-        if (
-          state.aggregatedThrough &&
-          getTallinnDateStr(start) > state.aggregatedThrough
-        ) {
-          catchUp = {
-            start: tallinnWallTimeToUtc(addDaysToDateStr(state.aggregatedThrough, 1), 0, 0).getTime() / 1000,
-            end: state.latest + 900,
-          };
-        }
+      if (latest) {
+        start = new Date(latest * 1000);
       } else {
         start = new Date(now);
         start.setDate(start.getDate() - 2);
         start.setHours(0, 0, 0, 0);
       }
-
-      end = defaultEnd;
+      // Same Free-plan budget as manual mode: a long gap is fetched over several runs
+      end = new Date(Math.min(defaultEnd.getTime(), start.getTime() + MAX_SYNC_RANGE_MS));
     }
-
-    // --- DB + fetch ---
-    const db = await getDB();
 
     // Fetch from Elering
     const prices = await fetchFromElering(start, end);
 
-    if (prices.length === 0) {
-      if (catchUp) {
-        await recomputeAllAggregates(db, catchUp.start, catchUp.end);
-      }
+    const synced =
+      prices.length > 0
+        ? {
+            min: Math.min(...prices.map((p) => p.timestamp)),
+            max: Math.max(...prices.map((p) => p.timestamp)),
+          }
+        : null;
+    if (synced) await upsertPrices(db, prices);
+
+    // Recompute aggregates for the synced range and for any range a failed run left
+    // behind (overlapping ranges are merged; separate ones are recomputed separately)
+    const ranges: [number, number][] = [];
+    if (synced) ranges.push([synced.min, synced.max + 900]);
+    if (catchUp) ranges.push([catchUp.start, catchUp.end]);
+    for (const [rangeStart, rangeEnd] of mergeRanges(ranges)) {
+      await recomputeAllAggregates(db, rangeStart, rangeEnd);
+    }
+
+    if (!synced) {
       return successResponse({
         message: catchUp
           ? "No new prices to sync; recomputed aggregates a previous run missed"
@@ -131,26 +144,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Upsert into D1
-    await upsertPrices(db, prices);
-
-    // Determine the actual time range of synced data
-    const minTimestamp = Math.min(...prices.map((p) => p.timestamp));
-    const maxTimestamp = Math.max(...prices.map((p) => p.timestamp));
-
-    // Recompute all aggregates for the affected range (plus any missed by a failed run)
-    await recomputeAllAggregates(
-      db,
-      Math.min(minTimestamp, catchUp?.start ?? minTimestamp),
-      maxTimestamp + 900
-    );
-
     return successResponse({
       message: `Synced ${prices.length} price points`,
       synced: prices.length,
       range: {
-        start: new Date(minTimestamp * 1000).toISOString(),
-        end: new Date(maxTimestamp * 1000).toISOString(),
+        start: new Date(synced.min * 1000).toISOString(),
+        end: new Date(synced.max * 1000).toISOString(),
       },
     });
   } catch (error) {
