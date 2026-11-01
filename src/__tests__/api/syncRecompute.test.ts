@@ -81,4 +81,22 @@ describe("POST /api/sync/recompute", () => {
     expect(sqlite.prepare("SELECT avg_price FROM hourly_averages WHERE timestamp = 1759280400").get())
       .toEqual({ avg_price: 10 });
   });
+
+  it("handles December (next month is January of the next year)", async () => {
+    seedHourlyAverages("2025-11-20T00:00:00Z", "2026-01-10T00:00:00Z");
+    const res = await post("?month=2025-12");
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { data: { rows: { monthly: number } } }).data.rows.monthly).toBe(1);
+    // Tallinn 2025-12-01 00:00 (EET) … 2026-01-01 00:00
+    expect(sqlite.prepare("SELECT data_points FROM monthly_averages WHERE year = 2025 AND month = 12").get())
+      .toEqual({ data_points: 31 * 24 });
+    expect(sqlite.prepare("SELECT COUNT(*) AS n FROM monthly_averages WHERE year = 2026").get()).toEqual({ n: 0 });
+  });
+
+  it("returns 404 when no hourly averages are stored for the month", async () => {
+    // A typo or a month never synced must not look like a successful backfill
+    const res = await post("?month=2015-01");
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as { error: string }).error).toContain("2015-01");
+  });
 });

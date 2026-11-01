@@ -34,6 +34,10 @@ export async function POST(request: NextRequest) {
 
     const db = await getDB();
     const rows = await recomputeCalendarAggregates(db, start, end);
+    if (rows.monthly === 0) {
+      // A typo or a never-synced month must not look like a successful backfill
+      return errorResponse(`No hourly averages stored for ${month}`, 404);
+    }
 
     return successResponse({ month, rows });
   } catch (error) {
