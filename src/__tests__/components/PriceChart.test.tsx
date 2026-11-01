@@ -186,6 +186,21 @@ describe("PriceChart", () => {
             expect(screen.getByText("Scroll sideways for more")).toBeInTheDocument();
         });
 
+        it("keeps the time at the viewport centre when zooming, allowing for the plot insets", () => {
+            render(<PriceChart {...defaultProps} />);
+            const scrollBox = chartBox().parentElement!.parentElement!;
+            let scrollLeft = 0;
+            Object.defineProperty(scrollBox, "clientWidth", { configurable: true, get: () => 340 });
+            Object.defineProperty(scrollBox, "scrollLeft", {
+                configurable: true,
+                get: () => scrollLeft,
+                set: (v: number) => { scrollLeft = v; },
+            });
+            zoomIn();
+            // Plot area starts 40 px in (60 px YAxis − 20 px margin) and ends 10 px from the right
+            expect(scrollLeft).toBeCloseTo(152.41, 2);
+        });
+
         it("zoom stops at 8×", () => {
             render(<PriceChart {...defaultProps} />);
             zoomIn();

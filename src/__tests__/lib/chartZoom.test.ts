@@ -39,6 +39,27 @@ describe("anchoredScrollLeft", () => {
         expect(anchoredScrollLeft(5000, 340, 2, 4)).toBe(1020);
     });
 
+    it("keeps the time at the viewport centre in place with plot insets", () => {
+        // Price chart plot area: 40 px from the left (YAxis 60 px − 20 px margin), 10 px from the right
+        const insets = { left: 40, right: 10 };
+        const cw = 340;
+        // Fraction of the plot width at the viewport centre
+        const centreFraction = (scrollLeft: number, zoom: number) =>
+            (scrollLeft + cw / 2 - insets.left) / (cw * zoom - insets.left - insets.right);
+        expect(anchoredScrollLeft(0, cw, 1, 2, insets)).toBeCloseTo(152.41, 2);
+        for (const [s, from, to] of [[0, 1, 2], [300, 2, 4], [1000, 4, 8], [1200, 8, 4], [400, 4, 2]] as const) {
+            const next = anchoredScrollLeft(s, cw, from, to, insets);
+            expect(centreFraction(next, to)).toBeCloseTo(centreFraction(s, from), 6);
+        }
+    });
+
+    it("clamps to [0, clientWidth × (newZoom − 1)] with plot insets", () => {
+        const insets = { left: 40, right: 10 };
+        expect(anchoredScrollLeft(170, 340, 2, 1, insets)).toBe(0);
+        expect(anchoredScrollLeft(20, 340, 4, 2, insets)).toBe(0);
+        expect(anchoredScrollLeft(5000, 340, 2, 4, insets)).toBe(1020);
+    });
+
     it("returns 0 when the box has no width", () => {
         expect(anchoredScrollLeft(100, 0, 1, 2)).toBe(0);
     });

@@ -25,6 +25,12 @@ import { anchoredScrollLeft, nextZoomLevel, prevZoomLevel, type ZoomLevel } from
 import { PILL_BASE, PILL_INACTIVE } from '@/lib/styles';
 import { ZoomIn, ZoomOut } from 'lucide-react';
 
+const MAIN_CHART_MARGIN = { top: 20, right: 10, left: -20, bottom: 0 };
+/** Recharts' default YAxis width, which the main chart keeps (spec 4.6) */
+const Y_AXIS_WIDTH = 60;
+/** Where the main chart's plot area sits inside it; zoom anchoring maps time to this area */
+const MAIN_PLOT_INSETS = { left: Y_AXIS_WIDTH + MAIN_CHART_MARGIN.left, right: MAIN_CHART_MARGIN.right };
+
 // ─── Sub-component interfaces ────────────────────────────────────────────────
 
 interface TooltipPayloadItem {
@@ -312,7 +318,7 @@ export default function PriceChart({
     function changeZoom(next: ZoomLevel): void {
         const el = scrollRef.current;
         if (el) {
-            pendingScroll.current = anchoredScrollLeft(el.scrollLeft, el.clientWidth, zoom, next);
+            pendingScroll.current = anchoredScrollLeft(el.scrollLeft, el.clientWidth, zoom, next, MAIN_PLOT_INSETS);
         }
         setZoom(next);
     }
@@ -481,7 +487,7 @@ export default function PriceChart({
                             <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} style={{ outline: 'none' }}>
                                 <AreaChart
                                     data={chartData}
-                                    margin={{ top: 20, right: 10, left: -20, bottom: 0 }}
+                                    margin={MAIN_CHART_MARGIN}
                                     style={{ outline: 'none' }}
                                     onMouseEnter={() => setIsHovering(true)}
                                     onMouseLeave={() => setIsHovering(false)}
