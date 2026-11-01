@@ -308,13 +308,13 @@ export default function PriceChart({
         pendingScroll.current = null;
     }, [zoom]);
 
-    const changeZoom = (next: ZoomLevel) => {
+    function changeZoom(next: ZoomLevel): void {
         const el = scrollRef.current;
         if (el) {
             pendingScroll.current = anchoredScrollLeft(el.scrollLeft, el.clientWidth, zoom, next);
         }
         setZoom(next);
-    };
+    }
 
     if (!mounted) {
         return <div className="w-full h-[300px] sm:h-[400px] mt-4 relative bg-zinc-900/10 animate-pulse rounded-xl flex items-center justify-center text-zinc-600 border border-zinc-800/50">Loading chart...</div>;
