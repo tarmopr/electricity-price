@@ -202,6 +202,14 @@ describe("useCostCalculator", () => {
     await waitFor(() => expect(localStorage.getItem("eprice_costAllowPredicted")).toBe("false"));
   });
 
+  it("settings start collapsed and persist", async () => {
+    getPricesWithPrediction.mockResolvedValue([]);
+    const { result } = renderHook(() => useCostCalculator(false));
+    expect(result.current.costSettingsOpen).toBe(false);
+    act(() => result.current.setCostSettingsOpen(true));
+    await waitFor(() => expect(localStorage.getItem("eprice_costSettingsOpen")).toBe("true"));
+  });
+
   it("migrates a legacy 'costUntil' setting into costReadyBy", async () => {
     localStorage.setItem("eprice_costUntil", "6");
     getPricesWithPrediction.mockResolvedValue([]);

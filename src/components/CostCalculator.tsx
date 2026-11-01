@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Calculator, Zap, X, AlertTriangle } from "lucide-react";
+import { ChevronDown, ChevronUp, Calculator, Zap, X, AlertTriangle, SlidersHorizontal } from "lucide-react";
 import {
   PRESETS,
   DURATION_LIMITS,
@@ -20,6 +20,9 @@ import NumericField from "@/components/ui/NumericField";
 interface CostCalculatorProps {
   isOpen: boolean;
   setIsOpen: (val: boolean) => void;
+  /** Whether the settings (presets and inputs) are expanded inside the open card */
+  settingsOpen: boolean;
+  setSettingsOpen: (val: boolean) => void;
   /** Average price (¢/kWh) of a same-length window starting now */
   currentPrice: number | null;
   cheapestWindow: CheapestWindow | null;
@@ -73,6 +76,8 @@ function formatWindowRange(w: CheapestWindow, nowMs: number | null | undefined):
 export default function CostCalculator({
   isOpen,
   setIsOpen,
+  settingsOpen,
+  setSettingsOpen,
   currentPrice,
   cheapestWindow,
   meanPrice,
@@ -104,6 +109,8 @@ export default function CostCalculator({
   const windowRange = cheapestWindow ? formatWindowRange(cheapestWindow, nowMs) : null;
   // Show what was actually searched (15-minute slots), not the raw typed value
   const searchedHours = cheapestWindow?.hours ?? snapDurationHours(durationHours);
+  // One-line recap shown on the settings row while the settings are collapsed
+  const settingsSummary = `${activePreset} · ${formatNumber(consumptionKwh)} kWh · ${formatDuration(searchedHours)} · ${readyBy !== null ? `ready by ${readyBy}` : "no deadline"}${allowPredicted ? "" : " · official prices only"}`;
   const deadlineLabel =
     readyBy && readyByLimitMs !== null && nowMs != null
       ? formatTallinnDeadline(new Date(readyByLimitMs), new Date(nowMs))
@@ -156,6 +163,12 @@ export default function CostCalculator({
   function markValidity(field: string) {
     return (valid: boolean) =>
       setInvalidFields((prev) => (prev[field] === !valid ? prev : { ...prev, [field]: !valid }));
+  }
+
+  function toggleSettings() {
+    // Collapsing unmounts the fields, so a half-typed draft can no longer report itself valid again
+    if (settingsOpen) setInvalidFields({});
+    setSettingsOpen(!settingsOpen);
   }
 
   function selectPreset(preset: (typeof PRESETS)[number]) {
@@ -239,97 +252,117 @@ export default function CostCalculator({
       {/* Expandable Content */}
       {isOpen && (
         <div className="px-4 md:px-5 pb-5 space-y-5 border-t border-zinc-800/50 pt-4">
-          {/* Preset Buttons */}
-          <div className="space-y-2">
-            <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">
-              Appliance
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {PRESETS.map((p) => (
-                <button
-                  key={p.label}
-                  onClick={() => selectPreset(p)}
-                  aria-pressed={activePreset === p.label}
-                  className={`${PILL_BASE} ${pillClass(activePreset === p.label)}`}
-                >
-                  {p.label}
-                  <span className="ml-1.5 text-zinc-500 text-xs">
-                    {p.kWh} kWh · {formatDuration(p.durationHours)}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* Settings disclosure: collapsed by default so the results stay near the top */}
+          <button
+            type="button"
+            onClick={toggleSettings}
+            aria-expanded={settingsOpen}
+            aria-label="Toggle calculator settings"
+            className="w-full flex items-center justify-between gap-2 min-h-11 rounded-xl border border-zinc-800/60 bg-zinc-800/20 px-3 text-left text-zinc-400 hover:text-zinc-200 transition-colors"
+          >
+            <span className="flex items-center gap-2 min-w-0">
+              <SlidersHorizontal className="w-4 h-4 shrink-0" />
+              <span className={LABEL_CLASS}>Settings</span>
+              {!settingsOpen && <span className="text-xs text-zinc-400 truncate">{settingsSummary}</span>}
+            </span>
+            {settingsOpen ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}
+          </button>
 
-          {/* Consumption, Duration & Ready-by inputs */}
-          <div className="grid grid-cols-1 sm:flex sm:flex-wrap sm:items-start gap-4 sm:gap-6">
-            <div className="flex flex-col gap-1.5">
-              <span className={LABEL_CLASS}>Consumption</span>
-              <NumericField
-                value={consumptionKwh}
-                onCommit={handleKwhCommit}
-                min={KWH_LIMITS.min}
-                max={KWH_LIMITS.max}
-                step={0.5}
-                label="Consumption in kWh"
-                unit="kWh"
-                onValidityChange={markValidity("kwh")}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <span className={LABEL_CLASS}>Duration</span>
-              <NumericField
-                value={durationHours}
-                onCommit={handleDurationCommit}
-                min={DURATION_LIMITS.min}
-                max={DURATION_LIMITS.max}
-                step={0.25}
-                snapStep={0.25}
-                label="Duration in hours"
-                unit="h"
-                onValidityChange={markValidity("duration")}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="cost-ready-by" className={LABEL_CLASS}>
-                Ready by
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  id="cost-ready-by"
-                  type="time"
-                  step={900}
-                  value={readyBy ?? ""}
-                  onChange={(e) => handleReadyByInput(e.target.value)}
-                  className={`${TIME_INPUT} w-32`}
-                />
-                {readyBy !== null ? (
-                  <button
-                    type="button"
-                    onClick={handleClearReadyBy}
-                    aria-label="Clear ready-by time"
-                    className={`${SECONDARY_BUTTON} border-zinc-700/80 bg-zinc-800/50 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/60`}
-                  >
-                    <X className="w-3.5 h-3.5" />
-                    Clear
-                  </button>
-                ) : (
-                  <span className="text-zinc-500 text-sm">No limit</span>
-                )}
+          {settingsOpen && (
+            <div className="space-y-5">
+              {/* Preset Buttons */}
+              <div className="space-y-2">
+                <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">
+                  Appliance
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {PRESETS.map((p) => (
+                    <button
+                      key={p.label}
+                      onClick={() => selectPreset(p)}
+                      aria-pressed={activePreset === p.label}
+                      className={`${PILL_BASE} ${pillClass(activePreset === p.label)}`}
+                    >
+                      {p.label}
+                      <span className="ml-1.5 text-zinc-500 text-xs">
+                        {p.kWh} kWh · {formatDuration(p.durationHours)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
-              {readyBy !== null && readyByLimitMs !== null && deadlineLabel && (
-                <p className="text-xs text-zinc-500">Ready by {deadlineLabel}</p>
-              )}
+
+              {/* Consumption, Duration & Ready-by inputs */}
+              <div className="grid grid-cols-1 sm:flex sm:flex-wrap sm:items-start gap-4 sm:gap-6">
+                <div className="flex flex-col gap-1.5">
+                  <span className={LABEL_CLASS}>Consumption</span>
+                  <NumericField
+                    value={consumptionKwh}
+                    onCommit={handleKwhCommit}
+                    min={KWH_LIMITS.min}
+                    max={KWH_LIMITS.max}
+                    step={0.5}
+                    label="Consumption in kWh"
+                    unit="kWh"
+                    onValidityChange={markValidity("kwh")}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <span className={LABEL_CLASS}>Duration</span>
+                  <NumericField
+                    value={durationHours}
+                    onCommit={handleDurationCommit}
+                    min={DURATION_LIMITS.min}
+                    max={DURATION_LIMITS.max}
+                    step={0.25}
+                    snapStep={0.25}
+                    label="Duration in hours"
+                    unit="h"
+                    onValidityChange={markValidity("duration")}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="cost-ready-by" className={LABEL_CLASS}>
+                    Ready by
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="cost-ready-by"
+                      type="time"
+                      step={900}
+                      value={readyBy ?? ""}
+                      onChange={(e) => handleReadyByInput(e.target.value)}
+                      className={`${TIME_INPUT} w-32`}
+                    />
+                    {readyBy !== null ? (
+                      <button
+                        type="button"
+                        onClick={handleClearReadyBy}
+                        aria-label="Clear ready-by time"
+                        className={`${SECONDARY_BUTTON} border-zinc-700/80 bg-zinc-800/50 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/60`}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        Clear
+                      </button>
+                    ) : (
+                      <span className="text-zinc-500 text-sm">No limit</span>
+                    )}
+                  </div>
+                  {readyBy !== null && readyByLimitMs !== null && deadlineLabel && (
+                    <p className="text-xs text-zinc-500">Ready by {deadlineLabel}</p>
+                  )}
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <span className={LABEL_CLASS}>Prices</span>
+                  <button type="button" onClick={() => setAllowPredicted(!allowPredicted)} aria-pressed={allowPredicted}
+                    className={`${PILL_BASE} self-start ${allowPredicted ? PILL_ACTIVE_INDIGO : PILL_INACTIVE}`}>
+                    Use predicted prices
+                  </button>
+                  {officialEndHint && <p className="text-xs text-zinc-500">Official prices end {officialEndLabel} — the search stops there</p>}
+                </div>
+              </div>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <span className={LABEL_CLASS}>Prices</span>
-              <button type="button" onClick={() => setAllowPredicted(!allowPredicted)} aria-pressed={allowPredicted}
-                className={`${PILL_BASE} self-start ${allowPredicted ? PILL_ACTIVE_INDIGO : PILL_INACTIVE}`}>
-                Use predicted prices
-              </button>
-              {officialEndHint && <p className="text-xs text-zinc-500">Official prices end {officialEndLabel} — the search stops there</p>}
-            </div>
-          </div>
+          )}
 
           {isPredicted && cheapestWindow && (
             <p className="text-xs text-indigo-300/90 flex items-center gap-2">

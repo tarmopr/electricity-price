@@ -111,6 +111,7 @@ export default function Dashboard() {
         costReadyBy, setCostReadyBy,
         costActivePreset, setCostActivePreset,
         costCalcOpen, setCostCalcOpen,
+        costSettingsOpen, setCostSettingsOpen,
         costAllowPredicted, setCostAllowPredicted,
         predictedFromMs,
         cheapestWindow,
@@ -130,10 +131,14 @@ export default function Dashboard() {
     // Best-window card tap: expand the calculator, then scroll it into view after it renders
     const openCostCalculator = useCallback(() => {
         setCostCalcOpen(true);
+        // The card says "Tap to adjust" when no window fits; settings start collapsed, so open them too
+        if (cheapestWindow === null && !costLoading && costError === null && !costNoData) {
+            setCostSettingsOpen(true);
+        }
         requestAnimationFrame(() => {
             document.getElementById('cost-calculator')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
         });
-    }, [setCostCalcOpen]);
+    }, [setCostCalcOpen, setCostSettingsOpen, cheapestWindow, costLoading, costError, costNoData]);
 
     const bestWindowCard = (
         <BestWindowCard
@@ -320,6 +325,8 @@ export default function Dashboard() {
             <CostCalculator
                 isOpen={costCalcOpen}
                 setIsOpen={setCostCalcOpen}
+                settingsOpen={costSettingsOpen}
+                setSettingsOpen={setCostSettingsOpen}
                 currentPrice={startingNowPrice}
                 cheapestWindow={cheapestWindow}
                 meanPrice={horizonAvgPrice}

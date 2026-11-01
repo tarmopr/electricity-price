@@ -72,6 +72,7 @@ export function useCostCalculator(includeVat: boolean) {
     const [storedReadyBy, setCostReadyBy] = usePersistedState<string | null>('costReadyBy', DEFAULT_PRESET.readyBy);
     const [costActivePreset, setCostActivePreset] = usePersistedState<string>('costPreset', DEFAULT_PRESET.label);
     const [costCalcOpen, setCostCalcOpen] = usePersistedState<boolean>('costCalcOpen', false);
+    const [costSettingsOpen, setCostSettingsOpen] = usePersistedState<boolean>('costSettingsOpen', false);
     const [costAllowPredicted, setCostAllowPredicted] = usePersistedState<boolean>('costAllowPredicted', true);
 
     // Guard against malformed persisted values. The old inputs had no upper bound,
@@ -196,6 +197,7 @@ export function useCostCalculator(includeVat: boolean) {
         costReadyBy, setCostReadyBy,
         costActivePreset, setCostActivePreset,
         costCalcOpen, setCostCalcOpen,
+        costSettingsOpen, setCostSettingsOpen,
         costAllowPredicted, setCostAllowPredicted,
         /** Recommended window — may finish after the ready-by time, see bestIgnoresDeadline */
         cheapestWindow: rolling?.best ?? null,
