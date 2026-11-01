@@ -33,15 +33,53 @@ describe("POST /api/sync", () => {
     expect(body.error).toBe("Start date must be before end date");
   });
 
-  it("returns 400 when date range exceeds 2 years", async () => {
+  it("returns 400 when date range exceeds 31 days", async () => {
+    // Workers Free: 10 ms CPU, 50 D1 queries and 100k rows written per day
     const { POST } = await import("@/app/api/sync/route");
     const request = new Request(
-      "http://localhost/api/sync?start=2022-01-01T00:00:00Z&end=2025-01-01T00:00:00Z"
+      "http://localhost/api/sync?start=2025-01-01T00:00:00Z&end=2025-02-01T01:00:01Z" // 31 days + 1 h + 1 s
     );
     const response = await POST(request as never);
     expect(response.status).toBe(400);
     const body = await response.json() as { error: string };
-    expect(body.error).toBe("Date range exceeds maximum of 2 years");
+    expect(body.error).toBe("Date range exceeds maximum of 31 days");
+  });
+
+  it("accepts a whole Tallinn October (31 days plus the fall-back hour)", async () => {
+    const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+    vi.mocked(getCloudflareContext).mockResolvedValue({
+      env: {
+        DB: {
+          prepare: vi.fn().mockReturnValue({ first: vi.fn().mockResolvedValue({ latest: null, aggregatedThrough: null }) }),
+          batch: vi.fn(),
+        },
+      },
+      cf: {},
+      ctx: {},
+    } as never);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ success: true, data: { ee: [] } }),
+    }));
+    const { POST } = await import("@/app/api/sync/route");
+    // 2025-10-01 00:00 EEST → 2025-11-01 00:00 EET
+    const request = new Request(
+      "http://localhost/api/sync?start=2025-09-30T21:00:00Z&end=2025-10-31T22:00:00Z"
+    );
+    const response = await POST(request as never);
+    expect(response.status).toBe(200);
+  });
+
+  it("returns 401 when SYNC_SECRET is set and the bearer token is missing or wrong", async () => {
+    vi.stubEnv("SYNC_SECRET", "s3cret");
+    try {
+      const { POST } = await import("@/app/api/sync/route");
+      const wrong = new Request("http://localhost/api/sync", { method: "POST", headers: { Authorization: "Bearer nope" } });
+      expect((await POST(wrong as never)).status).toBe(401);
+      expect((await POST(new Request("http://localhost/api/sync", { method: "POST" }) as never)).status).toBe(401);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("returns 400 for invalid start date format", async () => {
@@ -66,7 +104,7 @@ describe("POST /api/sync", () => {
     expect(body.error).toContain("Invalid end date format");
   });
 
-  it("accepts a valid date range under 2 years", async () => {
+  it("accepts a range of exactly 31 days", async () => {
     const { getCloudflareContext } = await import("@opennextjs/cloudflare");
     const mockFirst = vi.fn().mockResolvedValue({ latest: null });
     const mockBind = vi.fn().mockReturnValue({ run: vi.fn() });
@@ -99,7 +137,7 @@ describe("POST /api/sync", () => {
 
     const { POST } = await import("@/app/api/sync/route");
     const request = new Request(
-      "http://localhost/api/sync?start=2025-01-01T00:00:00Z&end=2025-06-01T00:00:00Z"
+      "http://localhost/api/sync?start=2025-01-01T00:00:00Z&end=2025-02-01T00:00:00Z"
     );
     const response = await POST(request as never);
     expect(response.status).toBe(200);

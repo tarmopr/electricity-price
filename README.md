@@ -120,6 +120,8 @@ Copy the `database_id` from the output and update `wrangler.jsonc`:
 npx wrangler d1 execute electricity-prices --remote --file=db/schema.sql
 ```
 
+`db/schema.sql` creates a fresh database. To upgrade an existing database, see [Upgrading an existing database](#upgrading-an-existing-database).
+
 ### 4. Deploy
 
 ```bash
@@ -130,20 +132,35 @@ This runs the OpenNext build, patches the worker with the scheduled sync handler
 
 ### 5. Sync Historical Data (Prefill Database)
 
-After the first deploy, the database is empty. Trigger a historical backfill by calling the sync endpoint with a start date. The Elering API allows a maximum of 1 year per request, and the sync route handles chunking automatically.
+After the first deploy, the database is empty. Backfill price history by calling the sync endpoint with a start and end date, at most 31 days per call (sized for the Workers Free limits: 10 ms CPU and 50 D1 queries per invocation, 100k rows written per day):
 
 ```bash
-# Backfill the past year
-curl -X POST "https://your-domain.com/api/sync?start=2025-03-01T00:00:00.000Z"
-
-# Backfill a specific range
-curl -X POST "https://your-domain.com/api/sync?start=2025-01-01T00:00:00.000Z&end=2025-06-01T00:00:00.000Z"
+# Backfill one month
+curl -X POST -H "Authorization: Bearer $SYNC_SECRET" \
+  "https://your-domain.com/api/sync?start=2025-01-01T00:00:00.000Z&end=2025-02-01T00:00:00.000Z"
 
 # Verify the sync status
 curl "https://your-domain.com/api/sync"
 ```
 
 The sync also recomputes all aggregate tables (hourly, daily, weekly, monthly, weekday-hour averages).
+
+#### Upgrading an existing database
+
+`npm run deploy` deploys the Worker and then applies any new scripts in `db/migrations/` to the remote database (`wrangler d1 migrations apply`, tracked in the `d1_migrations` table). They run after the code deploy on purpose, so the old cron cannot write rows in the old format afterwards. Workers Builds runs its own build step, so set its **Deploy command** to `npm run deploy:ci` (deploy the built Worker, then apply migrations); the build's API token needs D1 edit permission. If `npm run deploy` failed at the migration step, run `npx wrangler d1 migrations apply electricity-prices --remote`.
+
+When a migration resets an aggregate table (e.g. `0002_reset_weekly_averages.sql`), recompute every stored month afterwards (below); until then that table is empty or partial.
+
+#### Recompute aggregates without refetching
+
+After a change to how aggregates are bucketed, rewrite the calendar tables from the hourly averages already stored, one Tallinn month per request. It does not call Elering or rewrite prices, so each request stays inside the Workers Free limits. The script finds the stored range via `GET /api/sync` and calls `POST /api/sync/recompute?month=YYYY-MM` for every month:
+
+```bash
+SYNC_SECRET=... npm run recompute -- --url https://your-domain.com
+# or a range: ... --from 2025-01 --to 2025-06
+```
+
+Months without stored data (404) are skipped; any other failure stops the run and prints the `--from` value to resume with.
 
 ### 6. CI and Deployments
 
@@ -155,7 +172,7 @@ Deploy with `npm run deploy`, or connect the repository to [Cloudflare Workers B
 
 Prices are synced automatically via Cloudflare Cron Triggers every 4 hours (02:00, 06:00, 10:00, 14:00, 18:00, 22:00 UTC). Elering publishes next-day prices daily after 13:00 EET.
 
-The sync is resilient to missed runs — it checks the latest timestamp in the database and fetches only missing data from that point forward.
+The sync is resilient to missed runs — it checks the latest timestamp in the database and fetches only missing data from that point forward. If a run stored prices but failed to write the aggregates, the next run recomputes them (it compares the latest daily aggregate with the latest price).
 
 ## Testing
 
@@ -205,7 +222,9 @@ External dependencies (Cloudflare context, Elering API, D1 database) are mocked 
 | `npm test` | Run all tests once |
 | `npm run test:watch` | Run tests in watch mode |
 | `npm run preview` | Build and preview as Cloudflare Worker locally |
-| `npm run deploy` | Build and deploy to Cloudflare Workers |
+| `npm run deploy` | Build and deploy to Cloudflare Workers, then apply new `db/migrations/` to the remote D1 |
+| `npm run deploy:ci` | Deploy an already built Worker, then apply new migrations (Workers Builds deploy command) |
+| `npm run recompute -- --url <host>` | Rebuild a deployed app's calendar aggregates month by month (needs `SYNC_SECRET`) |
 | `npm run cf-typegen` | Regenerate Cloudflare Worker types after binding changes |
 | `npm run lint` | Run ESLint |
 
@@ -217,11 +236,12 @@ External dependencies (Cloudflare context, Elering API, D1 database) are mocked 
 | `/api/prices/current` | GET | Current price (D1 with Elering fallback) |
 | `/api/prices/hourly` | GET | Hourly averages from D1 |
 | `/api/prices/daily` | GET | Daily averages from D1 |
-| `/api/prices/weekly` | GET | Weekly averages from D1 |
+| `/api/prices/weekly` | GET | Weekly averages from D1 by ISO year and week (`year`) |
 | `/api/prices/monthly` | GET | Monthly averages from D1 |
 | `/api/prices/weekday-pattern` | GET | Weekday-hour averages from D1 (for heatmap) |
 | `/api/sync` | GET | Sync status (latest/earliest timestamp, total count) |
 | `/api/sync` | POST | Trigger price sync (auto or manual with `start`/`end` params) |
+| `/api/sync/recompute` | POST | Rewrite one month's daily/weekly/monthly/weekday-hour aggregates from stored hourly averages (`month=YYYY-MM`) |
 
 ## Database Schema
 
@@ -230,7 +250,7 @@ Stored in `db/schema.sql`. Six tables:
 - **`prices`** — Raw 15-minute prices (source of truth from Elering)
 - **`hourly_averages`** — Hourly aggregates (computed from raw prices)
 - **`daily_averages`** — Daily aggregates (computed from hourly averages)
-- **`weekly_averages`** — Weekly aggregates (computed from hourly averages)
+- **`weekly_averages`** — Weekly aggregates by ISO 8601 year and week, Tallinn time (computed from hourly averages)
 - **`monthly_averages`** — Monthly aggregates (computed from hourly averages)
 - **`weekday_hour_averages`** — Weekday x hour averages scoped by year+month (for heatmap patterns)
 

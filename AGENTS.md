@@ -24,8 +24,8 @@ Welcome to the `electricity-price` project. This file is the single source of in
 - `/src/components`: UI components (e.g., Dashboard, PriceChart, PriceHeatmap, Controls, CurrentPriceCard, BestWindowCard, CostCalculator); `/src/components/ui` for shared inputs (`NumericField`).
 - `/src/lib`: Utility functions and hooks (e.g., `api.ts` for data fetching, `db.ts` for D1 operations, `cheapestWindow.ts` for the window search, `timezone.ts` for Tallinn time, `styles.ts` for shared class strings, `useCostCalculator.ts`, `useDashboardPrices.ts`, `usePersistedState.ts` for localStorage persistence).
 - `/src/__tests__`: Test files mirroring the source structure.
-- `/db`: Database schema (`schema.sql`).
-- `/scripts`: Build scripts (e.g., `add-scheduled-handler.js` for Cron Triggers).
+- `/db`: Database schema (`schema.sql`, for a fresh database) and one-off `migrations/` for existing ones (applied by `npm run deploy` after the code deploy). A fresh database built from `schema.sql` also gets every migration applied on its first deploy, so a new migration must leave such a database correct (keep `schema.sql` at the post-migration state; if a migration resets an aggregate table, say so in the PR so `npm run recompute` is run).
+- `/scripts`: Build scripts (e.g., `add-scheduled-handler.js` for Cron Triggers) and `recompute-aggregates.mts` (rebuilds a deployed app's calendar aggregates month by month).
 
 ## Coding Conventions
 1. **Design First:** The priority is a superb, premium UI/UX. Do not use default/basic styling.
@@ -68,7 +68,8 @@ Reference this file before making structural changes.
 - Run locally: `npm run dev` (port 3000)
 - Build for production: `npm run build`
 - Preview as Cloudflare Worker: `npm run preview`
-- Deploy to Cloudflare Workers: `npm run deploy` (OpenNext + wrangler)
+- Deploy to Cloudflare Workers: `npm run deploy` (OpenNext + wrangler, then applies new `db/migrations/` to the remote D1). Production deploys via Workers Builds, whose deploy command must be `npm run deploy:ci` (same, without the build).
+- Rebuild calendar aggregates on a deployed app: `SYNC_SECRET=… npm run recompute -- --url https://… [--from YYYY-MM] [--to YYYY-MM]`
 - Regenerate Cloudflare types after binding changes: `npm run cf-typegen`
 
 ## Gotchas

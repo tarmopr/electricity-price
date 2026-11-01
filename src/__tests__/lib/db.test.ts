@@ -29,17 +29,18 @@ describe("upsertPrices", () => {
     expect(mockDb.prepare).not.toHaveBeenCalled();
   });
 
-  it("batches prices in groups of 100", async () => {
+  it("upserts a 31-day sync (2,976 slots) in 3 batches of up to 1,000", async () => {
+    // Each batch is one D1 query; Workers Free allows 50 per invocation
     const { upsertPrices } = await import("@/lib/db");
-    const prices = Array.from({ length: 250 }, (_, i) => ({
+    const prices = Array.from({ length: 31 * 96 }, (_, i) => ({
       timestamp: 1704067200 + i * 900,
       priceEurMwh: 50 + i,
     }));
 
     await upsertPrices(mockDb as unknown as D1Database, prices);
 
-    // 250 items / 100 batch size = 3 batches
     expect(mockDb.batch).toHaveBeenCalledTimes(3);
+    expect(mockDb.batch.mock.calls.map(([stmts]) => stmts.length)).toEqual([1000, 1000, 976]);
   });
 
   it("binds correct values including computed cents/kWh", async () => {
@@ -76,37 +77,5 @@ describe("recomputeHourlyAverages", () => {
     const [boundStart, boundEnd] = mockBind.mock.calls[0];
     expect(boundStart).toBe(Math.floor(midHour / 3600) * 3600);
     expect(boundEnd).toBe(Math.ceil(endMidHour / 3600) * 3600);
-  });
-});
-
-describe("recomputeAllAggregates", () => {
-  it("expands range to full months", async () => {
-    const mockRun = vi.fn().mockResolvedValue({});
-    const mockBind = vi.fn().mockReturnValue({ run: mockRun });
-    const mockDb = {
-      prepare: vi.fn().mockReturnValue({ bind: mockBind }),
-    };
-
-    const { recomputeAllAggregates } = await import("@/lib/db");
-
-    // Mid-March 2024: 2024-03-15T12:00:00Z = 1710504000
-    const midMarch = 1710504000;
-    // Late March 2024: 2024-03-25T12:00:00Z = 1711368000
-    const lateMarch = 1711368000;
-
-    await recomputeAllAggregates(
-      mockDb as unknown as D1Database,
-      midMarch,
-      lateMarch
-    );
-
-    // Should call prepare 5 times (hourly, daily, weekly, monthly, weekday-hour)
-    expect(mockDb.prepare).toHaveBeenCalledTimes(5);
-
-    // First call (hourly) should use expanded range: March 1 to April 1
-    const [expandedStart] = mockBind.mock.calls[0];
-    const startDate = new Date(expandedStart * 1000);
-    expect(startDate.getUTCDate()).toBe(1); // Should be start of month
-    expect(startDate.getUTCMonth()).toBe(2); // March (0-indexed)
   });
 });

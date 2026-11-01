@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   addDaysToDateStr,
   floorToHour,
@@ -21,6 +21,46 @@ describe("timezone helpers", () => {
     it("is +2h in winter (EET) and +3h in summer (EEST)", () => {
       expect(getTallinnOffsetMs(new Date("2024-01-15T12:00:00Z"))).toBe(2 * HOUR);
       expect(getTallinnOffsetMs(new Date("2024-07-15T12:00:00Z"))).toBe(3 * HOUR);
+    });
+
+    it("throws instead of returning a wrong offset when Intl omits a date part", () => {
+      // A missing part used to read as 0 (e.g. year 0), silently shifting every aggregate
+      const spy = vi
+        .spyOn(Intl.DateTimeFormat.prototype, "formatToParts")
+        .mockReturnValue([{ type: "month", value: "01" }]);
+      try {
+        expect(() => getTallinnOffsetMs(new Date("2024-01-15T12:00:00Z"))).toThrow(/year/);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it("throws when Intl returns a non-numeric date part", () => {
+      const real = Intl.DateTimeFormat.prototype.formatToParts;
+      const spy = vi
+        .spyOn(Intl.DateTimeFormat.prototype, "formatToParts")
+        .mockImplementation(function (this: Intl.DateTimeFormat, date) {
+          return real.call(this, date).map((p) => (p.type === "hour" ? { ...p, value: "x" } : p));
+        });
+      try {
+        expect(() => getTallinnOffsetMs(new Date("2024-01-15T12:00:00Z"))).toThrow(/hour/);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it("throws when Intl returns an empty date part (Number('') would be 0)", () => {
+      const real = Intl.DateTimeFormat.prototype.formatToParts;
+      const spy = vi
+        .spyOn(Intl.DateTimeFormat.prototype, "formatToParts")
+        .mockImplementation(function (this: Intl.DateTimeFormat, date) {
+          return real.call(this, date).map((p) => (p.type === "day" ? { ...p, value: "" } : p));
+        });
+      try {
+        expect(() => getTallinnOffsetMs(new Date("2024-01-15T12:00:00Z"))).toThrow(/day/);
+      } finally {
+        spy.mockRestore();
+      }
     });
   });
 

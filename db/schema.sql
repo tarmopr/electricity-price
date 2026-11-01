@@ -20,13 +20,13 @@ CREATE TABLE IF NOT EXISTS daily_averages (
   avg_price REAL NOT NULL,         -- Average ¢/kWh for the day
   min_price REAL NOT NULL,
   max_price REAL NOT NULL,
-  data_points INTEGER NOT NULL     -- Should be 96 (96 × 15-min slots)
+  data_points INTEGER NOT NULL     -- Hourly averages in the Tallinn day (24; 23/25 on DST days)
 );
 
 -- Weekly aggregates
 CREATE TABLE IF NOT EXISTS weekly_averages (
-  year INTEGER NOT NULL,
-  week INTEGER NOT NULL,           -- ISO week number (1–53)
+  year INTEGER NOT NULL,           -- ISO 8601 week-numbering year (strftime('%G'))
+  week INTEGER NOT NULL,           -- ISO 8601 week, Monday-based (strftime('%V'), 1–53)
   avg_price REAL NOT NULL,
   min_price REAL NOT NULL,
   max_price REAL NOT NULL,
@@ -54,12 +54,10 @@ CREATE TABLE IF NOT EXISTS weekday_hour_averages (
   weekday INTEGER NOT NULL,        -- 0=Monday, 6=Sunday (ISO)
   hour INTEGER NOT NULL,           -- 0–23
   avg_price REAL NOT NULL,
-  sample_count INTEGER NOT NULL,   -- How many 15-min slots contributed
+  sample_count INTEGER NOT NULL,   -- How many hourly averages contributed
   PRIMARY KEY (year, month, weekday, hour)
 );
 
--- Indexes for common query patterns
-CREATE INDEX IF NOT EXISTS idx_prices_timestamp ON prices(timestamp);
-CREATE INDEX IF NOT EXISTS idx_hourly_timestamp ON hourly_averages(timestamp);
-CREATE INDEX IF NOT EXISTS idx_daily_date ON daily_averages(date);
-CREATE INDEX IF NOT EXISTS idx_weekday_hour_period ON weekday_hour_averages(year, month);
+-- No extra indexes: every query is served by a table's primary key (INTEGER PRIMARY
+-- KEY is the rowid; composite keys cover their leading columns). D1 counts each index
+-- update as another row written, which counts against the Workers Free daily limit.
