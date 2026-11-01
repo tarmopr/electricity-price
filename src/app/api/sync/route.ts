@@ -10,6 +10,7 @@ import {
   successResponse,
 } from "@/lib/elering";
 import { isSyncAuthorized } from "@/lib/syncAuth";
+import { addDaysToDateStr, getTallinnDateStr, tallinnWallTimeToUtc } from "@/lib/timezone";
 
 /**
  * POST /api/sync — Sync prices from Elering to D1.
@@ -44,6 +45,8 @@ export async function POST(request: NextRequest) {
 
     let start: Date;
     let end: Date;
+    // Automatic mode only: stored prices whose aggregates a failed run did not write
+    let catchUp: { start: number; end: number } | null = null;
 
     // --- Input validation (before any DB or API calls) ---
     if (manualStart) {
@@ -79,12 +82,28 @@ export async function POST(request: NextRequest) {
     } else {
       // Automatic mode: resume from latest timestamp in DB
       const db = await getDB();
-      const latest = await db
-        .prepare("SELECT MAX(timestamp) as latest FROM prices")
-        .first<{ latest: number | null }>();
+      const state = await db
+        .prepare(
+          `SELECT (SELECT MAX(timestamp) FROM prices) AS latest,
+                  (SELECT MAX(date) FROM daily_averages) AS aggregatedThrough`
+        )
+        .first<{ latest: number | null; aggregatedThrough: string | null }>();
 
-      if (latest?.latest) {
-        start = new Date(latest.latest * 1000);
+      if (state?.latest) {
+        start = new Date(state.latest * 1000);
+        // Fetching resumes from the latest stored price, so prices a failed run
+        // stored without its aggregates are never fetched again. The aggregate write
+        // is atomic, so the latest daily row marks the last Tallinn day it covered:
+        // recompute from the day after it (incl. the previous month at a boundary).
+        if (
+          state.aggregatedThrough &&
+          getTallinnDateStr(start) > state.aggregatedThrough
+        ) {
+          catchUp = {
+            start: tallinnWallTimeToUtc(addDaysToDateStr(state.aggregatedThrough, 1), 0, 0).getTime() / 1000,
+            end: state.latest + 900,
+          };
+        }
       } else {
         start = new Date(now);
         start.setDate(start.getDate() - 2);
@@ -101,8 +120,13 @@ export async function POST(request: NextRequest) {
     const prices = await fetchFromElering(start, end);
 
     if (prices.length === 0) {
+      if (catchUp) {
+        await recomputeAllAggregates(db, catchUp.start, catchUp.end);
+      }
       return successResponse({
-        message: "No new prices to sync",
+        message: catchUp
+          ? "No new prices to sync; recomputed aggregates a previous run missed"
+          : "No new prices to sync",
         synced: 0,
       });
     }
@@ -114,8 +138,12 @@ export async function POST(request: NextRequest) {
     const minTimestamp = Math.min(...prices.map((p) => p.timestamp));
     const maxTimestamp = Math.max(...prices.map((p) => p.timestamp));
 
-    // Recompute all aggregates for the affected range
-    await recomputeAllAggregates(db, minTimestamp, maxTimestamp + 900);
+    // Recompute all aggregates for the affected range (plus any missed by a failed run)
+    await recomputeAllAggregates(
+      db,
+      Math.min(minTimestamp, catchUp?.start ?? minTimestamp),
+      maxTimestamp + 900
+    );
 
     return successResponse({
       message: `Synced ${prices.length} price points`,

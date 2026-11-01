@@ -163,7 +163,7 @@ Deploy with `npm run deploy`, or connect the repository to [Cloudflare Workers B
 
 Prices are synced automatically via Cloudflare Cron Triggers every 4 hours (02:00, 06:00, 10:00, 14:00, 18:00, 22:00 UTC). Elering publishes next-day prices daily after 13:00 EET.
 
-The sync is resilient to missed runs — it checks the latest timestamp in the database and fetches only missing data from that point forward.
+The sync is resilient to missed runs — it checks the latest timestamp in the database and fetches only missing data from that point forward. If a run stored prices but failed to write the aggregates, the next run recomputes them (it compares the latest daily aggregate with the latest price).
 
 ## Testing
 
