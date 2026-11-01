@@ -135,7 +135,7 @@ export default function Dashboard() {
     const openCostCalculator = useCallback(() => {
         setCostCalcOpen(true);
         // The card says "Tap to adjust" when no window fits; settings start collapsed, so open them too
-        if (cheapestWindow === null && !costLoading && costError === null && !costNoData) {
+        if (cheapestWindow === null && !costLoading && !costError && !costNoData) {
             setCostSettingsOpen(true);
         }
         requestAnimationFrame(() => {

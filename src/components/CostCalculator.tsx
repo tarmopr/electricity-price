@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { ChevronDown, ChevronUp, Calculator, Zap, X, AlertTriangle, SlidersHorizontal } from "lucide-react";
 import {
   PRESETS,
@@ -103,6 +103,7 @@ export default function CostCalculator({
 }: CostCalculatorProps) {
   const [invalidFields, setInvalidFields] = useState<Record<string, boolean>>({});
   const [showMore, setShowMore] = useState(false);
+  const settingsSummaryId = useId();
   const hasInvalidDraft = Object.values(invalidFields).some(Boolean);
 
   const cheapestWindowPrice = cheapestWindow?.averagePrice ?? null;
@@ -258,12 +259,13 @@ export default function CostCalculator({
             onClick={toggleSettings}
             aria-expanded={settingsOpen}
             aria-label="Toggle calculator settings"
+            aria-describedby={settingsOpen ? undefined : settingsSummaryId}
             className="w-full flex items-center justify-between gap-2 min-h-11 rounded-xl border border-zinc-800/60 bg-zinc-800/20 px-3 text-left text-zinc-400 hover:text-zinc-200 transition-colors"
           >
             <span className="flex items-center gap-2 min-w-0">
               <SlidersHorizontal className="w-4 h-4 shrink-0" />
               <span className={LABEL_CLASS}>Settings</span>
-              {!settingsOpen && <span className="text-xs text-zinc-400 truncate">{settingsSummary}</span>}
+              {!settingsOpen && <span id={settingsSummaryId} className="text-xs text-zinc-400 line-clamp-2 break-words">{settingsSummary}</span>}
             </span>
             {settingsOpen ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}
           </button>

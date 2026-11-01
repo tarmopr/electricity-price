@@ -62,6 +62,7 @@ describe("CostCalculator", () => {
     expect(screen.queryByText("Appliance")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Toggle calculator settings" })).toHaveAttribute("aria-expanded", "false");
     expect(screen.getByText("EV Charge · 40 kWh · 8 h · ready by 07:00")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Toggle calculator settings" })).toHaveAccessibleDescription("EV Charge · 40 kWh · 8 h · ready by 07:00");
     expect(screen.getByText("Starting Now")).toBeInTheDocument();
   });
 
@@ -478,6 +479,19 @@ describe("CostCalculator", () => {
         allowPredicted={false}
         predictedFromMs={predictedFromMs}
         readyByLimitMs={new Date("2024-06-05T04:00:00.000Z").getTime()} // 07:00 Tallinn
+      />
+    );
+    expect(screen.getByText("Official prices end 01:00 — the search stops there")).toBeInTheDocument();
+  });
+
+  it("names where official prices end when predictions are excluded and there is no deadline", () => {
+    render(
+      <CostCalculator
+        {...openProps}
+        allowPredicted={false}
+        predictedFromMs={predictedFromMs}
+        readyBy={null}
+        readyByLimitMs={null}
       />
     );
     expect(screen.getByText("Official prices end 01:00 — the search stops there")).toBeInTheDocument();

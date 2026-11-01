@@ -673,7 +673,7 @@ export default function PriceChart({
                     aria-label="Zoom out"
                     disabled={zoom === 1}
                     onClick={() => changeZoom(prevZoomLevel(zoom))}
-                    className={`${PILL_BASE} ${PILL_INACTIVE} flex items-center disabled:opacity-40`}
+                    className={`${PILL_BASE} ${PILL_INACTIVE} flex items-center justify-center min-w-11 disabled:opacity-40 disabled:pointer-events-none`}
                 >
                     <ZoomOut className="w-4 h-4" />
                 </button>
@@ -683,7 +683,7 @@ export default function PriceChart({
                     aria-label="Zoom in"
                     disabled={zoom === 8}
                     onClick={() => changeZoom(nextZoomLevel(zoom))}
-                    className={`${PILL_BASE} ${PILL_INACTIVE} flex items-center disabled:opacity-40`}
+                    className={`${PILL_BASE} ${PILL_INACTIVE} flex items-center justify-center min-w-11 disabled:opacity-40 disabled:pointer-events-none`}
                 >
                     <ZoomIn className="w-4 h-4" />
                 </button>

@@ -165,6 +165,7 @@ describe("Controls", () => {
     it("collapsed header summarises period and VAT", () => {
         const { rerender } = render(<Controls {...defaultProps} isOpen={false} period="next_24h" includeVat />);
         expect(screen.getByText("Next 24h \u00b7 incl. VAT")).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Toggle period controls" })).toHaveAccessibleDescription("Next 24h \u00b7 incl. VAT");
 
         rerender(<Controls {...defaultProps} isOpen={false} period="custom" includeVat={false} />);
         expect(screen.getByText("Custom \u00b7 excl. VAT")).toBeInTheDocument();

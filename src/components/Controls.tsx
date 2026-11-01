@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useId } from 'react';
 import { Label } from '@/components/ui/label';
 import { Period } from '@/lib/types';
 import { AlertConfig, AlertDirection } from '@/lib/priceAlerts';
@@ -143,6 +143,7 @@ export default function Controls({
 
     const periodLabel = [...PRIMARY_PERIODS, ...MORE_PERIODS].find((p) => p.value === period)?.label;
     const periodSummary = `${periodLabel} \u00b7 ${includeVat ? 'incl. VAT' : 'excl. VAT'}`;
+    const periodSummaryId = useId();
 
     const statMoreActiveCount = statMoreItems.filter(i => i.get()).length;
 
@@ -158,12 +159,13 @@ export default function Controls({
                 onClick={() => setIsOpen(!isOpen)}
                 aria-expanded={isOpen}
                 aria-label="Toggle period controls"
+                aria-describedby={isOpen ? undefined : periodSummaryId}
                 className="lg:hidden w-full flex items-center justify-between gap-2 min-h-11 text-zinc-300 hover:text-zinc-100 transition-colors"
             >
                 <span className="flex items-center gap-2.5 min-w-0">
                     <CalendarClock className="w-4 h-4 text-emerald-400 shrink-0" />
                     <span className="text-sm font-semibold tracking-wide uppercase whitespace-nowrap">Period</span>
-                    {!isOpen && <span className="text-xs text-zinc-500 truncate">{periodSummary}</span>}
+                    {!isOpen && <span id={periodSummaryId} className="text-xs text-zinc-500 truncate">{periodSummary}</span>}
                 </span>
                 {isOpen ? <ChevronUp className="w-5 h-5 text-zinc-500 shrink-0" /> : <ChevronDown className="w-5 h-5 text-zinc-500 shrink-0" />}
             </button>
