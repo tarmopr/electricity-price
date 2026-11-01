@@ -149,21 +149,49 @@ export function bucketTallinnAggregates(
     return cached ?? getTallinnOffsetMs(new Date(unix * 1000));
   };
 
+  // Calendar keys depend only on the Tallinn date, so build them once per day
+  // instead of once per hourly row (keeps the Worker's CPU time low).
+  interface DayKeys {
+    date: string;
+    week: string;
+    /** null when the day's month is outside `months` (no monthly/weekday-hour rows) */
+    month: string | null;
+    weekdayHourPrefix: string;
+  }
+  const dayKeys = new Map<number, DayKeys>();
+  const keysFor = (wallDay: number): DayKeys => {
+    let keys = dayKeys.get(wallDay);
+    if (!keys) {
+      // Wall-clock midnight expressed as a UTC instant: read fields via UTC getters
+      const wall = new Date(wallDay * 86_400_000);
+      const year = wall.getUTCFullYear();
+      const month = wall.getUTCMonth() + 1;
+      const date = wall.toISOString().slice(0, 10);
+      keys = {
+        date,
+        week: `${year}|${mondayWeekOfYear(year, month, wall.getUTCDate())}`,
+        month: months.has(date.slice(0, 7)) ? `${year}|${month}` : null,
+        // weekday_hour_averages.weekday is 0=Monday … 6=Sunday (see isoWeekday)
+        weekdayHourPrefix: `${year}|${month}|${isoWeekday(date)}|`,
+      };
+      dayKeys.set(wallDay, keys);
+    }
+    return keys;
+  };
+
   for (const row of rows) {
     if (row.timestamp < readStart || row.timestamp >= readEnd) continue;
-    // Shift by the Tallinn offset at this instant, then read wall-clock fields via UTC getters
-    const wall = new Date(row.timestamp * 1000 + offsetAt(row.timestamp));
-    const year = wall.getUTCFullYear();
-    const month = wall.getUTCMonth() + 1;
-    const day = wall.getUTCDate();
-    const date = wall.toISOString().slice(0, 10);
+    // Shift by the Tallinn offset at this instant to get wall-clock seconds
+    const wallSeconds = row.timestamp + offsetAt(row.timestamp) / 1000;
+    const wallDay = Math.floor(wallSeconds / 86_400);
+    const hour = Math.floor((wallSeconds - wallDay * 86_400) / 3600);
+    const keys = keysFor(wallDay);
 
-    add(daily, date, row);
-    add(weekly, `${year}|${mondayWeekOfYear(year, month, day)}`, row);
-    if (months.has(date.slice(0, 7))) {
-      add(monthly, `${year}|${month}`, row);
-      // weekday_hour_averages.weekday is 0=Monday … 6=Sunday (see isoWeekday)
-      add(weekdayHour, `${year}|${month}|${isoWeekday(date)}|${wall.getUTCHours()}`, row);
+    add(daily, keys.date, row);
+    add(weekly, keys.week, row);
+    if (keys.month) {
+      add(monthly, keys.month, row);
+      add(weekdayHour, keys.weekdayHourPrefix + hour, row);
     }
   }
 
