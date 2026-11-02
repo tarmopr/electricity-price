@@ -38,9 +38,12 @@ export default function Dashboard() {
     const [showP95, setShowP95] = usePersistedState<boolean>('showP95', false);
 
     // Period Settings (persisted, except custom dates which reset daily)
-    const [period, setPeriod, periodHydrated] = usePersistedState<Period>('period', 'today');
+    const [period, setPeriod, periodHydrated] = usePersistedState<Period>('period', 'next_24h');
     const [customStart, setCustomStart] = useState<string>(format(startOfToday(), 'yyyy-MM-dd'));
     const [customEnd, setCustomEnd] = useState<string>(format(endOfToday(), 'yyyy-MM-dd'));
+
+    // Period card open state (persisted; collapses below lg only)
+    const [controlsOpen, setControlsOpen] = usePersistedState<boolean>('controlsOpen', true);
 
     // View Mode (persisted)
     const [viewMode, setViewMode, viewModeHydrated] = usePersistedState<ViewMode>('viewMode', 'chart');
@@ -111,6 +114,9 @@ export default function Dashboard() {
         costReadyBy, setCostReadyBy,
         costActivePreset, setCostActivePreset,
         costCalcOpen, setCostCalcOpen,
+        costSettingsOpen, setCostSettingsOpen,
+        costAllowPredicted, setCostAllowPredicted,
+        predictedFromMs,
         cheapestWindow,
         startingNowPrice,
         horizonAvgPrice,
@@ -128,10 +134,14 @@ export default function Dashboard() {
     // Best-window card tap: expand the calculator, then scroll it into view after it renders
     const openCostCalculator = useCallback(() => {
         setCostCalcOpen(true);
+        // The card says "Tap to adjust" when no window fits; settings start collapsed, so open them too
+        if (cheapestWindow === null && !costLoading && !costError && !costNoData) {
+            setCostSettingsOpen(true);
+        }
         requestAnimationFrame(() => {
             document.getElementById('cost-calculator')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
         });
-    }, [setCostCalcOpen]);
+    }, [setCostCalcOpen, setCostSettingsOpen, cheapestWindow, costLoading, costError, costNoData]);
 
     const bestWindowCard = (
         <BestWindowCard
@@ -149,6 +159,8 @@ export default function Dashboard() {
             error={costError}
             noData={costNoData}
             nowMs={costNowMs}
+            excludesPredicted={!costAllowPredicted}
+            predictedFromMs={predictedFromMs}
             onOpen={openCostCalculator}
         />
     );
@@ -234,6 +246,8 @@ export default function Dashboard() {
                         setCustomEnd={setCustomEnd}
                         alertConfig={alertConfig}
                         setAlertConfig={setAlertConfig}
+                        isOpen={controlsOpen}
+                        setIsOpen={setControlsOpen}
                     />
                 </div>
                 <div className="hidden lg:block lg:col-span-3">
@@ -316,6 +330,8 @@ export default function Dashboard() {
             <CostCalculator
                 isOpen={costCalcOpen}
                 setIsOpen={setCostCalcOpen}
+                settingsOpen={costSettingsOpen}
+                setSettingsOpen={setCostSettingsOpen}
                 currentPrice={startingNowPrice}
                 cheapestWindow={cheapestWindow}
                 meanPrice={horizonAvgPrice}
@@ -328,6 +344,9 @@ export default function Dashboard() {
                 setReadyBy={setCostReadyBy}
                 activePreset={costActivePreset}
                 setActivePreset={setCostActivePreset}
+                allowPredicted={costAllowPredicted}
+                setAllowPredicted={setCostAllowPredicted}
+                predictedFromMs={predictedFromMs}
                 isPredicted={cheapestIsPredicted}
                 nowMs={costNowMs}
                 readyByLimitMs={readyByLimitMs}

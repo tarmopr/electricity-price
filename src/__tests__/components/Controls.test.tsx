@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import Controls from "@/components/Controls";
 import type { AlertConfig } from "@/lib/priceAlerts";
 
@@ -36,6 +36,8 @@ const defaultProps = {
     setCustomEnd: vi.fn(),
     alertConfig: defaultAlertConfig,
     setAlertConfig: vi.fn(),
+    isOpen: true,
+    setIsOpen: vi.fn(),
 };
 
 describe("Controls", () => {
@@ -44,6 +46,12 @@ describe("Controls", () => {
         expect(screen.getByRole("button", { name: /yesterday/i })).toBeInTheDocument();
         expect(screen.getByRole("button", { name: /today/i })).toBeInTheDocument();
         expect(screen.getByRole("button", { name: /tomorrow/i })).toBeInTheDocument();
+    });
+
+    it("lists Next 24h as the first period pill", () => {
+        render(<Controls {...defaultProps} />);
+        const pills = within(screen.getByRole("group", { name: /period selection/i })).getAllByRole("button");
+        expect(pills[0]).toHaveAccessibleName("Next 24h");
     });
 
     it("calls setPeriod when a period button is clicked", () => {
@@ -134,6 +142,40 @@ describe("Controls", () => {
         expect(isInsideHiddenContainer(periodGroup)).toBe(false);
         const vatButton = screen.getByRole("button", { name: /include vat/i });
         expect(isInsideHiddenContainer(vatButton)).toBe(false);
+    });
+
+    it("collapsing hides the whole card below lg", () => {
+        render(<Controls {...defaultProps} isOpen={false} />);
+        const header = screen.getByRole("button", { name: "Toggle period controls" });
+        expect(header).toHaveAttribute("aria-expanded", "false");
+        expect(header.className).toContain("lg:hidden");
+
+        const periodGroup = screen.getByRole("group", { name: /period selection/i });
+        expect(isInsideHiddenContainer(periodGroup)).toBe(true);
+        const vatButton = screen.getByRole("button", { name: /include vat/i });
+        expect(isInsideHiddenContainer(vatButton)).toBe(true);
+
+        // The collapsed wrapper must come back from lg up
+        let wrapper: HTMLElement | null = periodGroup;
+        while (wrapper && !wrapper.classList.contains("hidden")) wrapper = wrapper.parentElement;
+        expect(wrapper).not.toBeNull();
+        expect(wrapper!.classList.contains("lg:flex")).toBe(true);
+    });
+
+    it("collapsed header summarises period and VAT", () => {
+        const { rerender } = render(<Controls {...defaultProps} isOpen={false} period="next_24h" includeVat />);
+        expect(screen.getByText("Next 24h \u00b7 incl. VAT")).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Toggle period controls" })).toHaveAccessibleDescription("Next 24h \u00b7 incl. VAT");
+
+        rerender(<Controls {...defaultProps} isOpen={false} period="custom" includeVat={false} />);
+        expect(screen.getByText("Custom \u00b7 excl. VAT")).toBeInTheDocument();
+    });
+
+    it("the header toggles the card", () => {
+        const setIsOpen = vi.fn();
+        render(<Controls {...defaultProps} isOpen setIsOpen={setIsOpen} />);
+        fireEvent.click(screen.getByRole("button", { name: "Toggle period controls" }));
+        expect(setIsOpen).toHaveBeenCalledWith(false);
     });
 
     it("stat overlays and price alert are collapsed on mobile until expanded", () => {

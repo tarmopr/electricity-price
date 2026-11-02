@@ -150,6 +150,10 @@ export function useDashboardPrices(
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
+        // Set in cleanup: a response for a superseded period (or after unmount) must not
+        // overwrite the state of the newer request.
+        let cancelled = false;
+
         async function fetchData() {
             try {
                 setLoading(true);
@@ -158,6 +162,7 @@ export function useDashboardPrices(
                 const { start, end } = getDateRangeForPeriod(period, customStart, customEnd);
 
                 const rawData = await getPricesWithPrediction(start, end);
+                if (cancelled) return;
 
                 // Heatmap week data
                 const weekRange = getHeatmapWeekRange(period, start, end);
@@ -166,6 +171,7 @@ export function useDashboardPrices(
                         weekRange.weekStart,
                         weekRange.weekEnd
                     );
+                    if (cancelled) return;
                     setHeatmapPrices(heatmapData);
                     setHighlightedDates(weekRange.highlightedDates);
                 } else {
@@ -181,21 +187,24 @@ export function useDashboardPrices(
 
                 // Current price and neighbors
                 const current = await getCurrentPrice();
+                if (cancelled) return;
                 setCurrentPrice(current);
 
                 if (current) {
                     const { previous, next } = await fetchCurrentPriceContext(current, data);
+                    if (cancelled) return;
                     setPreviousPrice(previous);
                     setNextPrice(next);
                 }
             } catch (err: unknown) {
+                if (cancelled) return;
                 if (err instanceof Error) {
                     setError(err.message);
                 } else {
                     setError('Failed to load electricity prices');
                 }
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
             }
         }
 
@@ -203,7 +212,10 @@ export function useDashboardPrices(
 
         // Refresh every 15 minutes
         const interval = setInterval(fetchData, 15 * 60 * 1000);
-        return () => clearInterval(interval);
+        return () => {
+            cancelled = true;
+            clearInterval(interval);
+        };
     }, [period, customStart, customEnd]);
 
     return {

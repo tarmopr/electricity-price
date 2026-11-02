@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import CostCalculator from "@/components/CostCalculator";
 import { CheapestWindow } from "@/lib/cheapestWindow";
 
@@ -35,12 +35,16 @@ describe("CostCalculator", () => {
     setReadyBy: noopReadyBy,
     activePreset: "EV Charge",
     setActivePreset: noopStr,
+    allowPredicted: true,
+    setAllowPredicted: vi.fn(),
+    settingsOpen: false,
+    setSettingsOpen: vi.fn(),
     // 2024-06-04 20:00 Tallinn
     nowMs: new Date("2024-06-04T17:00:00.000Z").getTime(),
   };
 
   /** Shorthand for rendering with the panel expanded */
-  const openProps = { ...defaultProps, isOpen: true };
+  const openProps = { ...defaultProps, isOpen: true, settingsOpen: true };
 
   it("renders the header with calculator label", () => {
     render(<CostCalculator {...defaultProps} />);
@@ -51,6 +55,68 @@ describe("CostCalculator", () => {
     render(<CostCalculator {...defaultProps} />);
     // Preset buttons should not be visible when collapsed
     expect(screen.queryByText("Appliance")).not.toBeInTheDocument();
+  });
+
+  it("settings start collapsed to a one-line summary while results show", () => {
+    render(<CostCalculator {...openProps} settingsOpen={false} />);
+    expect(screen.queryByText("Appliance")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Toggle calculator settings" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByText("EV Charge · 40 kWh · 8 h · ready by 07:00")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Toggle calculator settings" })).toHaveAccessibleDescription("EV Charge · 40 kWh · 8 h · ready by 07:00");
+    expect(screen.getByText("Starting Now")).toBeInTheDocument();
+  });
+
+  it("the settings row toggles settings", () => {
+    const setSettingsOpen = vi.fn();
+    render(<CostCalculator {...openProps} settingsOpen={false} setSettingsOpen={setSettingsOpen} />);
+    fireEvent.click(screen.getByRole("button", { name: "Toggle calculator settings" }));
+    expect(setSettingsOpen).toHaveBeenCalledWith(true);
+  });
+
+  it("summary names no deadline and official-only prices", () => {
+    render(
+      <CostCalculator
+        {...openProps}
+        settingsOpen={false}
+        activePreset="Custom"
+        consumptionKwh={2}
+        durationHours={2}
+        readyBy={null}
+        allowPredicted={false}
+        cheapestWindow={null}
+      />
+    );
+    expect(screen.getByText("Custom · 2 kWh · 2 h · no deadline · official prices only")).toBeInTheDocument();
+  });
+
+  it("collapsing the settings clears the dimmed state of a half-typed field", () => {
+    const { container, rerender } = render(<CostCalculator {...openProps} />);
+    const input = screen.getByLabelText("Duration in hours");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "" } });
+    expect(container.querySelector(".opacity-50")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Toggle calculator settings" }));
+    rerender(<CostCalculator {...openProps} settingsOpen={false} />);
+    expect(container.querySelector(".opacity-50")).toBeNull();
+  });
+
+  it("results stay visible with settings open", () => {
+    render(<CostCalculator {...openProps} />);
+    expect(screen.getByText("Appliance")).toBeInTheDocument();
+    expect(screen.getByText("Starting Now")).toBeInTheDocument();
+  });
+
+  it("selecting the Plug-in Hybrid preset sets 14 kWh, 8 h and 07:00", () => {
+    const setActivePreset = vi.fn(), setConsumptionKwh = vi.fn(), setDurationHours = vi.fn(), setReadyBy = vi.fn();
+    render(<CostCalculator {...openProps} setActivePreset={setActivePreset} setConsumptionKwh={setConsumptionKwh}
+      setDurationHours={setDurationHours} setReadyBy={setReadyBy} />);
+    const pill = screen.getByText("Plug-in Hybrid").closest("button")!;
+    expect(within(pill).getByText("14 kWh · 8 h")).toBeInTheDocument();
+    fireEvent.click(pill);
+    expect(setActivePreset).toHaveBeenCalledWith("Plug-in Hybrid");
+    expect(setConsumptionKwh).toHaveBeenCalledWith(14);
+    expect(setDurationHours).toHaveBeenCalledWith(8);
+    expect(setReadyBy).toHaveBeenCalledWith("07:00");
   });
 
   it("shows collapsed summary with current cost", () => {
@@ -392,6 +458,113 @@ describe("CostCalculator", () => {
     expect(setActivePreset).toHaveBeenCalledWith("Custom");
   });
 
+  // ─── Predicted prices option ───────────────────────────────────────────────
+  // Official prices end 01:00 Tallinn on 2024-06-05
+  const predictedFromMs = new Date("2024-06-04T22:00:00.000Z").getTime();
+
+  it("the prices toggle flips the predicted-price option without changing the preset", () => {
+    const setAllowPredicted = vi.fn(), setActivePreset = vi.fn();
+    render(<CostCalculator {...openProps} setAllowPredicted={setAllowPredicted} setActivePreset={setActivePreset} />);
+    const toggle = screen.getByRole("button", { name: "Use predicted prices" });
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(toggle);
+    expect(setAllowPredicted).toHaveBeenCalledWith(false);
+    expect(setActivePreset).not.toHaveBeenCalled();
+  });
+
+  it("names where official prices end when predictions are excluded", () => {
+    render(
+      <CostCalculator
+        {...openProps}
+        allowPredicted={false}
+        predictedFromMs={predictedFromMs}
+        readyByLimitMs={new Date("2024-06-05T04:00:00.000Z").getTime()} // 07:00 Tallinn
+      />
+    );
+    expect(screen.getByText("Official prices end 01:00 — the search stops there")).toBeInTheDocument();
+  });
+
+  it("names where official prices end when predictions are excluded and there is no deadline", () => {
+    render(
+      <CostCalculator
+        {...openProps}
+        allowPredicted={false}
+        predictedFromMs={predictedFromMs}
+        readyBy={null}
+        readyByLimitMs={null}
+      />
+    );
+    expect(screen.getByText("Official prices end 01:00 — the search stops there")).toBeInTheDocument();
+  });
+
+  it("no-window line blames predicted prices when they are excluded", () => {
+    render(
+      <CostCalculator
+        {...openProps}
+        allowPredicted={false}
+        predictedFromMs={predictedFromMs}
+        readyByLimitMs={new Date("2024-06-05T04:00:00.000Z").getTime()} // 07:00 Tallinn
+        cheapestWindow={null}
+      />
+    );
+    expect(screen.getByText("No 8 h window fits before predicted prices start (01:00).")).toBeInTheDocument();
+  });
+
+  it("uses the generic no-window line when predictions are excluded but none are loaded", () => {
+    render(
+      <CostCalculator
+        {...openProps}
+        allowPredicted={false}
+        predictedFromMs={null}
+        cheapestWindow={null}
+      />
+    );
+    expect(screen.getByText("No 8 h window fits in the available prices.")).toBeInTheDocument();
+    expect(screen.queryByText(/before predicted prices start/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Official prices end/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/include predicted prices from/)).not.toBeInTheDocument();
+  });
+
+  it("notes that the stats still include predicted prices", () => {
+    const { rerender } = render(
+      <CostCalculator {...openProps} allowPredicted={false} predictedFromMs={predictedFromMs} />
+    );
+    expect(
+      screen.getByText("Starting now, average and peak include predicted prices from 01:00.")
+    ).toBeInTheDocument();
+    rerender(<CostCalculator {...openProps} allowPredicted predictedFromMs={predictedFromMs} />);
+    expect(screen.queryByText(/include predicted prices from/)).not.toBeInTheDocument();
+  });
+
+  it("hides the official-end hint when ready-by comes first", () => {
+    render(
+      <CostCalculator
+        {...openProps}
+        allowPredicted={false}
+        predictedFromMs={predictedFromMs}
+        readyByLimitMs={new Date("2024-06-04T21:00:00.000Z").getTime()} // 00:00 Tallinn, before 01:00
+      />
+    );
+    expect(screen.queryByText(/Official prices end/)).not.toBeInTheDocument();
+  });
+
+  it("the prices toggle reports aria-pressed=false when predictions are excluded", () => {
+    render(<CostCalculator {...openProps} allowPredicted={false} />);
+    expect(screen.getByRole("button", { name: "Use predicted prices" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("hides the official-end hint when ready-by equals the end of official prices", () => {
+    render(
+      <CostCalculator
+        {...openProps}
+        allowPredicted={false}
+        predictedFromMs={predictedFromMs}
+        readyByLimitMs={predictedFromMs} // 01:00 Tallinn, exactly where official prices end
+      />
+    );
+    expect(screen.queryByText(/Official prices end/)).not.toBeInTheDocument();
+  });
+
   it("dims the estimates while a field draft is empty", () => {
     const { container } = render(<CostCalculator {...openProps} />);
     const input = screen.getByLabelText("Duration in hours");
@@ -419,6 +592,10 @@ describe("CostCalculator loading and state sync", () => {
     setReadyBy: vi.fn(),
     activePreset: "EV Charge",
     setActivePreset: vi.fn(),
+    allowPredicted: true,
+    setAllowPredicted: vi.fn(),
+    settingsOpen: false,
+    setSettingsOpen: vi.fn(),
     nowMs: new Date("2024-06-04T17:00:00.000Z").getTime(),
   };
 
@@ -432,7 +609,7 @@ describe("CostCalculator loading and state sync", () => {
     const setActivePreset = vi.fn();
     const setReadyBy = vi.fn();
     const { container } = render(
-      <CostCalculator {...base} setActivePreset={setActivePreset} setReadyBy={setReadyBy} />
+      <CostCalculator {...base} settingsOpen setActivePreset={setActivePreset} setReadyBy={setReadyBy} />
     );
     const time = container.querySelector('input[type="time"]')!;
     fireEvent.change(time, { target: { value: "06:30" } });
@@ -453,7 +630,7 @@ describe("CostCalculator loading and state sync", () => {
   it("switches the preset to Custom when the ready-by time is cleared", () => {
     const setActivePreset = vi.fn();
     const setReadyBy = vi.fn();
-    render(<CostCalculator {...base} setActivePreset={setActivePreset} setReadyBy={setReadyBy} />);
+    render(<CostCalculator {...base} settingsOpen setActivePreset={setActivePreset} setReadyBy={setReadyBy} />);
     fireEvent.click(screen.getByRole("button", { name: "Clear ready-by time" }));
     expect(setReadyBy).toHaveBeenCalledWith(null);
     expect(setActivePreset).toHaveBeenCalledWith("Custom");
@@ -467,7 +644,7 @@ describe("CostCalculator loading and state sync", () => {
 
   it("switches the preset to Custom when the duration is edited", () => {
     const setActivePreset = vi.fn();
-    render(<CostCalculator {...base} setActivePreset={setActivePreset} />);
+    render(<CostCalculator {...base} settingsOpen setActivePreset={setActivePreset} />);
     const input = screen.getByRole("textbox", { name: "Duration in hours" });
     fireEvent.focus(input);
     fireEvent.change(input, { target: { value: "3" } });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import {
     Area,
     AreaChart,
@@ -21,6 +21,15 @@ import { CheapestWindow, getVisibleWindowRange } from '@/lib/cheapestWindow';
 import { getTallinnHour } from '@/lib/timezone';
 import { formatDuration } from '@/lib/numericInput';
 import { computeWindowLabelLayout } from '@/lib/chartLabel';
+import { anchoredScrollLeft, nextZoomLevel, prevZoomLevel, type ZoomLevel } from '@/lib/chartZoom';
+import { PILL_BASE, PILL_INACTIVE } from '@/lib/styles';
+import { ZoomIn, ZoomOut } from 'lucide-react';
+
+const MAIN_CHART_MARGIN = { top: 20, right: 10, left: -20, bottom: 0 };
+/** Recharts' default YAxis width, which the main chart keeps (spec 4.6) */
+const Y_AXIS_WIDTH = 60;
+/** Where the main chart's plot area sits inside it; zoom anchoring maps time to this area */
+const MAIN_PLOT_INSETS = { left: Y_AXIS_WIDTH + MAIN_CHART_MARGIN.left, right: MAIN_CHART_MARGIN.right };
 
 // ─── Sub-component interfaces ────────────────────────────────────────────────
 
@@ -291,6 +300,29 @@ export default function PriceChart({
     // This hook must be before early returns to satisfy Rules of Hooks.
     const cheapestRef = useMemo(() => getVisibleWindowRange(cheapestWindow, data), [cheapestWindow, data]);
 
+    // Zoom is component state, not persisted: a zoom factor means a different time span
+    // per period. It survives period changes and data refreshes; it resets on reload and
+    // when switching to the heatmap (spec ruling R8).
+    const [zoom, setZoom] = useState<ZoomLevel>(1);
+    const scrollRef = useRef<HTMLDivElement>(null);
+    // scrollLeft to apply once the chart has re-laid out at the new width,
+    // so the time at the viewport centre stays in place across zoom steps.
+    const pendingScroll = useRef<number | null>(null);
+    useLayoutEffect(() => {
+        if (pendingScroll.current !== null && scrollRef.current) {
+            scrollRef.current.scrollLeft = pendingScroll.current;
+        }
+        pendingScroll.current = null;
+    }, [zoom]);
+
+    function changeZoom(next: ZoomLevel): void {
+        const el = scrollRef.current;
+        if (el) {
+            pendingScroll.current = anchoredScrollLeft(el.scrollLeft, el.clientWidth, zoom, next, MAIN_PLOT_INSETS);
+        }
+        setZoom(next);
+    }
+
     if (!mounted) {
         return <div className="w-full h-[300px] sm:h-[400px] mt-4 relative bg-zinc-900/10 animate-pulse rounded-xl flex items-center justify-center text-zinc-600 border border-zinc-800/50">Loading chart...</div>;
     }
@@ -404,202 +436,267 @@ export default function PriceChart({
     const showMinMax = minPoint && maxPoint && minPoint.displayPrice !== maxPoint.displayPrice;
 
     return (
-        <div
-            className="w-full h-[300px] sm:h-[400px] mt-4 relative overflow-hidden"
-            aria-label={
-                minPoint && maxPoint
-                    ? `Electricity price chart: prices range from ${minPoint.displayPrice} to ${maxPoint.displayPrice} cents per kWh`
-                    : 'Electricity price chart'
-            }
-            role="img"
-            style={{ WebkitTapHighlightColor: 'transparent' }}
-        >
-            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} style={{ outline: 'none' }}>
-                <AreaChart
-                    data={chartData}
-                    margin={{ top: 20, right: 10, left: -20, bottom: 0 }}
-                    style={{ outline: 'none' }}
-                    onMouseEnter={() => setIsHovering(true)}
-                    onMouseLeave={() => setIsHovering(false)}
-                    onTouchStart={() => setIsHovering(true)}
-                    onTouchEnd={() => setIsHovering(false)}
+        <div>
+            <div className="w-full h-[300px] sm:h-[400px] mt-4 relative overflow-hidden">
+                <div
+                    ref={scrollRef}
+                    className={`h-full ${zoom > 1 ? "overflow-x-auto overflow-y-hidden" : "overflow-hidden"}`}
+                    role={zoom > 1 ? "region" : undefined}
+                    aria-label={zoom > 1 ? "Scrollable price chart" : undefined}
+                    tabIndex={zoom > 1 ? 0 : undefined}
                 >
-                    <defs>
-                        {/* Glow Filter for the main Area stroke */}
-                        <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
-                            <feGaussianBlur stdDeviation="4" result="blur" />
-                            <feMerge>
-                                <feMergeNode in="blur" />
-                                <feMergeNode in="SourceGraphic" />
-                            </feMerge>
-                        </filter>
+                    {/* Inline width: the zoom factor is data, and Tailwind classes must be static */}
+                    <div className="flex h-full" style={{ width: `${zoom * 100}%` }}>
+                        {zoom > 1 && (
+                            // Pinned price axis while zoomed. Same height, top/bottom margins and X-axis
+                            // height as the main chart, so the same Y scale: its Y-axis props and
+                            // series must mirror the main chart's.
+                            <div
+                                aria-hidden="true"
+                                data-testid="y-axis-overlay"
+                                className="sticky left-0 z-10 h-full w-12 shrink-0 -mr-12 pointer-events-none bg-gradient-to-r from-zinc-950 via-zinc-950/90 to-transparent"
+                            >
+                                <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                                    {/* No accessibility layer: it adds a keyboard focus stop inside this aria-hidden copy */}
+                                    <AreaChart data={chartData} margin={{ top: 20, right: 0, left: -20, bottom: 0 }} accessibilityLayer={false}>
+                                        <XAxis dataKey="timestamp" tick={false} tickLine={false} axisLine={false} />
+                                        <YAxis
+                                            stroke="#71717a"
+                                            tick={{ fill: '#71717a', fontSize: 12 }}
+                                            tickFormatter={(val) => `${val}¢`}
+                                            domain={[calculatedMin, 'auto']}
+                                            allowDataOverflow={true}
+                                        />
+                                        <Area dataKey="knownPrice" stroke="none" fill="none" isAnimationActive={false} activeDot={false} />
+                                        <Area dataKey="predictedPrice" stroke="none" fill="none" isAnimationActive={false} activeDot={false} />
+                                        {showAvg7d && avg7dPattern && <Line dataKey="avg7d" stroke="none" dot={false} isAnimationActive={false} />}
+                                        {showAvg30d && avg30dPattern && <Line dataKey="avg30d" stroke="none" dot={false} isAnimationActive={false} />}
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </div>
+                        )}
+                        <div
+                            className="h-full flex-1 min-w-0"
+                            aria-label={
+                                minPoint && maxPoint
+                                    ? `Electricity price chart: prices range from ${minPoint.displayPrice} to ${maxPoint.displayPrice} cents per kWh`
+                                    : 'Electricity price chart'
+                            }
+                            role="img"
+                            style={{ WebkitTapHighlightColor: 'transparent' }}
+                        >
+                            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} style={{ outline: 'none' }}>
+                                <AreaChart
+                                    data={chartData}
+                                    margin={MAIN_CHART_MARGIN}
+                                    style={{ outline: 'none' }}
+                                    onMouseEnter={() => setIsHovering(true)}
+                                    onMouseLeave={() => setIsHovering(false)}
+                                    onTouchStart={() => setIsHovering(true)}
+                                    onTouchEnd={() => setIsHovering(false)}
+                                >
+                                    <defs>
+                                        {/* Glow Filter for the main Area stroke */}
+                                        <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+                                            <feGaussianBlur stdDeviation="4" result="blur" />
+                                            <feMerge>
+                                                <feMergeNode in="blur" />
+                                                <feMergeNode in="SourceGraphic" />
+                                            </feMerge>
+                                        </filter>
 
-                        <linearGradient id="cursorGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#ffffff" stopOpacity={0.0} />
-                            <stop offset="50%" stopColor="#ffffff" stopOpacity={0.05} />
-                            <stop offset="100%" stopColor="#ffffff" stopOpacity={0.0} />
-                        </linearGradient>
+                                        <linearGradient id="cursorGradient" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stopColor="#ffffff" stopOpacity={0.0} />
+                                            <stop offset="50%" stopColor="#ffffff" stopOpacity={0.05} />
+                                            <stop offset="100%" stopColor="#ffffff" stopOpacity={0.0} />
+                                        </linearGradient>
 
-                        <linearGradient id="colorPast" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#0284c7" stopOpacity={0.4} /> {/* Sky Blue */}
-                            <stop offset={`${Math.max(0, medianOffset - 0.15) * 100}%`} stopColor="#0d9488" stopOpacity={0.25} /> {/* Teal */}
-                            <stop offset={`${medianOffset * 100}%`} stopColor="#10b981" stopOpacity={0.25} /> {/* Emerald */}
-                            <stop offset={`${Math.min(1, medianOffset + 0.15) * 100}%`} stopColor="#059669" stopOpacity={0.25} />
-                            <stop offset="100%" stopColor="#064e3b" stopOpacity={0.4} />
-                        </linearGradient>
-                        <linearGradient id="colorFuture" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} /> {/* Indigo */}
-                            <stop offset="95%" stopColor="#4338ca" stopOpacity={0} />
-                        </linearGradient>
-                        <linearGradient id="colorPredicted" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#71717a" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#71717a" stopOpacity={0} />
-                        </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#3f3f46" opacity={gridOpacity} style={{ transition: 'opacity 0.3s' }} />
-                    <XAxis
-                        dataKey="timestamp"
-                        tickFormatter={(tick) => format(new Date(tick), xAxisFormat)}
-                        stroke="#71717a"
-                        tick={{ fill: '#71717a', fontSize: 12 }}
-                        tickMargin={10}
-                        minTickGap={minTickGap}
-                        style={{ opacity: isHovering ? 0.6 : 1, transition: 'opacity 0.3s' }}
-                    />
-                    <YAxis
-                        stroke="#71717a"
-                        tick={{ fill: '#71717a', fontSize: 12 }}
-                        tickFormatter={(val) => `${val}¢`}
-                        domain={[calculatedMin, 'auto']}
-                        allowDataOverflow={true}
-                        style={{ opacity: isHovering ? 0.6 : 1, transition: 'opacity 0.3s' }}
-                    />
-                    <Tooltip
-                        content={(props) => <CustomTooltip {...props} stats={stats} />}
-                        cursor={<CustomCursor />}
-                        isAnimationActive={true}
-                        animationDuration={200}
-                    />
+                                        <linearGradient id="colorPast" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stopColor="#0284c7" stopOpacity={0.4} /> {/* Sky Blue */}
+                                            <stop offset={`${Math.max(0, medianOffset - 0.15) * 100}%`} stopColor="#0d9488" stopOpacity={0.25} /> {/* Teal */}
+                                            <stop offset={`${medianOffset * 100}%`} stopColor="#10b981" stopOpacity={0.25} /> {/* Emerald */}
+                                            <stop offset={`${Math.min(1, medianOffset + 0.15) * 100}%`} stopColor="#059669" stopOpacity={0.25} />
+                                            <stop offset="100%" stopColor="#064e3b" stopOpacity={0.4} />
+                                        </linearGradient>
+                                        <linearGradient id="colorFuture" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} /> {/* Indigo */}
+                                            <stop offset="95%" stopColor="#4338ca" stopOpacity={0} />
+                                        </linearGradient>
+                                        <linearGradient id="colorPredicted" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#71717a" stopOpacity={0.3} />
+                                            <stop offset="95%" stopColor="#71717a" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#3f3f46" opacity={gridOpacity} style={{ transition: 'opacity 0.3s' }} />
+                                    <XAxis
+                                        dataKey="timestamp"
+                                        tickFormatter={(tick) => format(new Date(tick), xAxisFormat)}
+                                        stroke="#71717a"
+                                        tick={{ fill: '#71717a', fontSize: 12 }}
+                                        tickMargin={10}
+                                        minTickGap={minTickGap}
+                                        style={{ opacity: isHovering ? 0.6 : 1, transition: 'opacity 0.3s' }}
+                                    />
+                                    <YAxis
+                                        stroke="#71717a"
+                                        tick={zoom > 1 ? false : { fill: '#71717a', fontSize: 12 }}
+                                        tickFormatter={(val) => `${val}¢`}
+                                        domain={[calculatedMin, 'auto']}
+                                        allowDataOverflow={true}
+                                        style={{ opacity: isHovering ? 0.6 : 1, transition: 'opacity 0.3s' }}
+                                    />
+                                    <Tooltip
+                                        content={(props) => <CustomTooltip {...props} stats={stats} />}
+                                        cursor={<CustomCursor />}
+                                        isAnimationActive={true}
+                                        animationDuration={200}
+                                    />
 
-                    {/* Cheapest Window Reference Area */}
-                    {cheapestWindow && cheapestRef && (
-                        <ReferenceArea
-                            x1={cheapestRef.x1}
-                            x2={cheapestRef.x2}
-                            fill="#86efac" // subtle green fill
-                            fillOpacity={0.15}
-                            strokeOpacity={0}
-                            // Window stats describe the whole window — hide the label when only part is visible
-                            label={cheapestRef.clipped ? undefined : (
-                                <WindowBandLabel
-                                    text={`Cheapest ${formatDuration(cheapestWindow.hours)}: ${cheapestWindow.averagePrice.toFixed(2)} ¢/kWh`}
-                                    x1Index={chartIndex.get(cheapestRef.x1) ?? 0}
-                                    x2Index={chartIndex.get(cheapestRef.x2) ?? 0}
-                                    nowIndex={showNow && currentTimestamp ? chartIndex.get(currentTimestamp) ?? null : null}
-                                    nowText={nowLabelText}
-                                />
-                            )}
-                        />
-                    )}
+                                    {/* Cheapest Window Reference Area */}
+                                    {cheapestWindow && cheapestRef && (
+                                        <ReferenceArea
+                                            x1={cheapestRef.x1}
+                                            x2={cheapestRef.x2}
+                                            fill="#86efac" // subtle green fill
+                                            fillOpacity={0.15}
+                                            strokeOpacity={0}
+                                            // Window stats describe the whole window — hide the label when only part is visible
+                                            label={cheapestRef.clipped ? undefined : (
+                                                <WindowBandLabel
+                                                    text={`Cheapest ${formatDuration(cheapestWindow.hours)}: ${cheapestWindow.averagePrice.toFixed(2)} ¢/kWh`}
+                                                    x1Index={chartIndex.get(cheapestRef.x1) ?? 0}
+                                                    x2Index={chartIndex.get(cheapestRef.x2) ?? 0}
+                                                    nowIndex={showNow && currentTimestamp ? chartIndex.get(currentTimestamp) ?? null : null}
+                                                    nowText={nowLabelText}
+                                                />
+                                            )}
+                                        />
+                                    )}
 
-                    {/* Current Time Line */}
-                    {showNow && currentTimestamp && (
-                        <ReferenceLine
-                            x={currentTimestamp}
-                            stroke="#38bdf8" // bright blue
-                            strokeDasharray="3 3"
-                            strokeOpacity={lineOpacity}
-                            style={{ transition: 'opacity 0.3s' }}
-                            label={<ChartReferenceLabel orientation="vertical" value={nowLabelText} fill="#38bdf8" isHovering={isHovering} />}
-                        />
-                    )}
+                                    {/* Current Time Line */}
+                                    {showNow && currentTimestamp && (
+                                        <ReferenceLine
+                                            x={currentTimestamp}
+                                            stroke="#38bdf8" // bright blue
+                                            strokeDasharray="3 3"
+                                            strokeOpacity={lineOpacity}
+                                            style={{ transition: 'opacity 0.3s' }}
+                                            label={<ChartReferenceLabel orientation="vertical" value={nowLabelText} fill="#38bdf8" isHovering={isHovering} />}
+                                        />
+                                    )}
 
-                    {/* Statistical Reference Lines */}
-                    {stats && showMean && <ReferenceLine y={stats.mean} stroke="#fde047" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`Mean ${stats.mean.toFixed(2)} ¢`} fill="#fde047" isHovering={isHovering} />} />}
-                    {stats && showMedian && <ReferenceLine y={stats.median} stroke="#f43f5e" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`Median ${stats.median.toFixed(2)} ¢`} fill="#f43f5e" isHovering={isHovering} />} />}
-                    {stats && showP75 && <ReferenceLine y={stats.p75} stroke="#a78bfa" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`75th ${stats.p75.toFixed(2)} ¢`} fill="#a78bfa" isHovering={isHovering} />} />}
-                    {stats && showP90 && <ReferenceLine y={stats.p90} stroke="#f472b6" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`90th ${stats.p90.toFixed(2)} ¢`} fill="#f472b6" isHovering={isHovering} />} />}
-                    {stats && showP95 && <ReferenceLine y={stats.p95} stroke="#fb923c" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`95th ${stats.p95.toFixed(2)} ¢`} fill="#fb923c" isHovering={isHovering} />} />}
+                                    {/* Statistical Reference Lines */}
+                                    {stats && showMean && <ReferenceLine y={stats.mean} stroke="#fde047" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`Mean ${stats.mean.toFixed(2)} ¢`} fill="#fde047" isHovering={isHovering} />} />}
+                                    {stats && showMedian && <ReferenceLine y={stats.median} stroke="#f43f5e" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`Median ${stats.median.toFixed(2)} ¢`} fill="#f43f5e" isHovering={isHovering} />} />}
+                                    {stats && showP75 && <ReferenceLine y={stats.p75} stroke="#a78bfa" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`75th ${stats.p75.toFixed(2)} ¢`} fill="#a78bfa" isHovering={isHovering} />} />}
+                                    {stats && showP90 && <ReferenceLine y={stats.p90} stroke="#f472b6" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`90th ${stats.p90.toFixed(2)} ¢`} fill="#f472b6" isHovering={isHovering} />} />}
+                                    {stats && showP95 && <ReferenceLine y={stats.p95} stroke="#fb923c" strokeDasharray="4 4" strokeOpacity={lineOpacity} style={{ transition: 'opacity 0.3s' }} label={<ChartReferenceLabel value={`95th ${stats.p95.toFixed(2)} ¢`} fill="#fb923c" isHovering={isHovering} />} />}
 
-                    <Area
-                        type="monotone"
-                        dataKey="knownPrice"
-                        stroke="url(#colorPast)"
-                        strokeWidth={3}
-                        fillOpacity={1}
-                        fill="url(#colorPast)"
-                        isAnimationActive={true}
-                        filter="url(#neonGlow)"
-                        activeDot={{ r: 6, fill: '#10b981', stroke: '#fff', strokeWidth: 2, className: 'animate-pulse drop-shadow-[0_0_12px_rgba(16,185,129,1)]' }}
-                    />
-                    <Area
-                        type="monotone"
-                        dataKey="predictedPrice"
-                        stroke="#6366f1"
-                        strokeWidth={3}
-                        strokeDasharray="4 4"
-                        fillOpacity={1}
-                        fill="url(#colorFuture)"
-                        isAnimationActive={true}
-                        filter="url(#neonGlow)"
-                        activeDot={{ r: 6, fill: '#6366f1', stroke: '#fff', strokeWidth: 2, className: 'animate-pulse drop-shadow-[0_0_12px_rgba(99,102,241,1)]' }}
-                    />
+                                    <Area
+                                        type="monotone"
+                                        dataKey="knownPrice"
+                                        stroke="url(#colorPast)"
+                                        strokeWidth={3}
+                                        fillOpacity={1}
+                                        fill="url(#colorPast)"
+                                        isAnimationActive={true}
+                                        filter="url(#neonGlow)"
+                                        activeDot={{ r: 6, fill: '#10b981', stroke: '#fff', strokeWidth: 2, className: 'animate-pulse drop-shadow-[0_0_12px_rgba(16,185,129,1)]' }}
+                                    />
+                                    <Area
+                                        type="monotone"
+                                        dataKey="predictedPrice"
+                                        stroke="#6366f1"
+                                        strokeWidth={3}
+                                        strokeDasharray="4 4"
+                                        fillOpacity={1}
+                                        fill="url(#colorFuture)"
+                                        isAnimationActive={true}
+                                        filter="url(#neonGlow)"
+                                        activeDot={{ r: 6, fill: '#6366f1', stroke: '#fff', strokeWidth: 2, className: 'animate-pulse drop-shadow-[0_0_12px_rgba(99,102,241,1)]' }}
+                                    />
 
-                    {/* Historical Average Overlay Lines */}
-                    {showAvg7d && avg7dPattern && (
-                        <Line
-                            type="monotone"
-                            dataKey="avg7d"
-                            stroke="#2dd4bf"
-                            strokeWidth={2}
-                            strokeDasharray="6 3"
-                            dot={false}
-                            strokeOpacity={0.6}
-                            isAnimationActive={true}
-                            name="7-Day Avg"
-                            connectNulls={false}
-                        />
-                    )}
-                    {showAvg30d && avg30dPattern && (
-                        <Line
-                            type="monotone"
-                            dataKey="avg30d"
-                            stroke="#22d3ee"
-                            strokeWidth={2}
-                            strokeDasharray="6 3"
-                            dot={false}
-                            strokeOpacity={0.6}
-                            isAnimationActive={true}
-                            name="30-Day Avg"
-                            connectNulls={false}
-                        />
-                    )}
+                                    {/* Historical Average Overlay Lines */}
+                                    {showAvg7d && avg7dPattern && (
+                                        <Line
+                                            type="monotone"
+                                            dataKey="avg7d"
+                                            stroke="#2dd4bf"
+                                            strokeWidth={2}
+                                            strokeDasharray="6 3"
+                                            dot={false}
+                                            strokeOpacity={0.6}
+                                            isAnimationActive={true}
+                                            name="7-Day Avg"
+                                            connectNulls={false}
+                                        />
+                                    )}
+                                    {showAvg30d && avg30dPattern && (
+                                        <Line
+                                            type="monotone"
+                                            dataKey="avg30d"
+                                            stroke="#22d3ee"
+                                            strokeWidth={2}
+                                            strokeDasharray="6 3"
+                                            dot={false}
+                                            strokeOpacity={0.6}
+                                            isAnimationActive={true}
+                                            name="30-Day Avg"
+                                            connectNulls={false}
+                                        />
+                                    )}
 
-                    {/* Min/Max Price Annotations */}
-                    {showMinMax && minPoint && (
-                        <ReferenceDot
-                            x={minPoint.timestamp}
-                            y={minPoint.displayPrice}
-                            r={4}
-                            fill="#22d3ee"
-                            stroke="#083344"
-                            strokeWidth={2}
-                            label={<MinMaxLabel type="min" value={`${minPoint.displayPrice} ¢`} isHovering={isHovering} />}
-                        />
-                    )}
-                    {showMinMax && maxPoint && (
-                        <ReferenceDot
-                            x={maxPoint.timestamp}
-                            y={maxPoint.displayPrice}
-                            r={4}
-                            fill="#f59e0b"
-                            stroke="#451a03"
-                            strokeWidth={2}
-                            label={<MinMaxLabel type="max" value={`${maxPoint.displayPrice} ¢`} isHovering={isHovering} />}
-                        />
-                    )}
-                </AreaChart>
-            </ResponsiveContainer>
+                                    {/* Min/Max Price Annotations */}
+                                    {showMinMax && minPoint && (
+                                        <ReferenceDot
+                                            x={minPoint.timestamp}
+                                            y={minPoint.displayPrice}
+                                            r={4}
+                                            fill="#22d3ee"
+                                            stroke="#083344"
+                                            strokeWidth={2}
+                                            label={<MinMaxLabel type="min" value={`${minPoint.displayPrice} ¢`} isHovering={isHovering} />}
+                                        />
+                                    )}
+                                    {showMinMax && maxPoint && (
+                                        <ReferenceDot
+                                            x={maxPoint.timestamp}
+                                            y={maxPoint.displayPrice}
+                                            r={4}
+                                            fill="#f59e0b"
+                                            stroke="#451a03"
+                                            strokeWidth={2}
+                                            label={<MinMaxLabel type="max" value={`${maxPoint.displayPrice} ¢`} isHovering={isHovering} />}
+                                        />
+                                    )}
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 mt-2 px-2 sm:px-0">
+                {zoom > 1 && <span className="mr-auto text-xs text-zinc-500">Scroll sideways for more</span>}
+                <button
+                    type="button"
+                    aria-label="Zoom out"
+                    disabled={zoom === 1}
+                    onClick={() => changeZoom(prevZoomLevel(zoom))}
+                    className={`${PILL_BASE} ${PILL_INACTIVE} flex items-center justify-center min-w-11 disabled:opacity-40 disabled:pointer-events-none`}
+                >
+                    <ZoomOut className="w-4 h-4" />
+                </button>
+                <span className="text-xs text-zinc-400 tabular-nums w-6 text-center">{zoom}×</span>
+                <button
+                    type="button"
+                    aria-label="Zoom in"
+                    disabled={zoom === 8}
+                    onClick={() => changeZoom(nextZoomLevel(zoom))}
+                    className={`${PILL_BASE} ${PILL_INACTIVE} flex items-center justify-center min-w-11 disabled:opacity-40 disabled:pointer-events-none`}
+                >
+                    <ZoomIn className="w-4 h-4" />
+                </button>
+            </div>
         </div>
     );
 }

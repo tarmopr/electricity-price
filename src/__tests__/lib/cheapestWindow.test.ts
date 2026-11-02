@@ -485,6 +485,164 @@ describe("cheapestWindow", () => {
       expect(r.readyByLimit).toBeNull();
       expect(r.best).not.toBeNull();
     });
+
+    // ─── Excluding predicted prices ──────────────────────────────────────────
+    // now = first point = 20:00 Tallinn, 14 Jun 2024 (EEST, UTC+3)
+
+    it("excludePredicted: the search ends where predicted prices start", () => {
+      // 20:00–23:59 official at 9, predicted from 00:00 (cheap 1 at 00:00–01:59)
+      const points = hourlyFromTallinn(20, [9, 9, 9, 9, 1, 1, 9], 4);
+      const r = computeRollingWindow(points, {
+        now: new Date(points[0].timestamp),
+        durationHours: 2,
+        readyBy: null,
+        excludePredicted: true,
+      });
+      expect(r.best!.averagePrice).toBeCloseTo(9);
+      expect(r.best!.startTimestamp).toBe("2024-06-14T17:00:00.000Z"); // 20:00 Tallinn
+      expect(r.isPredicted).toBe(false);
+      expect(r.predictedFrom!.toISOString()).toBe("2024-06-14T21:00:00.000Z"); // 00:00 Tallinn
+      // Horizon stats still include predicted prices
+      expect(r.horizonAvgPrice).toBeCloseTo(47 / 7);
+      expect(r.horizonMaxPrice).toBe(9);
+    });
+
+    it("excludePredicted: no window when official prices are shorter than the duration", () => {
+      // Official 20:00–21:59 only, predicted from 22:00
+      const points = hourlyFromTallinn(20, [9, 9, 1, 1, 1, 1], 2);
+      const r = computeRollingWindow(points, {
+        now: new Date(points[0].timestamp),
+        durationHours: 4,
+        readyBy: null,
+        excludePredicted: true,
+      });
+      expect(r.best).toBeNull();
+      expect(r.bestIgnoresDeadline).toBe(false);
+      expect(r.predictedFrom!.toISOString()).toBe("2024-06-14T19:00:00.000Z"); // 22:00 Tallinn
+      expect(r.horizonAvgPrice).toBeCloseTo(22 / 6);
+    });
+
+    it("excludePredicted: a later ready-by is capped where predictions start", () => {
+      // Official 20:00–23:59, predicted from 00:00; ready by 07:00 is past the official end
+      const points = hourlyFromTallinn(20, [5, 5, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1], 4);
+      const r = computeRollingWindow(points, {
+        now: new Date(points[0].timestamp),
+        durationHours: 2,
+        readyBy: "07:00",
+        excludePredicted: true,
+      });
+      expect(r.best!.startTimestamp).toBe("2024-06-14T19:00:00.000Z"); // 22:00 Tallinn
+      expect(r.best!.endTimestamp).toBe("2024-06-14T21:00:00.000Z"); // 00:00 Tallinn
+      expect(r.best!.averagePrice).toBeCloseTo(3);
+      expect(r.bestIgnoresDeadline).toBe(false);
+    });
+
+    it("excludePredicted: the deadline fallback stays on official prices", () => {
+      // Official 20:00–23:59, predicted from 00:00; ready by 21:00 is 1 h away = half
+      // the 2 h duration, so it is not rolled over and nothing fits before it
+      const points = hourlyFromTallinn(20, [9, 9, 2, 2, 1, 1], 4);
+      const opts = { now: new Date(points[0].timestamp), durationHours: 2, readyBy: "21:00" };
+      const r = computeRollingWindow(points, { ...opts, excludePredicted: true });
+      expect(r.best!.startTimestamp).toBe("2024-06-14T19:00:00.000Z"); // 22:00 Tallinn
+      expect(r.best!.endTimestamp).toBe("2024-06-14T21:00:00.000Z"); // 00:00 Tallinn
+      expect(r.best!.averagePrice).toBeCloseTo(2);
+      expect(r.bestIgnoresDeadline).toBe(true);
+      expect(r.isPredicted).toBe(false);
+
+      // Predictions allowed: the fallback picks the predicted 00:00–02:00
+      const allowed = computeRollingWindow(points, opts);
+      expect(allowed.best!.startTimestamp).toBe("2024-06-14T21:00:00.000Z"); // 00:00 Tallinn
+      expect(allowed.best!.averagePrice).toBeCloseTo(1);
+    });
+
+    it("predictedFrom is null when every slot is official", () => {
+      const points = hourlyFromTallinn(20, [1, 2, 3]);
+      const r = computeRollingWindow(points, { now: new Date(points[0].timestamp), durationHours: 1, readyBy: null });
+      expect(r.predictedFrom).toBeNull();
+    });
+
+    it("excludePredicted: a filled gap inside official prices is skipped, not where official prices end", () => {
+      // Official 15-minute points 20:00–22:45 Tallinn (17:00–19:45Z) with 20:30 missing:
+      // the 20:30 slot is a predicted fill inside official data
+      const start = Date.UTC(2024, 5, 14, 17); // 20:00 Tallinn
+      const points: { timestamp: string; displayPrice: number; isPredicted: boolean }[] = [];
+      for (let k = 0; k < 12; k++) {
+        if (k === 2) continue;
+        points.push({
+          timestamp: new Date(start + k * 15 * 60_000).toISOString(),
+          displayPrice: k === 3 || k === 4 ? 1 : 5,
+          isPredicted: false,
+        });
+      }
+      // Predicted hourly points at 23:00 and 00:00 Tallinn
+      points.push({ timestamp: "2024-06-14T20:00:00.000Z", displayPrice: 0, isPredicted: true });
+      points.push({ timestamp: "2024-06-14T21:00:00.000Z", displayPrice: 0, isPredicted: true });
+
+      const r = computeRollingWindow(points, {
+        now: new Date(start),
+        durationHours: 0.5,
+        readyBy: null,
+        excludePredicted: true,
+      });
+      expect(r.best!.startTimestamp).toBe("2024-06-14T17:45:00.000Z"); // 20:45 Tallinn
+      expect(r.best!.averagePrice).toBeCloseTo(1);
+      expect(r.isPredicted).toBe(false);
+      expect(r.predictedFrom!.toISOString()).toBe("2024-06-14T20:00:00.000Z"); // 23:00 Tallinn, not the 20:30 fill
+    });
+
+    it("excludePredicted: a cheap predicted fill inside official prices is not searched", () => {
+      // Official 15-minute points 20:00–22:45 Tallinn (17:00–19:45Z) with 20:30 missing;
+      // 20:15 is priced 0, so the 20:30 fill copies 0 and 20:15–20:45 would average 0
+      // if the fill were searched
+      const start = Date.UTC(2024, 5, 14, 17); // 20:00 Tallinn
+      const points: { timestamp: string; displayPrice: number; isPredicted: boolean }[] = [];
+      for (let k = 0; k < 12; k++) {
+        if (k === 2) continue;
+        points.push({
+          timestamp: new Date(start + k * 15 * 60_000).toISOString(),
+          displayPrice: k === 1 ? 0 : k === 3 || k === 4 ? 1 : 5,
+          isPredicted: false,
+        });
+      }
+
+      const r = computeRollingWindow(points, {
+        now: new Date(start),
+        durationHours: 0.5,
+        readyBy: null,
+        excludePredicted: true,
+      });
+      expect(r.best!.startTimestamp).toBe("2024-06-14T17:45:00.000Z"); // 20:45 Tallinn
+      expect(r.best!.averagePrice).toBeCloseTo(1);
+      expect(r.isPredicted).toBe(false);
+    });
+
+    it("excludePredicted: no window when the whole horizon is predicted", () => {
+      // Every point predicted from 20:00 Tallinn
+      const points = hourlyFromTallinn(20, [3, 2, 1], 0);
+      const r = computeRollingWindow(points, {
+        now: new Date(points[0].timestamp),
+        durationHours: 1,
+        readyBy: null,
+        excludePredicted: true,
+      });
+      expect(r.best).toBeNull();
+      expect(r.bestIgnoresDeadline).toBe(false);
+      expect(r.predictedFrom!.toISOString()).toBe("2024-06-14T17:00:00.000Z"); // 20:00 Tallinn
+      expect(r.horizonAvgPrice).toBeCloseTo(2);
+    });
+
+    it("reports predictedFrom even when the duration is zero", () => {
+      // Predicted from 22:00 Tallinn
+      const points = hourlyFromTallinn(20, [1, 1, 1], 2);
+      const r = computeRollingWindow(points, {
+        now: new Date(points[0].timestamp),
+        durationHours: 0,
+        readyBy: null,
+        excludePredicted: true,
+      });
+      expect(r.best).toBeNull();
+      expect(r.predictedFrom!.toISOString()).toBe("2024-06-14T19:00:00.000Z"); // 22:00 Tallinn
+    });
   });
 
   // ─── Ready-by resolution ───────────────────────────────────────────────────

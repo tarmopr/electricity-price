@@ -118,6 +118,11 @@ function makeCostCalc(overrides: Record<string, unknown> = {}) {
         setCostActivePreset: vi.fn(),
         costCalcOpen: false,
         setCostCalcOpen: vi.fn(),
+        costSettingsOpen: false,
+        setCostSettingsOpen: vi.fn(),
+        costAllowPredicted: true,
+        setCostAllowPredicted: vi.fn(),
+        predictedFromMs: null,
         cheapestWindow: null,
         startingNowPrice: null,
         horizonAvgPrice: null,
@@ -136,11 +141,12 @@ function makeCostCalc(overrides: Record<string, unknown> = {}) {
 
 /**
  * The Best Window card is rendered twice (mobile: `lg:hidden`, desktop: `hidden lg:block`);
- * jsdom ignores CSS, so tests scope queries to one copy.
+ * jsdom ignores CSS, so tests scope queries to one copy. The desktop selector includes
+ * `lg:col-span-3` because the Controls "Period" label is also `hidden lg:block`.
  */
 function bestWindowCopies(container: HTMLElement) {
     const mobile = container.querySelector<HTMLElement>(".lg\\:hidden")!;
-    const desktop = container.querySelector<HTMLElement>(".hidden.lg\\:block")!;
+    const desktop = container.querySelector<HTMLElement>(".hidden.lg\\:block.lg\\:col-span-3")!;
     return { mobile, desktop };
 }
 
@@ -293,8 +299,9 @@ describe("Dashboard", () => {
 
     it("tapping the Best Window card opens the cost calculator", () => {
         const setCostCalcOpen = vi.fn();
+        const setCostSettingsOpen = vi.fn();
         useCostCalculator.mockReturnValue(
-            makeCostCalc({ cheapestWindow, setCostCalcOpen }) as unknown as ReturnType<typeof useCostCalculator>
+            makeCostCalc({ cheapestWindow, setCostCalcOpen, setCostSettingsOpen }) as unknown as ReturnType<typeof useCostCalculator>
         );
         const scrollIntoView = vi.fn();
         const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
@@ -310,6 +317,156 @@ describe("Dashboard", () => {
         expect(setCostCalcOpen).toHaveBeenCalledTimes(2);
         expect(setCostCalcOpen).toHaveBeenCalledWith(true);
         expect(scrollIntoView).toHaveBeenCalledTimes(2);
+        // A window is shown, so the settings are left alone
+        expect(setCostSettingsOpen).not.toHaveBeenCalled();
+        raf.mockRestore();
+    });
+
+    it("tapping the card when no window fits opens the settings too", () => {
+        const setCostCalcOpen = vi.fn();
+        const setCostSettingsOpen = vi.fn();
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({ cheapestWindow: null, setCostCalcOpen, setCostSettingsOpen }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        const scrollIntoView = vi.fn();
+        const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+            cb(0);
+            return 0;
+        });
+        const { container } = render(<Dashboard />);
+        document.getElementById("cost-calculator")!.scrollIntoView = scrollIntoView;
+        const { mobile } = bestWindowCopies(container);
+        fireEvent.click(within(mobile).getByRole("button", { name: /open cost calculator/i }));
+        expect(setCostCalcOpen).toHaveBeenCalledWith(true);
+        expect(setCostSettingsOpen).toHaveBeenCalledWith(true);
+        raf.mockRestore();
+    });
+
+    it("tapping the card in its load-error state leaves the settings alone", () => {
+        const setCostCalcOpen = vi.fn();
+        const setCostSettingsOpen = vi.fn();
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({ cheapestWindow: null, costError: "boom", setCostCalcOpen, setCostSettingsOpen }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        const scrollIntoView = vi.fn();
+        const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+            cb(0);
+            return 0;
+        });
+        const { container } = render(<Dashboard />);
+        document.getElementById("cost-calculator")!.scrollIntoView = scrollIntoView;
+        const { mobile } = bestWindowCopies(container);
+        fireEvent.click(within(mobile).getByRole("button", { name: /open cost calculator/i }));
+        expect(setCostCalcOpen).toHaveBeenCalledWith(true);
+        expect(setCostSettingsOpen).not.toHaveBeenCalled();
+        raf.mockRestore();
+    });
+
+    it("tapping the card while prices load leaves the settings alone", () => {
+        const setCostCalcOpen = vi.fn();
+        const setCostSettingsOpen = vi.fn();
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({ cheapestWindow: null, costLoading: true, setCostCalcOpen, setCostSettingsOpen }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        const scrollIntoView = vi.fn();
+        const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+            cb(0);
+            return 0;
+        });
+        const { container } = render(<Dashboard />);
+        document.getElementById("cost-calculator")!.scrollIntoView = scrollIntoView;
+        const { mobile } = bestWindowCopies(container);
+        fireEvent.click(within(mobile).getByRole("button", { name: /open cost calculator/i }));
+        expect(setCostCalcOpen).toHaveBeenCalledWith(true);
+        expect(setCostSettingsOpen).not.toHaveBeenCalled();
+        raf.mockRestore();
+    });
+
+    it("tapping the card in its no-data state leaves the settings alone", () => {
+        const setCostCalcOpen = vi.fn();
+        const setCostSettingsOpen = vi.fn();
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({ cheapestWindow: null, costNoData: true, setCostCalcOpen, setCostSettingsOpen }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        const scrollIntoView = vi.fn();
+        const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+            cb(0);
+            return 0;
+        });
+        const { container } = render(<Dashboard />);
+        document.getElementById("cost-calculator")!.scrollIntoView = scrollIntoView;
+        const { mobile } = bestWindowCopies(container);
+        fireEvent.click(within(mobile).getByRole("button", { name: /open cost calculator/i }));
+        expect(setCostCalcOpen).toHaveBeenCalledWith(true);
+        expect(setCostSettingsOpen).not.toHaveBeenCalled();
+        raf.mockRestore();
+    });
+
+    it("passes the predicted-price option and collapsed settings to the open calculator", () => {
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({ costCalcOpen: true, costAllowPredicted: false }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        render(<Dashboard />);
+        const toggle = screen.getByRole("button", { name: "Toggle calculator settings" });
+        expect(toggle).toHaveAttribute("aria-expanded", "false");
+        const summary = document.getElementById(toggle.getAttribute("aria-describedby")!)!;
+        expect(summary.textContent).toMatch(/· official prices only$/);
+    });
+
+    it("passes the end of official prices to the open calculator", () => {
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({
+                costCalcOpen: true,
+                costAllowPredicted: false,
+                startingNowPrice: 10,
+                // 14:00 Tallinn (EET, UTC+2) on 2024-01-01; "now" is 11:00 Tallinn
+                predictedFromMs: new Date("2024-01-01T12:00:00.000Z").getTime(),
+            }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        render(<Dashboard />);
+        expect(
+            screen.getByText("Starting now, average and peak include predicted prices from 14:00.")
+        ).toBeInTheDocument();
+    });
+
+    it("wires the open settings panel and the predicted-price toggle to the calculator state", () => {
+        const setCostSettingsOpen = vi.fn();
+        const setCostAllowPredicted = vi.fn();
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({
+                costCalcOpen: true,
+                costSettingsOpen: true,
+                costAllowPredicted: false,
+                setCostSettingsOpen,
+                setCostAllowPredicted,
+            }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        render(<Dashboard />);
+        const toggle = screen.getByRole("button", { name: "Toggle calculator settings" });
+        expect(toggle).toHaveAttribute("aria-expanded", "true");
+        fireEvent.click(toggle);
+        expect(setCostSettingsOpen).toHaveBeenCalledWith(false);
+        fireEvent.click(screen.getByRole("button", { name: "Use predicted prices" }));
+        expect(setCostAllowPredicted).toHaveBeenCalledWith(true);
+    });
+
+    it("tapping the card uses the latest window once it disappears (no stale callback)", () => {
+        const setCostSettingsOpen = vi.fn();
+        const withWindow = makeCostCalc({ cheapestWindow, setCostSettingsOpen });
+        useCostCalculator.mockReturnValue(withWindow as unknown as ReturnType<typeof useCostCalculator>);
+        const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+            cb(0);
+            return 0;
+        });
+        const { container, rerender } = render(<Dashboard />);
+        // Same setters and flags; only the window changes to "none fits"
+        useCostCalculator.mockReturnValue(
+            { ...withWindow, cheapestWindow: null } as unknown as ReturnType<typeof useCostCalculator>
+        );
+        rerender(<Dashboard />);
+        const { mobile } = bestWindowCopies(container);
+        fireEvent.click(within(mobile).getByRole("button", { name: /open cost calculator/i }));
+        expect(setCostSettingsOpen).toHaveBeenCalledWith(true);
         raf.mockRestore();
     });
 
@@ -411,6 +568,33 @@ describe("Dashboard", () => {
         const { container } = render(<Dashboard />);
         expect(screen.getByTestId("cheapest-area")).toBeInTheDocument();
         expect(within(bestWindowCopies(container).mobile).getByText(/Finishes after 07:00/)).toBeInTheDocument();
+    });
+
+    it("passes the excluded-predictions state to the card", () => {
+        useCostCalculator.mockReturnValue(
+            makeCostCalc({
+                costAllowPredicted: false,
+                predictedFromMs: Date.parse("2024-01-01T22:00:00.000Z"), // 00:00 Tallinn, 2 Jan (now is 11:00)
+                cheapestWindow: null,
+            }) as unknown as ReturnType<typeof useCostCalculator>
+        );
+        const { container } = render(<Dashboard />);
+        expect(
+            within(bestWindowCopies(container).mobile).getByText(
+                "No 8 h window fits before predicted prices start (00:00). Tap to adjust."
+            )
+        ).toBeInTheDocument();
+    });
+
+    it("defaults to the Next 24h period", () => {
+        render(<Dashboard />);
+        expect(useDashboardPrices).toHaveBeenCalledWith("next_24h", expect.any(String), expect.any(String));
+        expect(screen.getByRole("button", { name: /next 24h/i })).toHaveAttribute("aria-pressed", "true");
+    });
+
+    it("the period card starts expanded", () => {
+        render(<Dashboard />);
+        expect(screen.getByRole("button", { name: "Toggle period controls" })).toHaveAttribute("aria-expanded", "true");
     });
 
     it("renders the Next 24h period pill", () => {
