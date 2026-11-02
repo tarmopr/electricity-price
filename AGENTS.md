@@ -74,5 +74,6 @@ Reference this file before making structural changes.
 
 ## Gotchas
 - Stop `npm run dev` before `npm run build` or the OpenNext build — both write `.next/`.
+- `usePersistedState` writes the default to localStorage on first hydrate, so changing a default reaches only first-time visitors; migrating stored values needs a new key or an explicit migration.
 - **Workers Free plan:** 10 ms CPU and 50 D1 queries per invocation (a `db.batch` counts as one), 100k D1 rows written/day (each index update counts as another row). Size every request path for these; backfill month by month (`npm run recompute`, 31-day sync cap).
 - `.github/workflows/deploy.yml` only validates (lint, test, build, OpenNext build, scheduled-handler patch); it does not deploy. When only docs change (`*.md`, `docs/`, `.claude/`) it skips those steps and still passes.

@@ -29,6 +29,10 @@ You review code changes in the `electricity-price` project. Project context, con
 - Client components: stable `useEffect`/`useMemo`/`useCallback` deps, no re-render loops, chart data memoized.
 - Cloudflare Workers: CPU-time and memory limits, no Node-only APIs in server code.
 
+### Charts (Recharts 3)
+- A decorative or `aria-hidden` chart sets `accessibilityLayer={false}`: Recharts 3 turns the layer on by default, which adds a keyboard focus stop.
+- Pixel ↔ time maths (scroll, zoom, overlays) uses the plot area — chart width minus the YAxis width and the left/right margins — not the container width.
+
 ### Conventions
 - Server Components by default, `'use client'` only where needed; `@/` imports.
 - Tailwind only, complete static class strings (no `bg-${color}-500`); shared strings in `src/lib/styles.ts`.
