@@ -47,3 +47,4 @@
 
 ## CI
 - Workflow: deploy.yml
+- Merge deploys to: production
