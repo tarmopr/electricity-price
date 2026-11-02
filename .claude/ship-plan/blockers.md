@@ -18,11 +18,11 @@ entry rather than adding a second.
 - **Fix:** stop the dev server (TaskStop) before the Build / OpenNext gates; restart `npm run dev` afterwards for UI scenarios.
 - **Date:** 2026-11-01
 
-### `gh pr create` refused by the permission system
+### `gh pr create` refused by the permission system (not reproduced)
 - **Symptom:** `Permission to use Bash with command gh pr create ... has been denied.` (twice, also with `--body-file`).
-- **Cause:** opening a PR is outward-facing; this session's permissions do not allow it.
-- **Fix:** hand the user the exact command (`! gh pr create --base main --title "..." --body-file <file>`); continue after they run it.
-- **Date:** 2026-11-01
+- **Cause:** that session's permission mode refused it; it is not a standing restriction. On 2026-11-02 `gh pr create --base main --head <branch> --title "..." --body-file <file>` succeeded (#33).
+- **Fix:** run `gh pr create` yourself first. Only if it is refused, hand the user the exact command (`! gh pr create --base main --title "..." --body-file <file>`) and continue after they run it.
+- **Date:** 2026-11-01, corrected 2026-11-02
 
 ### Hook asks for `/verify`, which is not installed
 - **Symptom:** PreToolUse hook: "Reminder (verify-reminder hook): run /verify on this branch before committing code or opening a PR".
@@ -37,6 +37,12 @@ entry rather than adding a second.
 - **Date:** 2026-11-01
 
 ## CI
+
+### Copilot missing from `reviewRequests` right after `gh pr edit --add-reviewer @copilot`
+- **Symptom:** the command succeeds, but `gh pr view <n> --json reviewRequests` and `pulls/<n>/requested_reviewers` both list nobody.
+- **Cause:** the bot request is not listed there; it was recorded and the review arrived about 5 minutes later.
+- **Fix:** confirm with `gh api repos/<owner>/<repo>/issues/<n>/timeline --jq '.[]|select(.event=="review_requested")|.requested_reviewer.login'` (shows `Copilot`); do not request it again.
+- **Date:** 2026-11-02
 
 ## UI
 
