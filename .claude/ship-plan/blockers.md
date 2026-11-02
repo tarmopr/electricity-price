@@ -38,6 +38,12 @@ entry rather than adding a second.
 
 ## CI
 
+### Lessons PR merge refused by auto mode
+- **Symptom:** `gh pr merge <lessons PR> --squash --delete-branch` → "Permission for this action was denied by the Claude Code auto mode classifier. Reason: [Merge Without Review]" (#34, `.claude/`-only).
+- **Cause:** auto mode treats an unreviewed merge as needing the user, even for a docs-only PR that does not deploy.
+- **Fix:** when asking the user to merge the code PR, ask in the same message to merge the lessons PR too, or open the lessons PR before that ask.
+- **Date:** 2026-11-02
+
 ### Copilot missing from `reviewRequests` right after `gh pr edit --add-reviewer @copilot`
 - **Symptom:** the command succeeds, but `gh pr view <n> --json reviewRequests` and `pulls/<n>/requested_reviewers` both list nobody.
 - **Cause:** the bot request is not listed there; it was recorded and the review arrived about 5 minutes later.
